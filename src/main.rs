@@ -7,15 +7,15 @@ use tracing_subscriber::FmtSubscriber;
 fn main() {
         App::build()
         .add_resource(Msaa { samples: 4 })
-        // .init_resource::<SpriteHandles>()
-        // .init_resource::<GameState>()
+        .init_resource::<SpriteHandles>()
+        .init_resource::<GameState>()
         .add_plugins(DefaultPlugins)
-        // .add_plugins(TilemapDefaultPlugins)
+        .add_plugins(TilemapDefaultPlugins)
         .add_startup_system(setup.system())
         .add_system(camera_movement_system.system())
         .add_system(keyboard_input_system.system())
-        // .add_system(load.system())
-        // .add_system(build_world.system())
+        .add_system(load.system())
+        .add_system(build_world.system())
         .run();
 }
 
@@ -37,22 +37,22 @@ struct Player;
 fn setup(
     commands: &mut Commands,
     asset_server: Res<AssetServer>,
-    // mut tile_sprite_handles: ResMut<SpriteHandles>,
+    mut tile_sprite_handles: ResMut<SpriteHandles>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    // tile_sprite_handles.handles = asset_server.load_folder("textures/terrain").unwrap();
+    tile_sprite_handles.handles = asset_server.load_folder("textures/terrain").unwrap();
     let character_texture_handle = asset_server.load("textures/character.png");
-    // asset_server.watch_for_changes().unwrap();
+    asset_server.watch_for_changes().unwrap();
     commands
         .spawn(SpriteBundle {
             material: materials.add(character_texture_handle.into()),
-            transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+            transform: Transform::from_translation(Vec3::new(0.0, 0.0, 3.0)),
             ..Default::default()
         })
         .with(Player)
         .with_children(|parent| {
             parent.spawn(Camera2dBundle {
-                // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 3.0)),
+                transform: Transform::from_translation(Vec3::new(0.0, 0.0, 3.0)),
                 ..Default::default()
             });
         });
@@ -140,13 +140,13 @@ fn build_world(
         tiles.push(Tile::with_z_order((10, 10), coal_index, 1));
         map.insert_tiles(tiles).unwrap();
 
-//         let load_chunks = 5;
+        let load_chunks = 4;
 
-//         for x in -load_chunks..load_chunks {
-//             for y in -load_chunks..load_chunks {
-//                 map.spawn_chunk((x, y)).unwrap();
-//             }
-//         }
+        for x in -load_chunks..load_chunks {
+            for y in -load_chunks..load_chunks {
+                map.spawn_chunk((x, y)).unwrap();
+            }
+        }
 
         game_state.map_loaded = true;
         info!("Map loaded")
@@ -180,7 +180,9 @@ fn keyboard_input_system(
             direction.y = 1.0
     }
 
-    for mut transform in player_query.iter_mut() {
-        transform.translation = transform.translation - direction.normalize() * 8.0;
+    if direction.length_squared() > 0.0 {
+        for mut transform in player_query.iter_mut() {
+            transform.translation = transform.translation - direction.normalize() * 8.0;
+        }
     }
 }
