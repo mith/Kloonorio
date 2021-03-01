@@ -1,6 +1,7 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::{asset::LoadState, prelude::*, render::camera::Camera, sprite::TextureAtlasBuilder};
 use bevy_tilemap::prelude::*;
+use std::collections::HashMap;
 
 fn main() {
     App::build()
@@ -37,6 +38,15 @@ struct GameState {
 
 struct Player;
 
+#[derive(Hash, Eq, PartialEq, Debug)]
+enum Resource {
+    Coal,
+}
+
+struct Inventory {
+    items: HashMap<Resource, u32>
+}
+
 fn setup(
     commands: &mut Commands,
     asset_server: Res<AssetServer>,
@@ -53,6 +63,9 @@ fn setup(
             ..Default::default()
         })
         .with(Player)
+        .with(Inventory {
+            items: HashMap::new()
+        })
         .with_children(|parent| {
             parent.spawn(Camera2dBundle {
                 transform: Transform::from_translation(Vec3::new(0.0, 0.0, 3.0)),
@@ -174,15 +187,6 @@ fn build_world(
             ..Default::default()
         });
         map.insert_tiles(tiles).unwrap();
-
-        let load_chunks = 4;
-
-        for x in -load_chunks..load_chunks {
-            for y in -load_chunks..load_chunks {
-                map.spawn_chunk((x, y)).unwrap();
-            }
-        }
-
         game_state.map_loaded = true;
         info!("Map loaded")
     }
@@ -194,10 +198,15 @@ fn mouse_world_interaction_system(
     mouse_button_input: Res<Input<MouseButton>>,
     camera_transforms: Query<&GlobalTransform, With<Camera>>,
     mut tilemap_query: Query<(&mut Tilemap, &GlobalTransform)>,
+    mut inventory_query: Query<&mut Inventory, With<Player>>
 ) {
     let maybe_window: Option<Vec3> = windows.get_primary().and_then(|window| {
         window.cursor_position().map(|cursor_position| {
-            Vec3::new(cursor_position.x - window.width() / 2.0, cursor_position.y - window.height() / 2.0, 0.0)
+            Vec3::new(
+                cursor_position.x - window.width() / 2.0,
+                cursor_position.y - window.height() / 2.0,
+                0.0,
+            )
         })
     });
     let cursor_position = if let Some(window) = maybe_window {
@@ -208,15 +217,24 @@ fn mouse_world_interaction_system(
 
     for camera_transform in camera_transforms.iter() {
         for (mut tilemap, tilemap_transform) in tilemap_query.iter_mut() {
-            if mouse_button_input.just_pressed(MouseButton::Right) {
-                let tile_position = get_tile_position_under_cursor(
-                    cursor_position,
-                    camera_transform,
-                    tilemap_transform,
-                    tilemap.tile_width(),
-                );
-                let tile = tilemap.get_tile(tile_position, 1);
-                state.under_cursor = tile.map(|tile| tile.index);
+            let tile_position = get_tile_position_under_cursor(
+                cursor_position,
+                camera_transform,
+                tilemap_transform,
+                tilemap.tile_width(),
+            );
+            debug!("cursor_position = {}", cursor_position);
+            debug!("tile_position = {:?}", tile_position);
+            if let Some(tile) = tilemap.get_tile(tile_position, 1) {
+                state.under_cursor = Some(tile.index);
+                debug!("tile = {:?}", tile);
+                if tile.index > 0 && mouse_button_input.just_pressed(MouseButton::Right) {
+                    for mut inventory in inventory_query.iter_mut() {
+                        let current_amount = inventory.items.entry(Resource::Coal).or_insert(0);
+                        *current_amount += 1;
+                        info!("Picked up 1 coal. current amount: {}", *current_amount);
+                    }
+                }
             }
         }
     }
@@ -268,8 +286,8 @@ mod tests {
     #[test]
     fn test_get_tile_position_under_cursor() {
         let cursor_position = Vec3::new(3.0, 4.0, 0.0);
-        let camera_transform = Transform::from_translation(-cursor_position);
-        let tilemap_transform = Transform::identity();
+        let camera_transform = GlobalTransform::from_translation(-cursor_position);
+        let tilemap_transform = GlobalTransform::identity();
         let tile_size = 16;
         let tile_position = get_tile_position_under_cursor(
             cursor_position,
