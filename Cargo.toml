@@ -5,27 +5,11 @@ authors = ["Simon Voordouw <simonvoordouw@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-bevy_tilemap = { path = "/home/simon/src/bevy_tilemap/" }
+bevy_tilemap = "*"
 tracing = "0.1.25"
 tracing-subscriber = "0.2.16"
 mockall = "0.9.1"
+bevy_egui = "*"
+bevy = "*"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies.bevy]
-version = "0.4.0"
-
-[patch.crates-io]
-bevy = { path = "/home/simon/src/bevy" }
-bevy_app = { path = "/home/simon/src/bevy/crates/bevy_app" }
-bevy_asset = { path = "/home/simon/src/bevy/crates/bevy_asset" }
-bevy_core = { path = "/home/simon/src/bevy/crates/bevy_core" }
-bevy_ecs = { path = "/home/simon/src/bevy/crates/bevy_ecs" }
-bevy_log = { path = "/home/simon/src/bevy/crates/bevy_log" }
-bevy_math = { path = "/home/simon/src/bevy/crates/bevy_math" }
-bevy_render = { path = "/home/simon/src/bevy/crates/bevy_render" }
-bevy_reflect = { path = "/home/simon/src/bevy/crates/bevy_reflect" }
-bevy_sprite = { path = "/home/simon/src/bevy/crates/bevy_sprite" }
-bevy_transform = { path = "/home/simon/src/bevy/crates/bevy_transform" }
-bevy_utils = { path = "/home/simon/src/bevy/crates/bevy_utils" }
-bevy_window = { path = "/home/simon/src/bevy/crates/bevy_window" }
