@@ -3,64 +3,104 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    naersk.url = "github:nmattia/naersk";
+    flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    naersk = {
+      url = "github:nix-community/naersk";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, utils, rust-overlay, naersk, ... }:
-    utils.lib.eachSystem [ "x86_64-linux" ] (system:
+  outputs = { self, nixpkgs, flake-utils, fenix, naersk, ... }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
-        rust = pkgs.rust-bin.stable.latest.default.override {
-                extensions = [ "rust-src" ];
-                targets = [ "wasm32-unknown-unknown" ];
-              };
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ 
-            rust-overlay.overlay
-            (self: super: {
-              rustc = rust;
-              cargo = rust;
-            })
-          ];
-        };
-        naersk-lib = naersk.lib."${system}".override {
-          cargo = rust;
-          rustc = rust;
-        };
+        pkgs = nixpkgs.legacyPackages."${system}";
+        toolchain = fenix.packages.${system}.stable;
+        naersk-lib = naersk.lib."${system}";
       in
       rec {
         packages.kloonorio = naersk-lib.buildPackage {
           pname = "kloonorio";
           root = ./.;
+          buildInputs = with pkgs; [
+            libxkbcommon
+          ];
           nativeBuildInputs = with pkgs; [
             pkg-config
-            alsa-lib
+            alsaLib
             libudev
             xorg.libX11
             xlibs.libX11
             xlibs.libXcursor
             xlibs.libXi
             xlibs.libXrandr
+            libxkbcommon
             python3
+            vulkan-loader
+            wayland
+            mold
           ];
         };
+        packages.kloonorio-web =
+          let
+            target = "wasm32-unknown-unknown";
+            toolchain = with fenix.packages.${system};
+              combine [
+                minimal.rustc
+                minimal.cargo
+                targets.${target}.latest.rust-std
+              ];
+            kloonorio-wasm = (naersk.lib.${system}.override {
+              cargo = toolchain;
+              rustc = toolchain;
+            }).buildPackage
+              {
+                src = ./.;
+                cargoBuildOptions = old: old ++ [ "--target ${target}"];
+              };
+          in
+          pkgs.stdenv.mkDerivation {
+            pname = "kloonorio-web";
+            src = ./.;
+            nativeBuildInputs = with pkgs; [
+              wasm-bindgen-cli
+            ];
+            phases = [ "unpackPhase" "installPhase" ];
+            installPhase = ''
+              mkdir -p $out
+              wasm-bindgen --out-dir $out --out-name wasm --target no-modules --no-typescript ${kloonorio-wasm}/bin/kloonorio.wasm
+              cp index.html $out/index.html
+              cp -r assets $out/assets
+            '';
+          };
+
         defaultPackage = packages.kloonorio;
 
-        apps.kloonorio = utils.lib.mkApp {
+        apps.kloonorio = flake-utils.lib.mkApp {
           drv = packages.kloonorio;
         };
         defaultApp = apps.kloonorio;
 
-        devShell = pkgs.mkShell {
+        devShell = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
+          buildInputs = with pkgs; [ llvmPackages.libclang ];
+          shellHook = ''export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath (with pkgs; [
+            alsaLib
+            udev
+            vulkan-loader
+            libxkbcommon
+            wayland
+          ])}"'';
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           inputsFrom = [ packages.kloonorio ];
-          RUST_SRC_PATH="${pkgs.rust-bin.stable.latest.rust-src}/lib/rustlib/src/rust/library/";
-          buildInputs = with pkgs; [ 
-            rust-bin.stable.latest.default
-            vulkan-loader 
-            lldb
+          nativeBuildInputs = [
+            pkgs.cargo-edit
+            (toolchain.withComponents [ "cargo" "rustc" "rust-src" "rustfmt" "clippy" ])
           ];
         };
-      });
+      }
+    );
 }
