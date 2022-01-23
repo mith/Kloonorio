@@ -7,6 +7,7 @@ pub struct Stack {
     pub amount: usize,
 }
 
+#[derive(Component)]
 pub struct Inventory {
     pub slots: Vec<Option<Stack>>,
 }
@@ -38,7 +39,7 @@ pub fn inventory_ui(
                     size: Size::new(Val::Px(200.0), Val::Px(200.0)),
                     ..Default::default()
                 },
-                material: materials.add(Color::rgb(0.15, 0.15, 0.15).into()),
+                color: UiColor::from(Color::rgb(0.15, 0.15, 0.15)),
                 ..Default::default()
             })
             .with_children(|parent| {
@@ -56,7 +57,7 @@ pub fn inventory_ui(
                                 size: Size::new(Val::Px(24.0), Val::Px(24.0)),
                                 ..Default::default()
                             },
-                            material: materials.add(Color::rgb(0.2, 0.2, 0.2).into()),
+                            color: UiColor::from(Color::rgb(0.2, 0.2, 0.2)),
                             ..Default::default()
                         });
                     }
@@ -67,7 +68,7 @@ pub fn inventory_ui(
 
 pub struct InventoryPlugin;
 impl Plugin for InventoryPlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.add_system(inventory_ui.system());
     }
 }

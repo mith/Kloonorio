@@ -34,7 +34,7 @@ fn keyboard_input_system(
 
 pub struct PlayerMovementPlugin;
 impl Plugin for PlayerMovementPlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.add_system(keyboard_input_system.system());
     }
 }
