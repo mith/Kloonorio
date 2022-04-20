@@ -116,7 +116,7 @@ fn debug_ui(
     mut player_query: Query<&mut Transform, With<Player>>,
     inventory_query: Query<&Inventory, With<Player>>,
 ) {
-    egui::Window::new("Debug").show(egui_context.ctx(), |ui| {});
+    // egui::Window::new("Debug").show(egui_context.ctx(), |ui| {});
 }
 #[cfg(test)]
 mod tests {

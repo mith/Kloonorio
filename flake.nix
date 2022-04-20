@@ -60,11 +60,16 @@
             }).buildPackage
               {
                 src = ./.;
-                cargoBuildOptions = old: old ++ [ "--target ${target}"];
+                cargoBuildOptions = old: old ++ [ "--target wasm32-unknown-unknown"];
+                nativeBuildInputs = with pkgs; [
+                  pkg-config
+                ];
+                buildInputs = with pkgs; [
+                ];
               };
           in
           pkgs.stdenv.mkDerivation {
-            pname = "kloonorio-web";
+            name = "kloonorio-web";
             src = ./.;
             nativeBuildInputs = with pkgs; [
               wasm-bindgen-cli
