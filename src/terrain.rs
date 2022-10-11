@@ -1,113 +1,169 @@
-use crate::types::GameState;
+use rand::seq::IteratorRandom;
+use rand::Rng;
+use std::collections::VecDeque;
+
 use bevy::{
-    asset::LoadState, prelude::*, render::render_resource::TextureUsages,
+    asset::LoadState,
+    prelude::*,
     sprite::TextureAtlasBuilder,
+    utils::{HashMap, HashSet},
 };
 use bevy_ecs_tilemap::prelude::*;
+use ndarray::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum PluginState {
-    Setup,
     Finished,
 }
 
-#[derive(Default)]
-struct TextureHandles {
-    handles: Vec<HandleUntyped>,
-}
+const GROUND: u32 = 0;
+const WATER: u32 = 1;
+const GRASS: u32 = 2;
+const TALL_GRASS: u32 = 3;
+const DEEP_WATER: u32 = 4;
+const TREE: u32 = 5;
+const FLOWERS: u32 = 6;
 
-fn load_textures(mut texture_handles: ResMut<TextureHandles>, asset_server: Res<AssetServer>) {
-    texture_handles.handles = asset_server.load_folder("textures/terrain").unwrap();
-}
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    info!("Setting up terrain");
 
-fn check_textures(
-    mut state: ResMut<State<PluginState>>,
-    texture_handles: ResMut<TextureHandles>,
-    asset_server: Res<AssetServer>,
-) {
-    if let LoadState::Loaded =
-        asset_server.get_group_load_state(texture_handles.handles.iter().map(|handle| handle.id))
-    {
-        state.set(PluginState::Finished).unwrap();
-    }
-}
+    let texture_handle = asset_server.load("textures/terrain.png");
 
-fn setup(
-    mut commands: Commands,
-    texture_handles: Res<TextureHandles>,
-    mut textures: ResMut<Assets<Image>>,
-    mut map_query: MapQuery,
-) {
-    // Lets load all our textures from our folder!
-    let mut texture_atlas_builder = TextureAtlasBuilder::default();
+    let tile_size = TilemapTileSize { x: 16., y: 16. };
 
-    for handle in texture_handles.handles.iter() {
-        let texture = textures.get(handle).unwrap();
-        texture_atlas_builder.add_texture(handle.clone_weak().typed::<Image>(), &texture);
-    }
+    info!("Creating tilemap");
+    let tilemap_entity = commands.spawn().id();
+    let map_size = 8;
+    let tilemap_size = TilemapSize {
+        x: map_size,
+        y: map_size,
+    };
+    let mut tile_storage = TileStorage::empty(tilemap_size);
 
-    let texture_atlas = texture_atlas_builder.finish(&mut textures).unwrap();
+    let mut rng = rand::thread_rng();
+    // Pick a random tile
+    let mut tile_pos = TilePos {
+        x: rng.gen_range(1..tilemap_size.x),
+        y: rng.gen_range(0..tilemap_size.y),
+    };
+    let mut unspawned_neighbors: VecDeque<(u32, u32)> = VecDeque::new();
+    let possible_neighbors = HashMap::from([
+        (GROUND, HashSet::from([GROUND, WATER, GRASS, TREE])),
+        (WATER, HashSet::from([GROUND, GRASS, WATER, DEEP_WATER])),
+        (
+            GRASS,
+            HashSet::from([GROUND, GRASS, WATER, TALL_GRASS, TREE, FLOWERS]),
+        ),
+        (
+            TALL_GRASS,
+            HashSet::from([GRASS, TALL_GRASS, WATER, FLOWERS]),
+        ),
+        (DEEP_WATER, HashSet::from([WATER, DEEP_WATER])),
+        (TREE, HashSet::from([GROUND, GRASS, TREE])),
+        (FLOWERS, HashSet::from([GRASS, TALL_GRASS, FLOWERS])),
+    ]);
+    let mut chunk =
+        Array2::<Option<u32>>::default((tilemap_size.x as usize + 2, tilemap_size.y as usize + 2));
+    let all_tiles = HashSet::from([WATER, GRASS, TALL_GRASS, DEEP_WATER, TREE, FLOWERS]);
+    for _ in 0..tilemap_size.x * tilemap_size.y {
+        debug!("Spawning new tile: {:?}", tile_pos);
+        // get neighboring existing tiles in chunk
+        let t_west = tile_pos.x as usize;
+        let t_east = tile_pos.x as usize + 2;
+        let t_north = tile_pos.y as usize;
+        let t_south = tile_pos.y as usize + 2;
 
-    let map_entity = commands.spawn().id();
-    let mut map = Map::new(0u16, map_entity);
+        let neighbors = &chunk.slice(s![t_west..=t_east, t_north..=t_south]);
+        debug!("Neighbors: {:?}", neighbors);
 
-    let layer_settings = LayerSettings::new(
-        MapSize(2, 2),
-        ChunkSize(8, 8),
-        TileSize(16.0, 16.0),
-        TextureSize(96.0, 16.0),
-    );
+        let possible: HashSet<u32> = neighbors
+            .iter()
+            .flatten()
+            .map(|tile| {
+                possible_neighbors
+                    .get(&tile)
+                    .expect("Tile type has no possible neighbors set")
+            })
+            .fold(all_tiles.clone(), |acc, poss_tiles| {
+                acc.intersection(&poss_tiles).map(|n| *n).collect()
+            });
 
-    let center = layer_settings.get_pixel_center();
+        debug!("Possible tiles: {:?}", possible);
+        if possible.len() == 0 {
+            error!("No possible tiles found")
+        }
 
-    let (mut ground_layer_builder, ground_layer) =
-        LayerBuilder::new(&mut commands, layer_settings, 0u16, 0u16);
-    map.add_layer(&mut commands, 0u16, ground_layer);
+        let texture_id = *possible.iter().choose(&mut rng).unwrap();
+        debug!("Chosen tile: {:?}", texture_id);
 
-    ground_layer_builder.set_all(TileBundle {
-        tile: Tile {
-            texture_index: 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+        chunk[[tile_pos.x as usize + 1, tile_pos.y as usize + 1]] = Some(texture_id);
 
-    map_query.build_layer(&mut commands, ground_layer_builder, texture_atlas.texture);
+        let tile_entity = commands
+            .spawn()
+            .insert_bundle(TileBundle {
+                position: tile_pos,
+                tilemap_id: TilemapId(tilemap_entity),
+                texture: TileTexture(texture_id),
+                ..default()
+            })
+            .id();
 
-    commands
-        .entity(map_entity)
-        .insert(map)
-        .insert(Transform::from_xyz(-center.x, -center.y, 0.0))
-        .insert(GlobalTransform::default());
-}
+        tile_storage.set(&tile_pos, Some(tile_entity));
 
-pub fn set_texture_filters_to_nearest(
-    mut texture_events: EventReader<AssetEvent<Image>>,
-    mut textures: ResMut<Assets<Image>>,
-) {
-    // quick and dirty, run this for all textures anytime a texture is created.
-    for event in texture_events.iter() {
-        match event {
-            AssetEvent::Created { handle } => {
-                if let Some(mut texture) = textures.get_mut(handle) {
-                    texture.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING
-                        | TextureUsages::COPY_SRC
-                        | TextureUsages::COPY_DST;
+        let tile_neighbors = tile_storage.get_neighboring_pos(&tile_pos);
+        debug!("Tile neighbors: {:?}", tile_neighbors);
+        for neighbor_pos in tile_neighbors {
+            if let Some(pos) = neighbor_pos {
+                if tile_storage.get(&pos).is_none()
+                    && !unspawned_neighbors.contains(&(pos.x, pos.y))
+                {
+                    debug!("Adding neighbor: {:?}", pos);
+                    unspawned_neighbors.push_back((pos.x, pos.y));
                 }
             }
-            _ => (),
+        }
+
+        if let Some(new_pos) = unspawned_neighbors.pop_front() {
+            tile_pos = TilePos {
+                x: new_pos.0,
+                y: new_pos.1,
+            };
+        } else {
+            warn!("No unspawned neighbors found");
+            break;
         }
     }
+
+    if !unspawned_neighbors.is_empty() {
+        warn!("Not all tiles spawned");
+    }
+
+    info!("Adding tilemap to world");
+    commands
+        .entity(tilemap_entity)
+        .insert_bundle(TilemapBundle {
+            grid_size: TilemapGridSize {
+                x: tilemap_size.x as f32,
+                y: tilemap_size.y as f32,
+            },
+            size: tilemap_size,
+            storage: tile_storage,
+            texture: TilemapTexture(texture_handle),
+            tile_size,
+            transform: bevy_ecs_tilemap::helpers::get_centered_transform_2d(
+                &tilemap_size,
+                &tile_size,
+                0.0,
+            ),
+            ..default()
+        });
 }
 
 pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<TextureHandles>()
-            .add_state(PluginState::Setup)
-            .add_system_set(SystemSet::on_enter(PluginState::Setup).with_system(load_textures))
-            .add_system_set(SystemSet::on_update(PluginState::Setup).with_system(check_textures))
-            .add_system_set(SystemSet::on_enter(PluginState::Finished).with_system(setup))
-            .add_system(set_texture_filters_to_nearest);
+        app.add_plugin(TilemapPlugin)
+            .add_state(PluginState::Finished)
+            .add_system_set(SystemSet::on_enter(PluginState::Finished).with_system(setup));
     }
 }

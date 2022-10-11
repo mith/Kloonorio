@@ -5,11 +5,14 @@ authors = ["Simon Voordouw <simonvoordouw@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-bevy_ecs_tilemap = "*"
-tracing = "*"
-tracing-subscriber = "*"
-mockall = "*"
-bevy_egui = "*"
-bevy = { version = "0.6" , features = ["wayland"]}
+bevy = { version = "0.8" , features = ["wayland"]}
+noise = "0.8.1"
+iyes_loopless = "0.7.1"
+bevy-inspector-egui = "0.13.0"
+bevy_ecs_tilemap = "0.7.0"
+tracing = "0.1.37"
+bevy_egui = "0.16.1"
+rand = "0.8.5"
+ndarray = "0.15.6"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

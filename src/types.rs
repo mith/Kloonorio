@@ -3,17 +3,15 @@ use bevy::{input::mouse::MouseMotion, prelude::*};
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash)]
 pub enum AppState {
     Setup,
-    Running
+    Running,
 }
 
-#[derive(Default)]
-#[derive(Component)]
+#[derive(Default, Component)]
 pub struct CursorState {
     pub under_cursor: Option<usize>,
 }
 
-#[derive(Default)]
-#[derive(Component)]
+#[derive(Default, Component)]
 pub struct GameState {
     pub map_loaded: bool,
     pub spawned: bool,

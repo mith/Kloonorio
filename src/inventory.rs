@@ -15,7 +15,7 @@ pub struct Inventory {
 impl Inventory {
     pub fn new(size: usize) -> Self {
         Self {
-            slots: (0..size).map(|_| None).collect()
+            slots: (0..size).map(|_| None).collect(),
         }
     }
 }
@@ -30,12 +30,12 @@ pub fn inventory_ui(
             .spawn_bundle(NodeBundle {
                 style: Style {
                     position_type: PositionType::Absolute,
-                    position: Rect {
+                    position: UiRect {
                         left: Val::Px(210.0),
                         bottom: Val::Px(10.0),
                         ..Default::default()
                     },
-                    border: Rect::all(Val::Px(10.0)),
+                    border: UiRect::all(Val::Px(10.0)),
                     size: Size::new(Val::Px(200.0), Val::Px(200.0)),
                     ..Default::default()
                 },
@@ -48,12 +48,12 @@ pub fn inventory_ui(
                         parent.spawn_bundle(NodeBundle {
                             style: Style {
                                 position_type: PositionType::Relative,
-                                position: Rect {
+                                position: UiRect {
                                     left: Val::Px(0.0),
                                     top: Val::Px(0.0),
                                     ..Default::default()
                                 },
-                                border: Rect::all(Val::Px(1.0)),
+                                border: UiRect::all(Val::Px(1.0)),
                                 size: Size::new(Val::Px(24.0), Val::Px(24.0)),
                                 ..Default::default()
                             },
@@ -69,6 +69,6 @@ pub fn inventory_ui(
 pub struct InventoryPlugin;
 impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(inventory_ui.system());
+        app.add_system(inventory_ui);
     }
 }

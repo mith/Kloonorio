@@ -1,6 +1,6 @@
-use bevy::{prelude::*, render::camera::Camera, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
-use bevy_ecs_tilemap::prelude::*;
-use bevy_egui::{egui, EguiContext, EguiPlugin};
+use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*, render::camera::Camera};
+use bevy_egui::{EguiContext, EguiPlugin};
+use bevy_inspector_egui::WorldInspectorPlugin;
 
 mod inventory;
 mod player_movement;
@@ -17,36 +17,37 @@ fn main() {
     app.init_resource::<GameState>()
         .init_resource::<CursorState>()
         .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        // .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(DefaultPlugins)
-        .add_plugin(TilemapPlugin)
-        .add_plugin(EguiPlugin)
+        // .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(InventoryPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(PlayerMovementPlugin)
         .add_state(AppState::Setup)
         .add_startup_system(setup)
-        .add_system(mouse_world_interaction_system)
-        .add_system(debug_ui)
+        .add_system(mouse_world_interaction_system) // .add_system(debug_ui)
         .run();
 }
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let character_texture_handle = asset_server.load("textures/character.png");
     asset_server.watch_for_changes().unwrap();
     commands
-        .spawn_bundle(OrthographicCameraBundle::new_2d())
+        .spawn_bundle(SpriteBundle {
+            texture: character_texture_handle,
+            transform: Transform::from_xyz(0.0, 0.0, 1.0),
+            ..Default::default()
+        })
         .insert(Player)
         .insert(Inventory::new(12))
         .with_children(|parent| {
-            parent.spawn_bundle(SpriteBundle {
-                texture: character_texture_handle,
-                transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-                ..Default::default()
+            parent.spawn_bundle(Camera2dBundle {
+                transform: Transform::from_xyz(0.0, 0.0, 500.0),
+                projection: OrthographicProjection {
+                    scale: 0.3,
+                    ..Default::default()
+                },
+                ..default()
             });
         });
 }
@@ -56,8 +57,6 @@ fn mouse_world_interaction_system(
     windows: Res<Windows>,
     mouse_button_input: Res<Input<MouseButton>>,
     camera_transforms: Query<&GlobalTransform, With<Camera>>,
-    mut tile_query: Query<&mut Tile>,
-    mut map_query: MapQuery,
     mut inventory_query: Query<&mut Inventory, With<Player>>,
 ) {
     let maybe_window: Option<Vec3> = windows.get_primary().and_then(|window| {
@@ -75,29 +74,29 @@ fn mouse_world_interaction_system(
         return;
     };
 
-    for camera_transform in camera_transforms.iter() {
-        let tile_position = get_tile_position_under_cursor(cursor_position, camera_transform, 16);
-        info!("cursor_position = {}", cursor_position);
-        info!("tile_position = {:?}", tile_position);
-        if let Ok(Ok(tile)) = map_query
-            .get_tile_entity(
-                TilePos(tile_position.0 as u32, tile_position.1 as u32),
-                0u16,
-                0u16,
-            )
-            .map(|t| tile_query.get(t))
-        {
-            state.under_cursor = Some(tile.texture_index.into());
-            info!("tile = {:?}", tile);
-        }
-        // if tile.index > 0 && mouse_button_input.just_pressed(MouseButton::Right) {
-        //     for mut inventory in inventory_query.iter_mut() {
-        //         let current_amount = inventory.items.entry(Resource::Coal).or_insert(0);
-        //         *current_amount += 1;
-        //         info!("Picked up 1 coal. current amount: {}", *current_amount);
-        //     }
-        // }
-    }
+    // for camera_transform in camera_transforms.iter() {
+    //     let tile_position = get_tile_position_under_cursor(cursor_position, camera_transform, 16);
+    //     info!("cursor_position = {}", cursor_position);
+    //     info!("tile_position = {:?}", tile_position);
+    //     if let Ok(Ok(tile)) = map_query
+    //         .get_tile_entity(
+    //             TilePos(tile_position.0 as u32, tile_position.1 as u32),
+    //             0u16,
+    //             0u16,
+    //         )
+    //         .map(|t| tile_query.get(t))
+    //     {
+    //         state.under_cursor = Some(tile.texture_index.into());
+    //         info!("tile = {:?}", tile);
+    //     }
+    //     // if tile.index > 0 && mouse_button_input.just_pressed(MouseButton::Right) {
+    //     //     for mut inventory in inventory_query.iter_mut() {
+    //     //         let current_amount = inventory.items.entry(Resource::Coal).or_insert(0);
+    //     //         *current_amount += 1;
+    //     //         info!("Picked up 1 coal. current amount: {}", *current_amount);
+    //     //     }
+    //     // }
+    // }
 }
 
 fn get_tile_position_under_cursor(

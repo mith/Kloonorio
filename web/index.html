@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Kloonorio</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <style>
+      @font-face {
+        font-family: 'PublicPixel';
+        src: url("assets/fonts/PublicPixel-z84yD.ttf");
+      }
+      html {
+        height: 100vh;
+        width: 100vw;
+      }
+      body {
+        background-color: black;
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        width: 100wh;
+        margin: 0;
+      }
+      canvas {
+        grid-area: 1 / 1 / 1 / 1;
+      }
+      #loading-screen {
+        grid-area: 1 / 1 / 1 / 1;
+        max-height: 100vh;
+        max-width: 100vw;
+      }
+      #focus-message {
+        color: white;
+        background-color: black;
+        padding: 5px 3px 9px 3px;
+        z-index: 2;
+        text-align: center;
+        font-size: 1.5em;
+        grid-area: 1 / 1 / 1 / 1;
+        animation: blinker 1s linear infinite;
+        font-family: "PublicPixel";
+        pointer-events: none;
+      }
+      @keyframes blinker {
+        50% {
+          color: black;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <img id="loading-screen" src="assets/loading-screen.png" />
+    <script type="module">
+      console.log('Initializing game.');
+
+      import init from './kloonorio.js';
+      init();
+    </script>
+  </body>
+</html>
