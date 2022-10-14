@@ -1,4 +1,10 @@
-use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*, render::camera::Camera};
+use bevy::{
+    asset::AssetServerSettings,
+    diagnostic::LogDiagnosticsPlugin,
+    input::mouse::MouseWheel,
+    prelude::*,
+    render::{camera::Camera, texture::ImageSettings},
+};
 use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
 
@@ -14,27 +20,31 @@ use types::{AppState, CursorState, GameState, Player};
 
 fn main() {
     let mut app = App::new();
-    app.init_resource::<GameState>()
-        .init_resource::<CursorState>()
-        .add_plugin(LogDiagnosticsPlugin::default())
-        // .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .add_plugins(DefaultPlugins)
-        // .add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(InventoryPlugin)
-        .add_plugin(TerrainPlugin)
-        .add_plugin(PlayerMovementPlugin)
-        .add_state(AppState::Setup)
-        .add_startup_system(setup)
-        .add_system(mouse_world_interaction_system) // .add_system(debug_ui)
-        .run();
+    app.insert_resource(AssetServerSettings {
+        watch_for_changes: true,
+        ..default()
+    })
+    .insert_resource(ImageSettings::default_nearest())
+    .init_resource::<GameState>()
+    .init_resource::<CursorState>()
+    .add_plugin(LogDiagnosticsPlugin::default())
+    // .add_plugin(FrameTimeDiagnosticsPlugin::default())
+    .add_plugins(DefaultPlugins)
+    // .add_plugin(WorldInspectorPlugin::new())
+    .add_plugin(InventoryPlugin)
+    .add_plugin(TerrainPlugin)
+    .add_plugin(PlayerMovementPlugin)
+    .add_state(AppState::Setup)
+    .add_startup_system(setup)
+    .add_system(mouse_world_interaction_system) // .add_system(debug_ui)
+    .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let character_texture_handle = asset_server.load("textures/character.png");
     asset_server.watch_for_changes().unwrap();
     commands
         .spawn_bundle(SpriteBundle {
-            texture: character_texture_handle,
+            texture: asset_server.load("textures/character.png"),
             transform: Transform::from_xyz(0.0, 0.0, 1.0),
             ..Default::default()
         })
@@ -50,6 +60,19 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             });
         });
+}
+
+fn camera_zoom(
+    mut query: Query<(&mut Transform, &mut OrthographicProjection)>,
+    mut state: ResMut<State<AppState>>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
+) {
+    for (mut transform, mut projection) in query.iter_mut() {
+        for event in mouse_wheel_events.iter() {
+            projection.scale += event.y * 0.1;
+            transform.translation.z += event.y * 0.1;
+        }
+    }
 }
 
 fn mouse_world_interaction_system(

@@ -28,7 +28,7 @@ fn keyboard_input_system(
     }
 
     for mut transform in player_query.iter_mut() {
-        transform.translation = transform.translation - direction.normalize() * 8.0;
+        transform.translation = transform.translation - direction.normalize() * 3.0;
     }
 }
 
