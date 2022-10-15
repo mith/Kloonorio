@@ -5,6 +5,7 @@ use crate::types::Player;
 fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut player_query: Query<&mut Transform, With<Player>>,
+    timer: Res<Time>,
 ) {
     let mut direction = Vec3::new(0.0, 0.0, 0.0);
     if keyboard_input.pressed(KeyCode::Comma) {
@@ -28,7 +29,8 @@ fn keyboard_input_system(
     }
 
     for mut transform in player_query.iter_mut() {
-        transform.translation = transform.translation - direction.normalize() * 3.0;
+        transform.translation =
+            transform.translation - direction.normalize() * 200.0 * timer.delta_seconds();
     }
 }
 

@@ -21,7 +21,7 @@ impl Plugin for TerrainPlugin {
         app.add_plugin(TilemapPlugin)
             .insert_resource(ChunkManager::default())
             .insert_resource(TerrainSettings {
-                chunk_spawn_radius: 4,
+                chunk_spawn_radius: 5,
             })
             .add_system(spawn_chunks_around_camera)
             .add_system(spawn_chunk.after(spawn_chunks_around_camera))
@@ -401,7 +401,7 @@ fn despawn_outofrange_chunks(
 
 fn debug_ui(
     mut egui_context: ResMut<EguiContext>,
-    mut chunk_task: Query<(Entity, &mut GenerateChunk)>,
+    chunk_task: Query<(Entity, &mut GenerateChunk)>,
     camera_query: Query<&GlobalTransform, With<Camera>>,
     mut terrain_settings: ResMut<TerrainSettings>,
 ) {
