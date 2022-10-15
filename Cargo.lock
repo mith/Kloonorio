@@ -2050,6 +2050,8 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_ecs_tilemap",
  "bevy_egui",
+ "crossbeam-channel",
+ "egui",
  "futures-lite",
  "iyes_loopless",
  "ndarray",

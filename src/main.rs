@@ -31,12 +31,13 @@ fn main() {
     // .add_plugin(FrameTimeDiagnosticsPlugin::default())
     .add_plugins(DefaultPlugins)
     // .add_plugin(WorldInspectorPlugin::new())
+    .add_plugin(EguiPlugin)
     .add_plugin(InventoryPlugin)
     .add_plugin(TerrainPlugin)
     .add_plugin(PlayerMovementPlugin)
     .add_state(AppState::Setup)
     .add_startup_system(setup)
-    .add_system(mouse_world_interaction_system) // .add_system(debug_ui)
+    .add_system(camera_zoom) // .add_system(debug_ui)
     .run();
 }
 
@@ -63,14 +64,13 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn camera_zoom(
-    mut query: Query<(&mut Transform, &mut OrthographicProjection)>,
-    mut state: ResMut<State<AppState>>,
+    mut query: Query<&mut OrthographicProjection>,
     mut mouse_wheel_events: EventReader<MouseWheel>,
 ) {
-    for (mut transform, mut projection) in query.iter_mut() {
+    for mut projection in &mut query {
         for event in mouse_wheel_events.iter() {
-            projection.scale += event.y * 0.1;
-            transform.translation.z += event.y * 0.1;
+            projection.scale -= event.y * 0.1;
+            projection.scale = projection.scale.max(0.1);
         }
     }
 }
