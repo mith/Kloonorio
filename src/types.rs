@@ -20,7 +20,12 @@ pub struct GameState {
 #[derive(Component)]
 pub struct Player;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum Resource {
     Coal,
+    Iron,
+    Wood,
+    Stone,
+    StoneFurnace,
+    IronPlate,
 }
