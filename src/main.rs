@@ -1,16 +1,13 @@
-use std::collections::VecDeque;
-
 use bevy::{
     asset::AssetServerSettings,
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     input::mouse::MouseWheel,
-    math::{Vec3Swizzles, Vec4Swizzles},
+    math::Vec3Swizzles,
     prelude::*,
     render::texture::ImageSettings,
 };
 use bevy_ecs_tilemap::tiles::TileTexture;
 use bevy_egui::{EguiContext, EguiPlugin};
-use bevy_inspector_egui::{InspectorPlugin, WorldInspectorParams, WorldInspectorPlugin};
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
@@ -97,7 +94,7 @@ fn pick_building(
     if mouse_input.just_pressed(MouseButton::Left) {
         let cursor: Vec2 = cursor_pos.0.xy();
         rapier_context.intersections_with_point(cursor, QueryFilter::new(), |entity| {
-            if let Ok(building) = building_query.get(entity) {
+            if let Ok(_building) = building_query.get(entity) {
                 let player = player_query.single();
                 commands
                     .entity(player)
@@ -354,10 +351,7 @@ struct MineCountdown {
 }
 
 fn is_minable(tile: u32) -> bool {
-    match tile {
-        COAL | IRON | STONE | TREE => true,
-        _ => false,
-    }
+    matches!(tile, COAL | IRON | STONE | TREE)
 }
 
 struct PlayerSettings {
@@ -454,7 +448,7 @@ fn craft_ui(
             ui.horizontal(|ui| {
                 ui.label(&blueprint.name);
                 ui.label(format!("Time: {:.2}", blueprint.crafting_time));
-                ui.label(format!("Materials:"));
+                ui.label("Materials:".to_string());
                 for (resource, amount) in &blueprint.materials {
                     ui.label(format!("{:?}: {}", resource, amount));
                 }

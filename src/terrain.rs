@@ -149,15 +149,15 @@ async fn generate_chunk(chunk_position: IVec2, mut chunk: Chunk) -> (IVec2, Chun
             .flatten()
             .map(|tile| {
                 possible_neighbors
-                    .get(&tile)
+                    .get(tile)
                     .expect("Tile type has no possible neighbors set")
             })
             .fold(all_tiles.clone(), |acc, poss_tiles| {
-                acc.intersection(&poss_tiles).map(|n| *n).collect()
+                acc.intersection(poss_tiles).copied().collect()
             });
 
         debug!("Possible tiles: {:?}", possible);
-        if possible.len() == 0 {
+        if possible.is_empty() {
             error!("No possible tiles found");
             continue;
         }
@@ -302,10 +302,9 @@ fn spawn_chunks_around_camera(
                         let mut any_neighbors = false;
                         for c_x in -1..=1 {
                             for c_y in -1..=1 {
-                                any_neighbors = any_neighbors
-                                    | chunk_manager
-                                        .loading_chunks
-                                        .contains(&IVec2::new(x + c_x, y + c_y))
+                                any_neighbors |= chunk_manager
+                                    .loading_chunks
+                                    .contains(&IVec2::new(x + c_x, y + c_y))
                             }
                         }
                         any_neighbors
@@ -421,8 +420,7 @@ fn despawn_outofrange_chunks(
             let chunk_pos = chunk_transform.translation.xy();
             let distance = player_transform.translation.xy().distance(chunk_pos);
             let chunk_spawn_radius = terrain_settings.chunk_spawn_radius;
-            if distance > (chunk_spawn_radius as f32 * CHUNK_SIZE.x as f32 * TILE_SIZE.x) * 2 as f32
-            {
+            if distance > (chunk_spawn_radius as f32 * CHUNK_SIZE.x as f32 * TILE_SIZE.x) * 2f32 {
                 let x = (chunk_pos.x as f32 / (CHUNK_SIZE.x as f32 * TILE_SIZE.x)).floor() as i32;
                 let y = (chunk_pos.y as f32 / (CHUNK_SIZE.y as f32 * TILE_SIZE.y)).floor() as i32;
 
@@ -462,13 +460,13 @@ fn update_cursor_pos(
     mut cursor_pos: ResMut<CursorPos>,
     player_query: Query<&Transform, With<Player>>,
 ) {
-    for cursor_moved in cursor_moved_events.iter().last() {
+    if let Some(cursor_moved) = cursor_moved_events.iter().last() {
         for (_cam_t, cam) in camera_query.iter() {
             let player_transform = player_query.single();
             *cursor_pos = CursorPos(cursor_pos_in_world(
                 &windows,
                 cursor_moved.position,
-                &player_transform,
+                player_transform,
                 cam,
             ));
         }
@@ -585,7 +583,7 @@ fn hover_info_ui(
     tile_query: Query<&TileTexture>,
     player_query: Query<&HoveredTile, With<Player>>,
 ) {
-    egui::Window::new("Hover Info").show(&egui_context.ctx_mut(), |ui| {
+    egui::Window::new("Hover Info").show(egui_context.ctx_mut(), |ui| {
         if let Ok(hovered_tile) = player_query.get_single() {
             let tile_entity = hovered_tile.entity;
             let cursor_pos = cursor_pos.0;

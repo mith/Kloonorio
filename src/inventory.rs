@@ -281,21 +281,19 @@ fn inventory_dev_ui(
         .default_width(200.0)
         .show(egui_context.ctx_mut(), |ui| {
             for inventory in inventory_query.iter() {
-                for slot in inventory.slots.iter() {
-                    if let Some(stack) = slot {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("{:?}", stack.resource));
-                            ui.label(format!("{}", stack.amount));
-                            if is_placeable(stack.resource) && ui.button("Place").clicked() {
-                                if let Ok(player) = player_query.get_single() {
-                                    commands.entity(player).insert(Placeable {
-                                        resource: stack.resource,
-                                        size: building_size(stack.resource),
-                                    });
-                                }
+                for stack in inventory.slots.iter().flatten() {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("{:?}", stack.resource));
+                        ui.label(format!("{}", stack.amount));
+                        if is_placeable(stack.resource) && ui.button("Place").clicked() {
+                            if let Ok(player) = player_query.get_single() {
+                                commands.entity(player).insert(Placeable {
+                                    resource: stack.resource,
+                                    size: building_size(stack.resource),
+                                });
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
         });
