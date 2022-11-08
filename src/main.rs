@@ -465,15 +465,17 @@ fn craft_ui(
                 for (resource, amount) in &blueprint.materials {
                     ui.label(format!("{:?}: {}", resource, amount));
                 }
-                if ui.button("Craft").clicked() {
-                    for (mut inventory, mut build_queue) in &mut player_query {
-                        if inventory.has_items(&blueprint.materials) {
-                            inventory.remove_items(&blueprint.materials);
-                            build_queue.0.push_back(ActiveCraft {
-                                blueprint: blueprint.clone(),
-                                timer: Timer::from_seconds(blueprint.crafting_time, false),
-                            });
-                        }
+                for (mut inventory, mut build_queue) in &mut player_query {
+                    let resources_available = inventory.has_items(&blueprint.materials);
+                    if ui
+                        .add_enabled(resources_available, egui::Button::new("Craft"))
+                        .clicked()
+                    {
+                        inventory.remove_items(&blueprint.materials);
+                        build_queue.0.push_back(ActiveCraft {
+                            blueprint: blueprint.clone(),
+                            timer: Timer::from_seconds(blueprint.crafting_time, false),
+                        });
                     }
                 }
             });
