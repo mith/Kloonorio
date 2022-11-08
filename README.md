@@ -1,6 +1,14 @@
 # Kloonorio
 A Factorio clone using the [Bevy engine](https://bevyengine.org/).
 
+## How to run
+
+### Nix
+
+To run the game locally using Nix, use the following command:
+```
+nix run github:mith/kloonorio
+```
 
 ## Screenshots
 
