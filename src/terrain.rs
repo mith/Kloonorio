@@ -1,9 +1,16 @@
 use bevy_egui::EguiContext;
 use iyes_loopless::prelude::ConditionSet;
 use rand::seq::IteratorRandom;
+use rand::seq::SliceRandom;
 use rand::Rng;
-use std::collections::VecDeque;
+use rand::SeedableRng;
 
+use std::{
+    collections::VecDeque,
+    hash::{BuildHasher, Hasher},
+};
+
+use ahash::{AHasher, RandomState};
 use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
     prelude::*,
@@ -13,6 +20,10 @@ use bevy::{
 use bevy_ecs_tilemap::prelude::*;
 use futures_lite::future;
 use ndarray::prelude::*;
+
+use fast_poisson::Poisson2D;
+use noise::{NoiseFn, OpenSimplex, ScalePoint, Seedable, SuperSimplex, Turbulence};
+use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::types::Player;
 
@@ -25,6 +36,7 @@ impl Plugin for TerrainPlugin {
         app.add_plugin(TilemapPlugin)
             .insert_resource(ChunkManager::default())
             .insert_resource(TerrainSettings {
+                seed: 1234567,
                 chunk_spawn_radius: 5,
             })
             .insert_resource(CursorPos(Vec3::new(-100., -100., 0.)))
@@ -48,6 +60,7 @@ const CHUNK_SIZE: UVec2 = UVec2 { x: 8, y: 8 };
 pub(crate) const TILE_SIZE: TilemapTileSize = TilemapTileSize { x: 16., y: 16. };
 
 struct TerrainSettings {
+    seed: u32,
     chunk_spawn_radius: i32,
 }
 
@@ -77,7 +90,141 @@ pub struct ChunkManager {
     pub entities: HashMap<IVec2, Entity>,
 }
 
-async fn generate_chunk(chunk_position: IVec2, mut chunk: Chunk) -> (IVec2, Chunk) {
+#[derive(Debug)]
+struct RadiusNoise {
+    location: [f64; 2],
+    radius: f64,
+}
+
+impl NoiseFn<f64, 2> for RadiusNoise {
+    /// Return 1. if the point is within the radius, 0. otherwise
+    fn get(&self, point: [f64; 2]) -> f64 {
+        let dist = (point[0] - self.location[0]).powi(2) + (point[1] - self.location[1]).powi(2);
+        if dist < self.radius.powi(2) {
+            1.
+        } else {
+            0.
+        }
+    }
+}
+
+type TileType = u32;
+
+struct Region {
+    ores: Vec<(u32, Turbulence<RadiusNoise, OpenSimplex>)>,
+}
+
+async fn generate_region(seed: u32, region_location: IVec2) -> Region {
+    let mut hasher: AHasher = RandomState::with_seed(seed as usize).build_hasher();
+    hasher.write_i32(region_location.x);
+    hasher.write_i32(region_location.y);
+    let region_seed = hasher.finish();
+
+    // Generate a list of ore locations for the region
+    let ore_locations = Poisson2D::new()
+        .with_dimensions(
+            [(CHUNK_SIZE.x * 10) as f64, (CHUNK_SIZE.y * 10) as f64],
+            30.,
+        )
+        .with_seed(region_seed)
+        .iter()
+        .take(10)
+        .collect::<Vec<_>>();
+
+    let ore_noise = ore_locations
+        .iter()
+        .map(|&location| RadiusNoise {
+            location,
+            radius: 5.,
+        })
+        .map(|noise| {
+            Turbulence::<_, OpenSimplex>::new(noise)
+                .set_seed(seed + 11)
+                .set_frequency(0.1)
+                .set_power(10.)
+        });
+
+    let mut rng = Xoshiro256StarStar::seed_from_u64(region_seed);
+    let ore_types = ore_locations
+        .iter()
+        .map(|_| {
+            let ore_types = [(COAL, 2), (IRON, 2), (STONE, 1)];
+
+            let ore_type = ore_types
+                .choose_weighted(&mut rng, |item| item.1)
+                .unwrap()
+                .0;
+            ore_type
+        })
+        .collect::<Vec<_>>();
+
+    Region {
+        ores: ore_types.into_iter().zip(ore_noise).collect::<Vec<_>>(),
+    }
+}
+
+async fn generate_chunk_noise(seed: u32, chunk_position: IVec2) -> (IVec2, Chunk) {
+    let mut chunk =
+        Array2::<Option<TileType>>::default((CHUNK_SIZE.x as usize, CHUNK_SIZE.y as usize));
+
+    let open_simplex = SuperSimplex::new(seed);
+    let scale_point = ScalePoint::new(open_simplex).set_scale(0.005);
+    let turbulence = Turbulence::<_, SuperSimplex>::new(scale_point)
+        .set_seed(seed + 9)
+        .set_frequency(0.001)
+        .set_power(100.);
+    let turbulence_2 = Turbulence::<_, OpenSimplex>::new(turbulence)
+        .set_seed(seed + 10)
+        .set_frequency(0.1)
+        .set_power(10.)
+        .set_roughness(103);
+    for ((x, y), tile) in chunk.indexed_iter_mut() {
+        let noise = turbulence_2.get([
+            (chunk_position.x * CHUNK_SIZE.x as i32 + x as i32).into(),
+            (chunk_position.y * CHUNK_SIZE.y as i32 + y as i32).into(),
+        ]);
+        if noise > 0.4 {
+            *tile = Some(TREE);
+        } else if noise > 0.2 {
+            *tile = Some(TALL_GRASS);
+        } else if noise > -0.1 {
+            *tile = Some(GRASS);
+        } else if noise > -0.3 {
+            *tile = Some(GROUND);
+        } else if noise > -0.4 {
+            *tile = Some(WATER);
+        } else {
+            *tile = Some(DEEP_WATER);
+        }
+    }
+
+    let region_location = chunk_position / 10 * 10;
+    let region = generate_region(seed, region_location).await;
+
+    for ((x, y), tile) in chunk.indexed_iter_mut() {
+        let ore_type = region.ores.iter().fold(None, |acc, (ore_type, noise)| {
+            let amount = noise.get([
+                ((chunk_position.x - region_location.x) * CHUNK_SIZE.x as i32 + x as i32).into(),
+                ((chunk_position.y - region_location.y) * CHUNK_SIZE.y as i32 + y as i32).into(),
+            ]);
+            if amount > 0. {
+                Some(*ore_type)
+            } else {
+                acc
+            }
+        });
+        if ore_type.is_some() && !matches!(tile, Some(WATER) | Some(DEEP_WATER)) {
+            *tile = ore_type;
+        }
+    }
+
+    (chunk_position, chunk)
+}
+
+async fn generate_chunk_waveform_collapse(
+    chunk_position: IVec2,
+    mut chunk: Chunk,
+) -> (IVec2, Chunk) {
     info!("Start generating chunk {:?}", chunk_position);
     let mut rng = rand::thread_rng();
     // Pick a random tile
@@ -283,10 +430,8 @@ fn spawn_chunk(
 fn spawn_chunks_around_camera(
     mut commands: Commands,
     camera_query: Query<&GlobalTransform, With<Camera>>,
-    mut chunk_manager: ResMut<ChunkManager>,
+    chunk_manager: ResMut<ChunkManager>,
     terrain_settings: Res<TerrainSettings>,
-    chunks_query: Query<(&Transform, &TileStorage), With<SpawnedChunk>>,
-    tile_query: Query<&TileTexture>,
 ) {
     for transform in &camera_query {
         let camera_chunk_pos = global_pos_to_chunk_pos(&transform.translation().xy());
@@ -298,103 +443,11 @@ fn spawn_chunks_around_camera(
                 (camera_chunk_pos.x - chunk_spawn_radius)..(camera_chunk_pos.x + chunk_spawn_radius)
             {
                 if !chunk_manager.spawned_chunks.contains(&IVec2::new(x, y)) {
-                    let neighboring_loading_chunks = {
-                        let mut any_neighbors = false;
-                        for c_x in -1..=1 {
-                            for c_y in -1..=1 {
-                                any_neighbors |= chunk_manager
-                                    .loading_chunks
-                                    .contains(&IVec2::new(x + c_x, y + c_y))
-                            }
-                        }
-                        any_neighbors
-                    };
-                    if !neighboring_loading_chunks {
-                        info!("Spawning chunk {:?}", IVec2::new(x, y));
-                        // chunk_manager.spawned_chunks.insert(IVec2::new(x, y));
-                        chunk_manager.loading_chunks.insert(IVec2::new(x, y));
-                        let mut chunk = Array2::<Option<u32>>::default((
-                            CHUNK_SIZE.x as usize + 2,
-                            CHUNK_SIZE.y as usize + 2,
-                        ));
-
-                        if let Some(left_chunk_entity) =
-                            chunk_manager.entities.get(&IVec2::new(x - 1, y))
-                        {
-                            let (_chunk_transform, tile_storage) = chunks_query
-                                .get(*left_chunk_entity)
-                                .expect(&format!("Chunk {:?} should exist", (x - 1, y)));
-                            for c_y in 0..CHUNK_SIZE.y {
-                                if let Some(tile_entity) = tile_storage.get(&TilePos {
-                                    x: CHUNK_SIZE.x - 1,
-                                    y: c_y,
-                                }) {
-                                    let tile =
-                                        tile_query.get(tile_entity).expect("Tile should exist");
-                                    chunk[[0, c_y as usize + 1]] = Some(tile.0);
-                                }
-                            }
-                        }
-
-                        if let Some(right_chunk_entity) =
-                            chunk_manager.entities.get(&IVec2::new(x + 1, y))
-                        {
-                            let (_chunk_transform, tile_storage) = chunks_query
-                                .get(*right_chunk_entity)
-                                .expect(&format!("Chunk {:?} should exist", (x + 1, y)));
-                            for c_y in 0..CHUNK_SIZE.y {
-                                if let Some(tile_entity) =
-                                    tile_storage.get(&TilePos { x: 0, y: c_y })
-                                {
-                                    let tile =
-                                        tile_query.get(tile_entity).expect("Tile should exist");
-                                    chunk[[CHUNK_SIZE.x as usize + 1, c_y as usize + 1]] =
-                                        Some(tile.0);
-                                }
-                            }
-                        }
-
-                        if let Some(bottom_chunk_entity) =
-                            chunk_manager.entities.get(&IVec2::new(x, y + 1))
-                        {
-                            let (_chunk_transform, tile_storage) = chunks_query
-                                .get(*bottom_chunk_entity)
-                                .expect(&format!("Chunk {:?} should exist", (x, y + 1)));
-                            for c_x in 0..CHUNK_SIZE.x {
-                                if let Some(tile_entity) =
-                                    tile_storage.get(&TilePos { x: c_x, y: 0 })
-                                {
-                                    let tile =
-                                        tile_query.get(tile_entity).expect("Tile should exist");
-                                    chunk[[c_x as usize + 1, CHUNK_SIZE.y as usize + 1]] =
-                                        Some(tile.0);
-                                }
-                            }
-                        }
-
-                        if let Some(top_chunk_entity) =
-                            chunk_manager.entities.get(&IVec2::new(x, y - 1))
-                        {
-                            let (_chunk_transform, tile_storage) = chunks_query
-                                .get(*top_chunk_entity)
-                                .expect(&format!("Chunk {:?} should exist", (x, y - 1)));
-                            for c_x in 0..CHUNK_SIZE.x {
-                                if let Some(tile_entity) = tile_storage.get(&TilePos {
-                                    x: c_x,
-                                    y: CHUNK_SIZE.y - 1,
-                                }) {
-                                    let tile =
-                                        tile_query.get(tile_entity).expect("Tile should exist");
-                                    chunk[[c_x as usize + 1, 0]] = Some(tile.0);
-                                }
-                            }
-                        }
-
-                        let thread_pool = AsyncComputeTaskPool::get();
-                        let task = thread_pool
-                            .spawn(async move { generate_chunk(IVec2::new(x, y), chunk).await });
-                        commands.spawn().insert(GenerateChunk(task));
-                    }
+                    let thread_pool = AsyncComputeTaskPool::get();
+                    let seed = terrain_settings.seed;
+                    let task = thread_pool
+                        .spawn(async move { generate_chunk_noise(seed, IVec2::new(x, y)).await });
+                    commands.spawn().insert(GenerateChunk(task));
                 }
             }
         }
@@ -624,4 +677,19 @@ fn debug_ui(
                 .text("chunk spawn radius"),
         );
     });
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tokio;
+
+    #[tokio::test]
+    async fn generate_chunk_is_reproducible() {
+        let seed = 123456789;
+        let position = IVec2::new(100, 100);
+        let chunk_a = generate_chunk_noise(seed, position).await;
+        let chunk_b = generate_chunk_noise(seed, position).await;
+        assert_eq!(chunk_a, chunk_b);
+    }
 }

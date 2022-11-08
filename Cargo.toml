@@ -18,8 +18,15 @@ futures-lite = "1.12"
 crossbeam-channel = "0.5"
 egui = "0.19"
 bevy_rapier2d = { version = "0.17.0", features = ["wasm-bindgen"] }
+fast_poisson = "0.5.2"
+ahash = "0.8.1"
+rand_chacha = "0.3.1"
+rand_xoshiro = "0.6.0"
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[dev-dependencies]
+tokio = { version = "1.21.2", features = ["macros", "rt"] }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
