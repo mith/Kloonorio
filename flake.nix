@@ -157,6 +157,7 @@
             ${self.checks.${system}.pre-commit-check.shellHook}
           '';
           inputsFrom = [self.packages.${system}.kloonorio-bin];
+          RUST_LOG = "error,kloonorio=info";
           nativeBuildInputs = with pkgs;
             [
               (toolchain.withComponents ["cargo" "rustc" "rust-src" "rustfmt" "clippy"])
