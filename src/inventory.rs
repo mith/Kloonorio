@@ -504,4 +504,15 @@ mod test {
         assert_eq!(inventory.slots[0], Some(Stack::new(Resource::Stone, 10)));
         assert_eq!(remainder, vec![(Resource::Wood, 20)]);
     }
+
+    #[test]
+    fn test_add_items_stack() {
+        let mut inventory = Inventory::new(2);
+        inventory.add_items(&[(Resource::StoneFurnace, 1)]);
+        inventory.add_items(&[(Resource::StoneFurnace, 1)]);
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Resource::StoneFurnace, 2))
+        );
+    }
 }
