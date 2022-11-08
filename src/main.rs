@@ -36,6 +36,10 @@ fn main() {
     .insert_resource(PlayerSettings {
         max_mining_distance: 20.,
     })
+    .insert_resource(CameraSettings {
+        min_zoom: 0.1,
+        max_zoom: 10.,
+    })
     .insert_resource(vec![Recipe {
         materials: vec![(Resource::Stone, 5u32)],
         products: vec![(Resource::StoneFurnace, 1u32)],
@@ -322,14 +326,23 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 }
 
+struct CameraSettings {
+    min_zoom: f32,
+    max_zoom: f32,
+}
+
 fn camera_zoom(
     mut query: Query<&mut OrthographicProjection>,
     mut mouse_wheel_events: EventReader<MouseWheel>,
+    camera_settings: Res<CameraSettings>,
 ) {
     for mut projection in &mut query {
         for event in mouse_wheel_events.iter() {
             projection.scale -= event.y * 0.1;
-            projection.scale = projection.scale.max(0.1).min(0.4);
+            projection.scale = projection
+                .scale
+                .max(camera_settings.min_zoom)
+                .min(camera_settings.max_zoom);
         }
     }
 }
