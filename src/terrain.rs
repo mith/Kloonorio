@@ -115,7 +115,14 @@ struct Region {
 }
 
 async fn generate_region(seed: u32, region_location: IVec2) -> Region {
-    let mut hasher: AHasher = RandomState::with_seed(seed as usize).build_hasher();
+    let useed = seed as u64;
+    let mut hasher: AHasher = RandomState::with_seeds(
+        useed,
+        useed.swap_bytes(),
+        useed.count_ones() as u64,
+        useed.rotate_left(32),
+    )
+    .build_hasher();
     hasher.write_i32(region_location.x);
     hasher.write_i32(region_location.y);
     let region_seed = hasher.finish();
