@@ -87,28 +87,35 @@ impl Inventory {
         let mut remainder = Vec::new();
         for (resource, amount) in items {
             let mut amount = *amount;
-            for slot in self.slots.iter_mut() {
-                if let Some(stack) = slot {
-                    if stack.resource == *resource {
-                        let space = MAX_STACK_SIZE - stack.amount;
-                        if space >= amount {
-                            stack.amount += amount;
-                            amount = 0;
-                        } else {
-                            stack.amount = MAX_STACK_SIZE;
-                            amount -= space;
-                        }
+
+            // First iterate over existing stacks
+            for stack in self.slots.iter_mut().flatten() {
+                if stack.resource == *resource {
+                    let space = MAX_STACK_SIZE - stack.amount;
+                    if space >= amount {
+                        stack.amount += amount;
+                        amount = 0;
+                    } else {
+                        stack.amount = MAX_STACK_SIZE;
+                        amount -= space;
                     }
-                } else {
-                    *slot = Some(Stack {
-                        resource: *resource,
-                        amount: amount.min(MAX_STACK_SIZE),
-                    });
-                    amount = 0;
                 }
                 if amount == 0 {
                     break;
                 }
+            }
+
+            if amount == 0 {
+                return remainder;
+            }
+
+            // Then put in the first empty slot
+            if let Some(slot) = self.slots.iter_mut().filter(|s| s.is_none()).next() {
+                *slot = Some(Stack {
+                    resource: *resource,
+                    amount: amount.min(MAX_STACK_SIZE),
+                });
+                amount = 0;
             }
 
             if amount > 0 {
@@ -119,33 +126,8 @@ impl Inventory {
         remainder
     }
 
-    pub fn add_item(&mut self, resource: Resource, amount: u32) {
-        let mut amount = amount;
-        for slot in self.slots.iter_mut() {
-            if amount == 0 {
-                break;
-            }
-            if let Some(stack) = slot {
-                if stack.resource == resource {
-                    let space = MAX_STACK_SIZE - stack.amount;
-                    if space > 0 {
-                        if amount > space {
-                            stack.amount += space;
-                            amount -= space;
-                        } else {
-                            stack.amount += amount;
-                            return;
-                        }
-                    }
-                }
-            } else {
-                *slot = Some(Stack {
-                    resource,
-                    amount: std::cmp::min(amount, MAX_STACK_SIZE),
-                });
-                amount -= std::cmp::min(amount, MAX_STACK_SIZE);
-            }
-        }
+    pub fn add_item(&mut self, resource: Resource, amount: u32) -> Vec<(Resource, u32)> {
+        self.add_items(&[(resource, amount)])
     }
 
     pub fn has_items(&self, items: &[(Resource, u32)]) -> bool {
@@ -508,11 +490,11 @@ mod test {
     #[test]
     fn test_add_items_stack() {
         let mut inventory = Inventory::new(2);
-        inventory.add_items(&[(Resource::StoneFurnace, 1)]);
+        inventory.slots[1] = Some(Stack::new(Resource::StoneFurnace, 10));
         inventory.add_items(&[(Resource::StoneFurnace, 1)]);
         assert_eq!(
-            inventory.slots[0],
-            Some(Stack::new(Resource::StoneFurnace, 2))
+            inventory.slots[1],
+            Some(Stack::new(Resource::StoneFurnace, 11))
         );
     }
 }

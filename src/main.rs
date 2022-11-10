@@ -432,8 +432,8 @@ fn interact_completion(
                     IRON => inventory.add_item(Resource::Iron, 1),
                     STONE => inventory.add_item(Resource::Stone, 1),
                     TREE => inventory.add_item(Resource::Wood, 1),
-                    _ => {}
-                }
+                    _ => vec![],
+                };
             }
         }
     }
