@@ -1,14 +1,11 @@
 use bevy_egui::EguiContext;
 use iyes_loopless::prelude::ConditionSet;
-use rand::seq::IteratorRandom;
+
 use rand::seq::SliceRandom;
-use rand::Rng;
+
 use rand::SeedableRng;
 
-use std::{
-    collections::VecDeque,
-    hash::{BuildHasher, Hasher},
-};
+use std::hash::{BuildHasher, Hasher};
 
 use ahash::{AHasher, RandomState};
 use bevy::{
@@ -25,6 +22,7 @@ use fast_poisson::Poisson2D;
 use noise::{NoiseFn, OpenSimplex, ScalePoint, Seedable, SuperSimplex, Turbulence};
 use rand_xoshiro::Xoshiro256StarStar;
 
+use crate::types::AppState;
 use crate::types::Player;
 
 #[derive(SystemLabel)]
@@ -42,6 +40,7 @@ impl Plugin for TerrainPlugin {
             .insert_resource(CursorPos(Vec3::new(-100., -100., 0.)))
             .add_system_set(
                 ConditionSet::new()
+                    .run_in_state(AppState::Running)
                     .label(TerrainStage)
                     .with_system(spawn_chunks_around_camera)
                     .with_system(spawn_chunk)
@@ -152,18 +151,15 @@ async fn generate_region(seed: u32, region_location: IVec2) -> Region {
         });
 
     let mut rng = Xoshiro256StarStar::seed_from_u64(region_seed);
-    let ore_types = ore_locations
-        .iter()
-        .map(|_| {
-            let ore_types = [(COAL, 2), (IRON, 2), (STONE, 1)];
+    let ore_types = ore_locations.iter().map(|_| {
+        let ore_types = [(COAL, 2), (IRON, 2), (STONE, 1)];
 
-            let ore_type = ore_types
-                .choose_weighted(&mut rng, |item| item.1)
-                .unwrap()
-                .0;
-            ore_type
-        })
-        .collect::<Vec<_>>();
+        let ore_type = ore_types
+            .choose_weighted(&mut rng, |item| item.1)
+            .unwrap()
+            .0;
+        ore_type
+    });
 
     Region {
         ores: ore_types.into_iter().zip(ore_noise).collect::<Vec<_>>(),
@@ -291,7 +287,7 @@ fn spawn_chunk(
 
             let texture_handle = asset_server.load("textures/terrain.png");
 
-            info!("Adding chunk {:?} to world", chunk_position);
+            debug!("Adding chunk {:?} to world", chunk_position);
             commands
                 .entity(chunk_entity)
                 .insert_bundle(TilemapBundle {

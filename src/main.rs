@@ -5,23 +5,38 @@ use bevy::{
     math::Vec3Swizzles,
     prelude::*,
     render::texture::ImageSettings,
+    utils::HashMap,
 };
 use bevy_ecs_tilemap::tiles::TileTexture;
 use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
+use burner::{burner_load, burner_tick, Burner};
 use egui::Align2;
+use inventory::{drop_between_inventories, inventory_grid, Drag, Output, Source};
+use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
+use loading::LoadingPlugin;
+use recipe_loader::{Recipe, RecipeLoaderPlugin};
+use smelter::{smelter_tick, Smelter};
+use structure_loader::StructureLoaderPlugin;
+use types::{Powered, Working};
 
+mod burner;
 mod inventory;
+mod loading;
 mod player_movement;
+mod recipe_loader;
+mod smelter;
+mod structure_loader;
 mod terrain;
 mod types;
 
-use crate::inventory::{ActiveCraft, CraftingQueue, Inventory, InventoryPlugin, Stack};
+use crate::inventory::{ActiveCraft, CraftingQueue, Inventory, InventoryPlugin};
 use crate::player_movement::PlayerMovementPlugin;
+use crate::recipe_loader::RecipeAsset;
 use crate::terrain::{CursorPos, HoveredTile, TerrainPlugin, COAL, IRON, STONE, TREE};
 use crate::types::{AppState, CursorState, GameState, Player};
 
-use crate::inventory::{Building, Fueled, Smelter};
+use crate::inventory::Building;
 use crate::types::Resource;
 
 fn main() {
@@ -40,13 +55,7 @@ fn main() {
         min_zoom: 0.1,
         max_zoom: 10.,
     })
-    .insert_resource(vec![Recipe {
-        materials: vec![(Resource::Stone, 5u32)],
-        products: vec![(Resource::StoneFurnace, 1u32)],
-        crafting_time: 0.5,
-        texture: "stone_furnace.png".to_string(),
-        name: "Stone Furnace".to_string(),
-    }])
+    .add_loopless_state(AppState::Loading)
     // .add_plugin(LogDiagnosticsPlugin::default())
     .add_plugin(FrameTimeDiagnosticsPlugin::default())
     .add_plugins(DefaultPlugins)
@@ -65,22 +74,28 @@ fn main() {
     .add_plugin(TerrainPlugin)
     .add_plugin(InventoryPlugin)
     .add_plugin(PlayerMovementPlugin)
-    .add_state(AppState::Setup)
-    .add_startup_system(setup)
-    .add_system(camera_zoom)
-    // .add_system(performance_ui)
-    .add_system(interact)
-    .add_system(interact_completion)
-    .add_system(interact_cancel)
-    .add_system(interaction_ui)
-    .add_system(craft_ui)
-    .add_system(craft_ticker)
-    .add_system(pick_building)
-    .add_system(building_ui)
-    .add_system(smelter_tick)
-    .add_system(fueled_tick)
-    .add_system(fueled_load)
-    .add_system(working_texture)
+    .add_plugin(RecipeLoaderPlugin)
+    .add_plugin(StructureLoaderPlugin)
+    .add_plugin(LoadingPlugin)
+    .add_enter_system(AppState::Running, spawn_player)
+    .add_system_set(
+        ConditionSet::new()
+            .run_in_state(AppState::Running)
+            .with_system(camera_zoom)
+            .with_system(interact)
+            .with_system(interact_completion)
+            .with_system(interact_cancel)
+            .with_system(interaction_ui)
+            .with_system(craft_ui)
+            .with_system(craft_ticker)
+            .with_system(pick_building)
+            .with_system(building_ui)
+            .with_system(smelter_tick)
+            .with_system(burner_tick)
+            .with_system(burner_load)
+            .with_system(working_texture)
+            .into(),
+    )
     .run();
 }
 
@@ -111,49 +126,6 @@ fn pick_building(
     }
 }
 
-#[derive(Component)]
-struct Powered;
-
-#[derive(Component)]
-struct Working;
-
-fn smelter_tick(
-    mut commands: Commands,
-    mut smelter_query: Query<
-        (Entity, &mut Smelter, &mut CraftingQueue, &mut Inventory),
-        With<Powered>,
-    >,
-    time: Res<Time>,
-) {
-    for (entity, mut smelter, mut crafting_queue, mut inventory) in smelter_query.iter_mut() {
-        if inventory.has_items(&[(Resource::Iron, 1)])
-            && crafting_queue.0.is_empty()
-            && smelter.output.can_add(&[(Resource::IronPlate, 1)])
-        {
-            inventory.remove_items(&[(Resource::Iron, 1)]);
-            crafting_queue.0.push_back(ActiveCraft {
-                timer: Timer::from_seconds(1., false),
-                blueprint: Recipe {
-                    materials: vec![(Resource::Iron, 1u32)],
-                    products: vec![(Resource::IronPlate, 1u32)],
-                    crafting_time: 0.5,
-                    texture: "iron_plate.png".to_string(),
-                    name: "Iron Plate".to_string(),
-                },
-            });
-            commands.entity(entity).insert(Working);
-        }
-
-        if let Some(active_build) = crafting_queue.0.front_mut() {
-            if active_build.timer.tick(time.delta()).just_finished() {
-                smelter.output.add_items(&active_build.blueprint.products);
-                crafting_queue.0.pop_front();
-                commands.entity(entity).remove::<Working>();
-            }
-        }
-    }
-}
-
 fn working_texture(
     mut buildings: ParamSet<(
         Query<&mut TextureAtlasSprite, (With<Powered>, With<Working>)>,
@@ -174,33 +146,6 @@ fn working_texture(
     }
 }
 
-fn fueled_tick(
-    mut commands: Commands,
-    mut fueled_query: Query<(Entity, &mut Fueled), With<Working>>,
-    time: Res<Time>,
-) {
-    for (entity, mut fueled) in fueled_query.iter_mut() {
-        if let Some(timer) = &mut fueled.fuel_timer {
-            if timer.tick(time.delta()).just_finished() {
-                commands.entity(entity).remove::<Powered>();
-                fueled.fuel_timer = None;
-            }
-        }
-    }
-}
-
-fn fueled_load(
-    mut commands: Commands,
-    mut fueled_query: Query<(Entity, &mut Fueled), Without<Powered>>,
-) {
-    for (entity, mut fueled) in fueled_query.iter_mut() {
-        if fueled.fuel_inventory.remove_items(&[(Resource::Coal, 1)]) {
-            fueled.fuel_timer = Some(Timer::from_seconds(10., false));
-            commands.entity(entity).insert(Powered);
-        }
-    }
-}
-
 fn building_ui(
     mut commands: Commands,
     mut egui_ctx: ResMut<EguiContext>,
@@ -209,9 +154,11 @@ fn building_ui(
         (With<Player>, Without<Building>),
     >,
     name: Query<&Name>,
-    mut smelter_query: Query<(&mut Smelter, &mut Inventory), With<Building>>,
-    mut fueled_query: Query<&mut Fueled, With<Building>>,
+    mut building_inventory_query: Query<&mut Inventory, With<Building>>,
+    mut smelter_query: Query<(&mut Source, &mut Output), (With<Smelter>, With<Building>)>,
+    mut burner_query: Query<&mut Burner, With<Building>>,
     crafting_queue_query: Query<&CraftingQueue, With<Building>>,
+    icons: Res<HashMap<String, egui::TextureId>>,
 ) {
     for (player_entity, SelectedBuilding(selected_building), mut player_inventory) in
         &mut player_query
@@ -221,71 +168,132 @@ fn building_ui(
             .map_or("Building", |n| n.as_str());
 
         let mut window_open = true;
+        let mut character_inven_drag = (None, None);
+        let mut building_inven_drag = (None, None);
+        let mut crafting_source_drag = (None, None);
+        let mut crafting_output_drag = (None, None);
+        let mut burner_drag = (None, None);
         egui::Window::new(name)
+            .resizable(false)
             .open(&mut window_open)
             .show(egui_ctx.ctx_mut(), |ui| {
-                if let Ok((mut smelter, mut building_inventory)) =
-                    smelter_query.get_mut(*selected_building)
-                {
-                    ui.horizontal(|ui| {
-                        ui.label("Input:");
-                        ui.label(format!("{:?}", building_inventory.slots[0]));
-                        if player_inventory.has_items(&[(Resource::Iron, 1)])
-                            && ui.button("Load").clicked()
-                        {
-                            player_inventory.remove_items(&[(Resource::Iron, 1)]);
-                            let remainder = building_inventory.add_items(&[(Resource::Iron, 1)]);
-                            player_inventory.add_items(&remainder);
-                        }
-                    });
-                    if let Ok(crafting_queue) = crafting_queue_query.get(*selected_building) {
-                        if let Some(active_craft) = crafting_queue.0.front() {
-                            ui.add(egui::ProgressBar::new(active_craft.timer.percent()));
-                        }
-                    }
-                    ui.horizontal(|ui| {
-                        ui.label("Output:");
-                        ui.label(format!("{:?}", smelter.output.slots[0]));
-                        if !smelter.output.empty() && ui.button("Unload").clicked() {
-                            player_inventory.add_items(&smelter.output.take_all());
-                        }
-                    });
-                }
+                ui.horizontal(|ui| {
+                    egui::Frame::none()
+                        .stroke(egui::Stroke::new(2., egui::Color32::from_gray(10)))
+                        .inner_margin(5.)
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.label("Character");
+                                character_inven_drag =
+                                    inventory_grid("character", &mut player_inventory, ui, &icons);
+                            });
+                        });
+                    egui::Frame::none()
+                        .stroke(egui::Stroke::new(2., egui::Color32::from_gray(10)))
+                        .inner_margin(5.)
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                if let Ok(mut inventory) =
+                                    building_inventory_query.get_mut(*selected_building)
+                                {
+                                    building_inven_drag =
+                                        inventory_grid("building", &mut inventory, ui, &icons);
+                                }
+                                if let Ok((input, output)) =
+                                    smelter_query.get_mut(*selected_building)
+                                {
+                                    (crafting_source_drag, crafting_output_drag) =
+                                        crafting_machine_widget(
+                                            ui,
+                                            &icons,
+                                            input,
+                                            &crafting_queue_query,
+                                            selected_building,
+                                            output,
+                                        );
+                                }
 
-                if let Ok(mut fueled) = fueled_query.get_mut(*selected_building) {
-                    ui.horizontal(|ui| {
-                        ui.label("Fuel:");
-                        ui.label(format!("{:?}", fueled.fuel_inventory.slots[0]));
+                                if let Ok(mut burner) = burner_query.get_mut(*selected_building) {
+                                    burner_drag = burner_widget(ui, &icons, &mut burner);
+                                }
+                            });
+                        });
+                    if ui.input().pointer.any_released() {
+                        // Get a mutable reference to all inventory types and pass them to drop_between_inventories
+                        let mut inventories: Vec<(&mut Inventory, Drag)> =
+                            vec![(&mut player_inventory, character_inven_drag)];
 
-                        if player_inventory.has_items(&[(Resource::Coal, 1)])
-                            && ui.button("Load").clicked()
-                        {
-                            player_inventory.remove_items(&[(Resource::Coal, 1)]);
-                            fueled.fuel_inventory.add_item(Resource::Coal, 1);
+                        let mut building_inventory =
+                            building_inventory_query.get_mut(*selected_building).ok();
+                        if let Some(ref mut inventory) = &mut building_inventory {
+                            inventories.push((inventory, building_inven_drag));
                         }
-                    });
-                    if let Some(timer) = &fueled.fuel_timer {
-                        ui.add(egui::ProgressBar::new(1. - timer.percent()));
+
+                        let mut smelter_input = smelter_query.get_mut(*selected_building).ok();
+                        if let Some((ref mut input, ref mut output)) = &mut smelter_input {
+                            inventories.push((&mut input.0, crafting_source_drag));
+                            inventories.push((&mut output.0, crafting_output_drag));
+                        }
+
+                        let mut burner = burner_query.get_mut(*selected_building).ok();
+                        if let Some(ref mut burner) = &mut burner {
+                            inventories.push((&mut burner.fuel_inventory, burner_drag));
+                        }
+
+                        drop_between_inventories(&mut inventories);
                     }
-                }
+                });
             });
+
         if !window_open {
             commands.entity(player_entity).remove::<SelectedBuilding>();
         }
     }
 }
 
-#[derive(Clone)]
-pub struct Recipe {
-    pub materials: Vec<(Resource, u32)>,
-    pub products: Vec<(Resource, u32)>,
-    pub crafting_time: f32,
-    pub texture: String,
-    pub name: String,
+fn burner_widget(
+    ui: &mut egui::Ui,
+    icons: &HashMap<String, egui::TextureId>,
+    burner: &mut Burner,
+) -> inventory::Drag {
+    let mut drag = (None, None);
+    ui.horizontal(|ui| {
+        ui.label("Fuel:");
+        drag = inventory_grid("burner", &mut burner.fuel_inventory, ui, icons)
+    });
+    if let Some(timer) = &burner.fuel_timer {
+        ui.add(egui::ProgressBar::new(1. - timer.percent()));
+    }
+    drag
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    asset_server.watch_for_changes().unwrap();
+fn crafting_machine_widget(
+    ui: &mut egui::Ui,
+    icons: &HashMap<String, egui::TextureId>,
+    mut source: Mut<Source>,
+    crafting_queue_query: &Query<&CraftingQueue, With<Building>>,
+    selected_building: &Entity,
+    mut output: Mut<Output>,
+) -> (inventory::Drag, Drag) {
+    let mut source_drag = (None, None);
+    ui.horizontal(|ui| {
+        ui.label("Input:");
+        source_drag = inventory_grid("input", &mut source.0, ui, icons);
+    });
+    if let Ok(crafting_queue) = crafting_queue_query.get(*selected_building) {
+        if let Some(active_craft) = crafting_queue.0.front() {
+            ui.add(egui::ProgressBar::new(active_craft.timer.percent()));
+        }
+    }
+    let mut output_drag = (None, None);
+    ui.horizontal(|ui| {
+        ui.label("Output:");
+        output_drag = inventory_grid("output", &mut output.0, ui, icons);
+    });
+
+    (source_drag, output_drag)
+}
+fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(SpriteBundle {
             texture: asset_server.load("textures/character.png"),
@@ -294,24 +302,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(Player)
         .insert(Inventory {
-            slots: [
-                vec![None; 10],
-                vec![
-                    Some(Stack {
-                        resource: Resource::StoneFurnace,
-                        amount: 1,
-                    }),
-                    Some(Stack {
-                        resource: Resource::Coal,
-                        amount: 1,
-                    }),
-                    Some(Stack {
-                        resource: Resource::Iron,
-                        amount: 1,
-                    }),
-                ],
-            ]
-            .concat(),
+            slots: vec![None; 12],
         })
         .insert(CraftingQueue::default())
         .with_children(|parent| {
@@ -393,7 +384,6 @@ fn interact(
             .translation
             .xy()
             .distance(cursor_pos.0.xy());
-        info!("Tile distance: {}", tile_distance);
         if is_minable(tile_texture.0) && tile_distance < player_settings.max_mining_distance {
             commands.entity(player_entity).insert(MineCountdown {
                 timer: Timer::from_seconds(1.0, false),
@@ -423,7 +413,6 @@ fn interact_completion(
 ) {
     for (entity, mut inventory, mut interaction) in &mut query {
         if interaction.timer.tick(time.delta()).just_finished() {
-            info!("Interact complete");
             commands.entity(entity).remove::<MineCountdown>();
             let tile_entity = interaction.target;
             if let Ok(tile_texture) = tile_query.get(tile_entity) {
@@ -453,11 +442,11 @@ fn interaction_ui(mut egui_context: ResMut<EguiContext>, interact_query: Query<&
 
 fn craft_ui(
     mut egui_context: ResMut<EguiContext>,
-    blueprints: Res<Vec<Recipe>>,
+    blueprints: Res<HashMap<String, Recipe>>,
     mut player_query: Query<(&mut Inventory, &mut CraftingQueue), With<Player>>,
 ) {
     egui::Window::new("Crafting").show(egui_context.ctx_mut(), |ui| {
-        for blueprint in blueprints.iter() {
+        for blueprint in blueprints.values() {
             ui.horizontal(|ui| {
                 ui.label(&blueprint.name);
                 ui.label(format!("Time: {:.2}", blueprint.crafting_time));

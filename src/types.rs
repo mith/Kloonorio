@@ -1,8 +1,11 @@
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{prelude::*, reflect::TypeUuid};
+use serde::Deserialize;
+
+use crate::{structure_loader::StructuresAsset, RecipeAsset};
 
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash)]
 pub enum AppState {
-    Setup,
+    Loading,
     Running,
 }
 
@@ -15,17 +18,45 @@ pub struct CursorState {
 pub struct GameState {
     pub map_loaded: bool,
     pub spawned: bool,
+    pub recipes_handle: Handle<RecipeAsset>,
+    pub recipes_loaded: bool,
+    pub structures_handle: Handle<StructuresAsset>,
+    pub structures_loaded: bool,
+    pub icons_loaded: bool,
+    pub icons_handle: Vec<HandleUntyped>,
 }
 
 #[derive(Component)]
 pub struct Player;
 
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid)]
+#[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
 pub enum Resource {
     Coal,
     Iron,
     Wood,
     Stone,
-    StoneFurnace,
     IronPlate,
+    IronGearWheel,
+    Structure(String),
 }
+
+impl Resource {
+    pub fn name(&self) -> String {
+        match self {
+            Resource::Coal => "Coal".to_string(),
+            Resource::Iron => "Iron".to_string(),
+            Resource::Wood => "Wood".to_string(),
+            Resource::Stone => "Stone".to_string(),
+            Resource::IronPlate => "Iron plate".to_string(),
+            Resource::IronGearWheel => "Iron gear wheel".to_string(),
+            Resource::Structure(s) => s.to_string(),
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct Powered;
+
+#[derive(Component)]
+pub struct Working;

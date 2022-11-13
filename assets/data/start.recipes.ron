@@ -1,0 +1,30 @@
+[
+	Recipe(
+	    materials: [(Stone, 5)],
+	    products: [(Structure("Stone furnace"), 1)],
+	    crafting_time: 0.5,
+	    texture: "stone_furnace.png",
+	    name: "Stone furnace",
+	),
+	Recipe(
+		materials: [(Iron, 1)],
+		products: [(IronPlate, 1)],
+		crafting_time: 0.5,
+		texture: "iron_plate.png",
+		name: "Iron plate",
+	),
+	Recipe(
+		materials: [(IronPlate, 1)],
+		products: [(IronGearWheel, 1)],
+		crafting_time: 0.5,
+		texture: "iron_gear_wheel.png",
+		name: "Iron gear wheel",
+	),
+	Recipe(
+		materials: [(Wood, 2)],
+		products: [(Structure("Wooden chest"), 1)],
+		crafting_time: 0.5,
+		texture: "wooden_chest.png",
+		name: "Wooden chest"
+	)
+]

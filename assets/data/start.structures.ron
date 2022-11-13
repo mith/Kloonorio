@@ -1,0 +1,22 @@
+[
+	Structure(
+		name: "Stone furnace",
+		texture: "stone_furnace",
+		size: (2, 2),
+		components: [
+			Smelter,
+			Burner,
+			CraftingQueue,
+			Source(1),
+			Output(1)
+		]
+	),
+	Structure(
+		name: "Wooden chest",
+		texture: "wooden_chest",
+		size: (1, 1),
+		components: [
+			Inventory(8)
+		]
+	)
+]
