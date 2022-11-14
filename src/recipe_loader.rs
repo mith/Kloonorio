@@ -14,7 +14,6 @@ pub struct Recipe {
     pub materials: Vec<(Resource, u32)>,
     pub products: Vec<(Resource, u32)>,
     pub crafting_time: f32,
-    pub texture: String,
     pub name: String,
 }
 

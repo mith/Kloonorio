@@ -21,7 +21,6 @@ pub enum StructureComponent {
 #[uuid = "540f864d-3e80-4e5d-8be5-1846d7be2484"]
 pub struct Structure {
     pub name: String,
-    pub texture: String,
     pub size: IVec2,
     pub components: Vec<StructureComponent>,
 }

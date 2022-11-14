@@ -27,7 +27,6 @@ pub fn smelter_tick(
                     materials: vec![(Resource::IronOre, 1u32)],
                     products: vec![(Resource::IronPlate, 1u32)],
                     crafting_time: 0.5,
-                    texture: "iron_plate.png".into(),
                     name: "Iron Plate".into(),
                 },
             });
