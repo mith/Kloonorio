@@ -1,19 +1,8 @@
 use bevy::{prelude::*, utils::HashMap};
-use bevy_egui::EguiContext;
-use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use egui::{epaint, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
-use iyes_loopless::prelude::ConditionSet;
-use std::collections::VecDeque;
 
-use crate::{
-    burner::Burner,
-    smelter::Smelter,
-    structure_loader::{Structure, StructureComponent},
-    terrain::{HoveredTile, TerrainStage, TILE_SIZE},
-    types::{AppState, Player, Resource},
-    Recipe,
-};
+use crate::types::Resource;
 
 const MAX_STACK_SIZE: u32 = 1000;
 
@@ -204,12 +193,6 @@ impl Inventory {
     }
 }
 
-#[derive(Component)]
-struct Placeable {
-    structure: String,
-    size: IVec2,
-}
-
 fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)) {
     let is_being_dragged = ui.memory().is_being_dragged(id);
 
@@ -295,51 +278,6 @@ pub fn resource_stack(
         angle: 0.,
     });
     response
-}
-
-fn inventory_ui(
-    mut commands: Commands,
-    mut egui_context: ResMut<EguiContext>,
-    mut inventory_query: Query<&mut Inventory, With<Player>>,
-    player_query: Query<Entity, With<Player>>,
-    structures: Res<HashMap<String, Structure>>,
-    icons: Res<HashMap<String, egui::TextureId>>,
-) {
-    egui::Window::new("Inventory")
-        .resizable(false)
-        .show(egui_context.ctx_mut(), |ui| {
-            for mut inventory in &mut inventory_query {
-                let (source_slot, drop_slot) =
-                    inventory_grid("character", &mut inventory, ui, &icons);
-                if let (Some(source_slot), Some(drop_slot)) = (source_slot, drop_slot) {
-                    if ui.input().pointer.any_released() {
-                        drop_within_inventory(
-                            &mut inventory,
-                            (source_slot) as usize,
-                            (drop_slot) as usize,
-                        );
-                    }
-                } else if let Some(source_slot) = source_slot {
-                    if !ui.ui_contains_pointer() {
-                        if let Some(stack) = inventory.slots[source_slot].clone() {
-                            if let Resource::Structure(structure_name) = stack.resource {
-                                if let Ok(player) = player_query.get_single() {
-                                    let structure = structures.get(&structure_name).unwrap();
-                                    commands.entity(player).insert(Placeable {
-                                        structure: structure_name.clone(),
-                                        size: structure.size,
-                                    });
-                                }
-                            }
-                        }
-                    } else {
-                        commands
-                            .entity(player_query.get_single().unwrap())
-                            .remove::<Placeable>();
-                    }
-                }
-            }
-        });
 }
 
 pub type SlotIndex = usize;
@@ -453,157 +391,11 @@ pub fn inventory_grid(
     (source_slot, drop_slot)
 }
 
-#[derive(Component, Default)]
-pub struct CraftingQueue(pub VecDeque<ActiveCraft>);
-
-pub struct ActiveCraft {
-    pub blueprint: Recipe,
-    pub timer: Timer,
-}
-
-#[derive(Component)]
-struct Ghost;
-
-#[derive(Component)]
-pub(crate) struct Building;
-
 #[derive(Component)]
 pub struct Source(pub Inventory);
 
 #[derive(Component)]
 pub struct Output(pub Inventory);
-
-fn placeable(
-    mut commands: Commands,
-    mut placeable_query: Query<(Entity, &mut Inventory, &Placeable, &HoveredTile)>,
-    mouse_input: Res<Input<MouseButton>>,
-    ghosts: Query<Entity, With<Ghost>>,
-    asset_server: Res<AssetServer>,
-    rapier_context: Res<RapierContext>,
-    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-    structures: Res<HashMap<String, Structure>>,
-) {
-    // delete old ghosts
-    for ghost in ghosts.iter() {
-        commands.entity(ghost).despawn_recursive();
-    }
-
-    for (player, mut inventory, placeable, hovered_tile) in &mut placeable_query {
-        let structure = structures.get(&placeable.structure).unwrap();
-        let texture_handle = asset_server.load(&format!("textures/{}.png", &structure.texture));
-        let texture_atlas = TextureAtlas::from_grid(
-            texture_handle,
-            placeable.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
-            2,
-            1,
-        );
-        let texture_atlas_handle = texture_atlases.add(texture_atlas);
-        let translation =
-            hovered_tile.tile_center + Vec2::new(0.5 * TILE_SIZE.x, 0.5 * TILE_SIZE.y);
-        let transform = Transform::from_translation(translation.extend(1.0));
-
-        if rapier_context
-            .intersection_with_shape(
-                translation,
-                0.,
-                &Collider::cuboid(16., 16.),
-                QueryFilter::new(),
-            )
-            .is_some()
-        {
-            commands
-                .spawn()
-                .insert_bundle(SpriteSheetBundle {
-                    transform,
-                    texture_atlas: texture_atlas_handle,
-                    sprite: TextureAtlasSprite {
-                        color: Color::rgba(1.0, 0.3, 0.3, 0.5),
-                        ..default()
-                    },
-                    ..default()
-                })
-                .insert(Ghost);
-        } else if mouse_input.just_pressed(MouseButton::Left) {
-            info!("Placing {:?}", placeable.structure);
-            commands.entity(player).remove::<Placeable>();
-            if inventory.remove_items(&[(Resource::Structure(structure.name.clone()), 1)]) {
-                let structure_entity = commands
-                    .spawn()
-                    .insert_bundle(SpriteSheetBundle {
-                        texture_atlas: texture_atlas_handle,
-                        ..default()
-                    })
-                    .insert(Collider::cuboid(11., 11.))
-                    .insert_bundle(TransformBundle::from_transform(transform))
-                    .insert(Building)
-                    .insert(Name::new(structure.name.to_string()))
-                    .id();
-
-                for component in &structure.components {
-                    match component {
-                        StructureComponent::Smelter => {
-                            commands.entity(structure_entity).insert(Smelter);
-                        }
-                        StructureComponent::Burner => {
-                            commands.entity(structure_entity).insert(Burner::new());
-                        }
-                        StructureComponent::CraftingQueue => {
-                            commands
-                                .entity(structure_entity)
-                                .insert(CraftingQueue::default());
-                        }
-                        StructureComponent::Inventory(slots) => {
-                            commands
-                                .entity(structure_entity)
-                                .insert(Inventory::new(*slots));
-                        }
-                        StructureComponent::Source(slots) => {
-                            commands
-                                .entity(structure_entity)
-                                .insert(Source(Inventory::new(*slots)));
-                        }
-                        StructureComponent::Output(slots) => {
-                            commands
-                                .entity(structure_entity)
-                                .insert(Output(Inventory::new(*slots)));
-                        }
-                    }
-                }
-            }
-        } else {
-            commands
-                .spawn()
-                .insert_bundle(SpriteSheetBundle {
-                    transform,
-                    texture_atlas: texture_atlas_handle,
-                    sprite: TextureAtlasSprite {
-                        color: Color::rgba(1.0, 1.0, 1.0, 0.5),
-                        ..default()
-                    },
-                    ..default()
-                })
-                .insert(Ghost);
-        }
-    }
-}
-
-#[derive(SystemLabel)]
-pub struct InventoryStage;
-
-pub struct InventoryPlugin;
-impl Plugin for InventoryPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_system_set(
-            ConditionSet::new()
-                .run_in_state(AppState::Running)
-                .label(InventoryStage)
-                .after(TerrainStage)
-                .with_system(inventory_ui)
-                .with_system(placeable)
-                .into(),
-        );
-    }
-}
 
 #[cfg(test)]
 mod test {

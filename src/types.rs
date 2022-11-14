@@ -1,7 +1,9 @@
+use std::collections::VecDeque;
+
 use bevy::{prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
 
-use crate::{structure_loader::StructuresAsset, RecipeAsset};
+use crate::{recipe_loader::Recipe, structure_loader::StructuresAsset, RecipeAsset};
 
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash)]
 pub enum AppState {
@@ -33,7 +35,7 @@ pub struct Player;
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
 pub enum Resource {
     Coal,
-    Iron,
+    IronOre,
     Wood,
     Stone,
     IronPlate,
@@ -45,7 +47,7 @@ impl Resource {
     pub fn name(&self) -> String {
         match self {
             Resource::Coal => "Coal".to_string(),
-            Resource::Iron => "Iron".to_string(),
+            Resource::IronOre => "Iron ore".to_string(),
             Resource::Wood => "Wood".to_string(),
             Resource::Stone => "Stone".to_string(),
             Resource::IronPlate => "Iron plate".to_string(),
@@ -60,3 +62,11 @@ pub struct Powered;
 
 #[derive(Component)]
 pub struct Working;
+
+#[derive(Component, Default)]
+pub struct CraftingQueue(pub VecDeque<ActiveCraft>);
+
+pub struct ActiveCraft {
+    pub blueprint: Recipe,
+    pub timer: Timer,
+}

@@ -11,16 +11,18 @@ use bevy_ecs_tilemap::tiles::TileTexture;
 use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use burner::{burner_load, burner_tick, Burner};
+use character_ui::Building;
 use egui::Align2;
-use inventory::{drop_between_inventories, inventory_grid, Drag, Output, Source};
+use inventory::{drop_between_inventories, inventory_grid, Drag, Source};
 use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 use loading::LoadingPlugin;
 use recipe_loader::{Recipe, RecipeLoaderPlugin};
-use smelter::{smelter_tick, Smelter};
+use smelter::smelter_tick;
 use structure_loader::StructureLoaderPlugin;
-use types::{Powered, Working};
+use types::{ActiveCraft, CraftingQueue, Powered, Working};
 
 mod burner;
+mod character_ui;
 mod inventory;
 mod loading;
 mod player_movement;
@@ -30,13 +32,13 @@ mod structure_loader;
 mod terrain;
 mod types;
 
-use crate::inventory::{ActiveCraft, CraftingQueue, Inventory, InventoryPlugin};
+use crate::character_ui::CharacterUiPlugin;
+use crate::inventory::{Inventory, Output};
 use crate::player_movement::PlayerMovementPlugin;
 use crate::recipe_loader::RecipeAsset;
 use crate::terrain::{CursorPos, HoveredTile, TerrainPlugin, COAL, IRON, STONE, TREE};
 use crate::types::{AppState, CursorState, GameState, Player};
 
-use crate::inventory::Building;
 use crate::types::Resource;
 
 fn main() {
@@ -72,7 +74,7 @@ fn main() {
     .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
     // .add_plugin(RapierDebugRenderPlugin::default())
     .add_plugin(TerrainPlugin)
-    .add_plugin(InventoryPlugin)
+    .add_plugin(CharacterUiPlugin)
     .add_plugin(PlayerMovementPlugin)
     .add_plugin(RecipeLoaderPlugin)
     .add_plugin(StructureLoaderPlugin)
@@ -426,7 +428,7 @@ fn interact_completion(
             if let Ok(tile_texture) = tile_query.get(tile_entity) {
                 match tile_texture.0 {
                     COAL => inventory.add_item(Resource::Coal, 1),
-                    IRON => inventory.add_item(Resource::Iron, 1),
+                    IRON => inventory.add_item(Resource::IronOre, 1),
                     STONE => inventory.add_item(Resource::Stone, 1),
                     TREE => inventory.add_item(Resource::Wood, 1),
                     _ => vec![],

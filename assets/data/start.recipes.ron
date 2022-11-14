@@ -7,7 +7,7 @@
 	    name: "Stone furnace",
 	),
 	Recipe(
-		materials: [(Iron, 1)],
+		materials: [(IronOre, 1)],
 		products: [(IronPlate, 1)],
 		crafting_time: 0.5,
 		texture: "iron_plate.png",
