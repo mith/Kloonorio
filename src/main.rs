@@ -155,9 +155,11 @@ fn building_ui(
     >,
     name: Query<&Name>,
     mut building_inventory_query: Query<&mut Inventory, With<Building>>,
-    mut smelter_query: Query<(&mut Source, &mut Output), (With<Smelter>, With<Building>)>,
+    mut crafting_machine_query: Query<
+        (&mut Source, &mut Output, &CraftingQueue),
+        (With<CraftingQueue>, With<Building>),
+    >,
     mut burner_query: Query<&mut Burner, With<Building>>,
-    crafting_queue_query: Query<&CraftingQueue, With<Building>>,
     icons: Res<HashMap<String, egui::TextureId>>,
 ) {
     for (player_entity, SelectedBuilding(selected_building), mut player_inventory) in
@@ -199,21 +201,21 @@ fn building_ui(
                                     building_inven_drag =
                                         inventory_grid("building", &mut inventory, ui, &icons);
                                 }
-                                if let Ok((input, output)) =
-                                    smelter_query.get_mut(*selected_building)
+                                if let Ok((input, output, crafting_queue)) =
+                                    crafting_machine_query.get_mut(*selected_building)
                                 {
                                     (crafting_source_drag, crafting_output_drag) =
                                         crafting_machine_widget(
                                             ui,
                                             &icons,
                                             input,
-                                            &crafting_queue_query,
-                                            selected_building,
+                                            &crafting_queue,
                                             output,
                                         );
                                 }
 
                                 if let Ok(mut burner) = burner_query.get_mut(*selected_building) {
+                                    ui.separator();
                                     burner_drag = burner_widget(ui, &icons, &mut burner);
                                 }
                             });
@@ -225,18 +227,19 @@ fn building_ui(
 
                         let mut building_inventory =
                             building_inventory_query.get_mut(*selected_building).ok();
-                        if let Some(ref mut inventory) = &mut building_inventory {
+                        if let Some(inventory) = &mut building_inventory {
                             inventories.push((inventory, building_inven_drag));
                         }
 
-                        let mut smelter_input = smelter_query.get_mut(*selected_building).ok();
-                        if let Some((ref mut input, ref mut output)) = &mut smelter_input {
+                        let mut smelter_input =
+                            crafting_machine_query.get_mut(*selected_building).ok();
+                        if let Some((ref mut input, ref mut output, _)) = &mut smelter_input {
                             inventories.push((&mut input.0, crafting_source_drag));
                             inventories.push((&mut output.0, crafting_output_drag));
                         }
 
                         let mut burner = burner_query.get_mut(*selected_building).ok();
-                        if let Some(ref mut burner) = &mut burner {
+                        if let Some(burner) = &mut burner {
                             inventories.push((&mut burner.fuel_inventory, burner_drag));
                         }
 
@@ -259,11 +262,13 @@ fn burner_widget(
     let mut drag = (None, None);
     ui.horizontal(|ui| {
         ui.label("Fuel:");
-        drag = inventory_grid("burner", &mut burner.fuel_inventory, ui, icons)
+        drag = inventory_grid("burner", &mut burner.fuel_inventory, ui, icons);
+        if let Some(timer) = &burner.fuel_timer {
+            ui.add(egui::ProgressBar::new(1. - timer.percent()).desired_width(100.));
+        } else {
+            ui.add(egui::ProgressBar::new(0.).desired_width(100.));
+        }
     });
-    if let Some(timer) = &burner.fuel_timer {
-        ui.add(egui::ProgressBar::new(1. - timer.percent()));
-    }
     drag
 }
 
@@ -271,23 +276,26 @@ fn crafting_machine_widget(
     ui: &mut egui::Ui,
     icons: &HashMap<String, egui::TextureId>,
     mut source: Mut<Source>,
-    crafting_queue_query: &Query<&CraftingQueue, With<Building>>,
-    selected_building: &Entity,
+    crafting_queue: &CraftingQueue,
     mut output: Mut<Output>,
 ) -> (inventory::Drag, Drag) {
     let mut source_drag = (None, None);
-    ui.horizontal(|ui| {
-        ui.label("Input:");
-        source_drag = inventory_grid("input", &mut source.0, ui, icons);
-    });
-    if let Ok(crafting_queue) = crafting_queue_query.get(*selected_building) {
-        if let Some(active_craft) = crafting_queue.0.front() {
-            ui.add(egui::ProgressBar::new(active_craft.timer.percent()));
-        }
-    }
     let mut output_drag = (None, None);
-    ui.horizontal(|ui| {
-        ui.label("Output:");
+    ui.horizontal_centered(|ui| {
+        source_drag = inventory_grid("input", &mut source.0, ui, icons);
+        if let Some(active_craft) = crafting_queue.0.front() {
+            ui.add(
+                egui::ProgressBar::new(active_craft.timer.percent())
+                    .desired_width(100.)
+                    .show_percentage(),
+            );
+        } else {
+            ui.add(
+                egui::ProgressBar::new(0.)
+                    .desired_width(100.)
+                    .show_percentage(),
+            );
+        }
         output_drag = inventory_grid("output", &mut output.0, ui, icons);
     });
 

@@ -40,9 +40,11 @@ impl Stack {
     }
 }
 
+type Slot = Option<Stack>;
+
 #[derive(Component)]
 pub struct Inventory {
-    pub slots: Vec<Option<Stack>>,
+    pub slots: Vec<Slot>,
 }
 
 impl Inventory {
@@ -357,60 +359,56 @@ pub fn drop_between_inventories(inventories: &mut [(&mut Inventory, Drag)]) {
     ) = inventories
         .iter_mut()
         .fold((None, None), |acc, inv| match inv {
-            (ref mut inventory, (Some(source_slot), None)) => {
-                (Some((inventory, *source_slot)), acc.1)
-            }
-            (ref mut inventory, (None, Some(target_slot))) => {
-                (acc.0, (Some((inventory, *target_slot))))
-            }
+            (inventory, (Some(source_slot), None)) => (Some((inventory, *source_slot)), acc.1),
+            (inventory, (None, Some(target_slot))) => (acc.0, (Some((inventory, *target_slot)))),
             _ => acc,
         });
 
-    if let (Some((source_inventory, source_slot)), Some((target_inventory, target_slot))) = dragged
+    if let (Some((source_inventory, source_slot_i)), Some((target_inventory, target_slot_i))) =
+        dragged
     {
-        if let Some(mut source_stack) = source_inventory.slots.get(source_slot).unwrap().clone() {
-            if let Some(target_stack) = target_inventory.slots.get(target_slot).unwrap() {
-                let mut target_stack = target_stack.clone();
-                if target_stack.resource == source_stack.resource {
-                    info!("Adding source stack to target stack");
-                    let remainder = target_stack.add(source_stack.amount);
-                    source_stack.amount = remainder;
-                    target_inventory.slots[target_slot] = Some(target_stack);
-                    source_inventory.slots[source_slot] = Some(source_stack);
-                } else {
-                    info!("Swapping stacks");
-                    target_inventory.slots[target_slot] = Some(source_stack);
-                    source_inventory.slots[source_slot] = Some(target_stack);
-                }
-            } else {
-                info!("Moving source stack to target slot");
-                target_inventory.slots[target_slot] = Some(source_stack);
-                source_inventory.slots[source_slot] = None;
-            }
+        drop_between_slots(
+            source_inventory.slots.get_mut(source_slot_i).unwrap(),
+            target_inventory.slots.get_mut(target_slot_i).unwrap(),
+        );
+    }
+}
+
+fn drop_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
+    if let Some(ref mut source_stack) = source_slot {
+        if let Some(ref mut target_stack) = target_slot {
+            drop_between_stacks(source_stack, target_stack)
+        } else {
+            info!("Moving source stack to target slot");
+            *target_slot = Some(source_stack.clone());
+            *source_slot = None;
         }
     }
 }
 
 pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, target_slot: usize) {
-    if let Some(mut source_stack) = inventory.slots.get(source_slot).unwrap().clone() {
-        if let Some(target_stack) = inventory.slots.get(target_slot).unwrap() {
-            let mut target_stack = target_stack.clone();
-            if target_stack.resource == source_stack.resource {
-                info!("Adding source stack to target stack");
-                let remainder = target_stack.add(source_stack.amount);
-                source_stack.amount = remainder;
-                inventory.slots[target_slot] = Some(target_stack);
-                inventory.slots[source_slot] = Some(source_stack);
-            } else {
-                info!("Swapping stacks");
-                inventory.slots[target_slot] = Some(source_stack);
-                inventory.slots[source_slot] = Some(target_stack);
-            }
+    if let Some(ref mut source_stack) = inventory.slots.get_mut(source_slot).unwrap().clone() {
+        if let Some(ref mut target_stack) = inventory.slots.get_mut(target_slot).unwrap() {
+            drop_between_stacks(source_stack, target_stack);
         } else {
             info!("Moving source stack to target slot");
-            inventory.slots[target_slot] = Some(source_stack);
+            inventory.slots[target_slot] = Some(source_stack.clone());
             inventory.slots[source_slot] = None;
         }
+    }
+}
+
+fn drop_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
+    if source_stack == target_stack {
+        return;
+    }
+    if target_stack.resource == source_stack.resource {
+        info!("Adding source stack to target stack");
+        let remainder = target_stack.add(source_stack.amount);
+        source_stack.amount = remainder;
+    } else {
+        info!("Swapping stacks");
+        std::mem::swap(source_stack, target_stack);
     }
 }
 
