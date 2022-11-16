@@ -1,6 +1,4 @@
-use bevy::{prelude::*, utils::HashMap};
-
-use egui::{epaint, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
+use bevy::prelude::*;
 
 use crate::types::Resource;
 
@@ -17,6 +15,7 @@ impl Stack {
         Self { resource, amount }
     }
 
+    /// Add an amount to the stack, returning the amount that could not be added.
     pub fn add(&mut self, amount: u32) -> u32 {
         if self.amount + amount > MAX_STACK_SIZE {
             let overflow = self.amount + amount - MAX_STACK_SIZE;
@@ -192,130 +191,10 @@ impl Inventory {
         true
     }
 }
-
-fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)) {
-    let is_being_dragged = ui.memory().is_being_dragged(id);
-
-    if !is_being_dragged {
-        let response = ui.scope(body).response;
-
-        // Check for drags:
-        let response = ui.interact(response.rect, id, Sense::drag());
-        if response.hovered() {
-            ui.output().cursor_icon = CursorIcon::Grab;
-        }
-    } else {
-        ui.output().cursor_icon = CursorIcon::Grabbing;
-
-        // Paint the body to a new layer:
-        let layer_id = egui::LayerId::new(Order::Tooltip, id);
-        let response = ui.with_layer_id(layer_id, body).response;
-
-        if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
-            let delta = pointer_pos - response.rect.center() + egui::Vec2::new(10., 10.);
-            ui.ctx().translate_layer(layer_id, delta);
-        }
-    }
-}
-
-fn drop_target<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -> InnerResponse<R> {
-    let is_being_dragged = ui.memory().is_anything_being_dragged();
-    let outer_rect_bounds = ui.available_rect_before_wrap();
-    let where_to_put_background = ui.painter().add(egui::Shape::Noop);
-    let mut content_ui = ui.child_ui(outer_rect_bounds, *ui.layout());
-    let ret = body(&mut content_ui);
-    let (rect, response) = ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::hover());
-    let (style, bg_fill) = if is_being_dragged && response.hovered() {
-        (ui.visuals().widgets.active, egui::Color32::RED)
-    } else {
-        (ui.visuals().widgets.inactive, egui::Color32::from_gray(45))
-    };
-    if response.dragged() {
-        ui.ctx().output().cursor_icon = CursorIcon::Grab;
-    }
-    ui.painter().set(
-        where_to_put_background,
-        epaint::RectShape {
-            rounding: style.rounding,
-            fill: bg_fill,
-            stroke: Stroke::none(),
-            rect,
-        },
-    );
-    InnerResponse::new(ret, response)
-}
-
-pub fn resource_stack(
-    ui: &mut egui::Ui,
-    stack: &Stack,
-    icons: &HashMap<String, egui::TextureId>,
-) -> Response {
-    let icon_name = &stack.resource.name().to_lowercase().replace(" ", "_");
-    let response = {
-        if let Some(egui_img) = icons.get(icon_name) {
-            ui.image(*egui_img, [32., 32.])
-        } else if let Some(no_icon_img) = icons.get("no_icon") {
-            ui.image(*no_icon_img, [32., 32.])
-        } else {
-            ui.label("NO ICON")
-        }
-    };
-
-    let font_id = egui::FontId::proportional(16.);
-    let layout = ui
-        .fonts()
-        .layout_no_wrap(stack.amount.to_string(), font_id, egui::Color32::WHITE);
-    let rect = response.rect;
-    let pos = Pos2::new(
-        rect.right() - layout.size().x - 1.,
-        rect.bottom() - layout.size().y - 1.,
-    );
-    ui.painter().add(epaint::TextShape {
-        pos,
-        galley: layout,
-        underline: Stroke::new(1., egui::Color32::BLACK),
-        override_text_color: None,
-        angle: 0.,
-    });
-    response
-}
-
-pub type SlotIndex = usize;
-pub type Drag = (Option<SlotIndex>, Option<SlotIndex>);
-
-pub fn drop_between_inventories(inventories: &mut [(&mut Inventory, Drag)]) {
-    for (inventory, drag) in inventories.iter_mut() {
-        // If the item is dropped in the same inventory
-        if let (Some(source_slot), Some(target_slot)) = drag {
-            drop_within_inventory(*inventory, *source_slot, *target_slot)
-        }
-    }
-
-    let dragged: (
-        Option<(&mut Inventory, SlotIndex)>,
-        Option<(&mut Inventory, SlotIndex)>,
-    ) = inventories
-        .iter_mut()
-        .fold((None, None), |acc, inv| match inv {
-            (inventory, (Some(source_slot), None)) => (Some((inventory, *source_slot)), acc.1),
-            (inventory, (None, Some(target_slot))) => (acc.0, (Some((inventory, *target_slot)))),
-            _ => acc,
-        });
-
-    if let (Some((source_inventory, source_slot_i)), Some((target_inventory, target_slot_i))) =
-        dragged
-    {
-        drop_between_slots(
-            source_inventory.slots.get_mut(source_slot_i).unwrap(),
-            target_inventory.slots.get_mut(target_slot_i).unwrap(),
-        );
-    }
-}
-
-fn drop_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
+pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
     if let Some(ref mut source_stack) = source_slot {
         if let Some(ref mut target_stack) = target_slot {
-            drop_between_stacks(source_stack, target_stack)
+            transfer_between_stacks(source_stack, target_stack)
         } else {
             info!("Moving source stack to target slot");
             *target_slot = Some(source_stack.clone());
@@ -327,7 +206,7 @@ fn drop_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
 pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, target_slot: usize) {
     if let Some(ref mut source_stack) = inventory.slots.get_mut(source_slot).unwrap().clone() {
         if let Some(ref mut target_stack) = inventory.slots.get_mut(target_slot).unwrap() {
-            drop_between_stacks(source_stack, target_stack);
+            transfer_between_stacks(source_stack, target_stack);
         } else {
             info!("Moving source stack to target slot");
             inventory.slots[target_slot] = Some(source_stack.clone());
@@ -336,7 +215,7 @@ pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, targ
     }
 }
 
-fn drop_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
+fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
     if source_stack == target_stack {
         return;
     }
@@ -349,53 +228,14 @@ fn drop_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
         std::mem::swap(source_stack, target_stack);
     }
 }
-
-pub fn inventory_grid(
-    name: &str,
-    inventory: &mut Inventory,
-    ui: &mut egui::Ui,
-    icons: &HashMap<String, egui::TextureId>,
-) -> (Option<usize>, Option<usize>) {
-    let mut source_slot = None;
-    let mut drop_slot = None;
-    let grid_height = (inventory.slots.len() as f32 / 10.).ceil() as usize;
-    egui::Grid::new(name)
-        .min_col_width(32.)
-        .max_col_width(32.)
-        .spacing([3., 3.])
-        .show(ui, |ui| {
-            for row in 0..grid_height {
-                for col in 0..10 {
-                    if let Some(slot) = inventory.slots.get(row * 10 + col) {
-                        let item_id = egui::Id::new(name).with(col).with(row);
-                        let response = drop_target(ui, |ui| {
-                            if let Some(stack) = slot {
-                                drag_source(ui, item_id, |ui| {
-                                    let response = resource_stack(ui, stack, icons);
-                                    if !ui.memory().is_being_dragged(item_id) {
-                                        response.on_hover_text_at_pointer(stack.resource.name());
-                                    } else {
-                                        source_slot = Some(row * 10 + col);
-                                    }
-                                });
-                            }
-                        });
-                        if response.response.hovered() {
-                            drop_slot = Some(row * 10 + col);
-                        }
-                    }
-                }
-                ui.end_row();
-            }
-        });
-    (source_slot, drop_slot)
-}
+#[derive(Component)]
+pub struct Source;
 
 #[derive(Component)]
-pub struct Source(pub Inventory);
+pub struct Output;
 
 #[derive(Component)]
-pub struct Output(pub Inventory);
+pub struct Fuel;
 
 #[cfg(test)]
 mod test {

@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
-use crate::inventory::{Output, Source};
-use crate::recipe_loader::Recipe;
-use crate::types::{ActiveCraft, CraftingQueue, Powered, Resource, Working};
+use crate::inventory::{Inventory, Output, Source};
+use crate::types::{ActiveCraft, CraftingQueue, Powered, Recipe, Resource, Working};
 
 #[derive(Component)]
 pub struct Smelter;
@@ -10,17 +9,25 @@ pub struct Smelter;
 pub fn smelter_tick(
     mut commands: Commands,
     mut smelter_query: Query<
-        (Entity, &mut CraftingQueue, &mut Source, &mut Output),
+        (Entity, &mut CraftingQueue, &Children),
         (With<Smelter>, With<Powered>),
     >,
+    mut source_query: Query<&mut Inventory, (With<Source>, Without<Output>)>,
+    mut output_query: Query<&mut Inventory, (With<Output>, Without<Source>)>,
     time: Res<Time>,
 ) {
-    for (entity, mut crafting_queue, mut source, mut output) in smelter_query.iter_mut() {
-        if source.0.has_items(&[(Resource::IronOre, 1)])
+    for (entity, mut crafting_queue, children) in smelter_query.iter_mut() {
+        let source_entity = children.iter().find(|c| source_query.get(entity).is_ok());
+        let output_entity = children.iter().find(|c| output_query.get(entity).is_ok());
+
+        let mut source = source_query.get_mut(*source_entity.unwrap()).unwrap();
+        let mut output = output_query.get_mut(*output_entity.unwrap()).unwrap();
+
+        if source.has_items(&[(Resource::IronOre, 1)])
             && crafting_queue.0.is_empty()
-            && output.0.can_add(&[(Resource::IronPlate, 1)])
+            && output.can_add(&[(Resource::IronPlate, 1)])
         {
-            source.0.remove_items(&[(Resource::IronOre, 1)]);
+            source.remove_items(&[(Resource::IronOre, 1)]);
             crafting_queue.0.push_back(ActiveCraft {
                 timer: Timer::from_seconds(1., false),
                 blueprint: Recipe {
@@ -35,7 +42,7 @@ pub fn smelter_tick(
 
         if let Some(active_build) = crafting_queue.0.front_mut() {
             if active_build.timer.tick(time.delta()).just_finished() {
-                output.0.add_items(&active_build.blueprint.products);
+                output.add_items(&active_build.blueprint.products);
                 crafting_queue.0.pop_front();
                 commands.entity(entity).remove::<Working>();
             }

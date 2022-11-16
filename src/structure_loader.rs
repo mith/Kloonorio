@@ -6,6 +6,9 @@ use bevy::{
 };
 use serde::Deserialize;
 
+#[derive(Default)]
+pub struct StructuresAssetLoader;
+
 #[derive(Clone, Copy, Debug, Deserialize, TypeUuid)]
 #[uuid = "990c9ea7-3c00-4d6b-b9f0-c62b86bb9973"]
 pub enum StructureComponent {
@@ -24,9 +27,6 @@ pub struct Structure {
     pub size: IVec2,
     pub components: Vec<StructureComponent>,
 }
-
-#[derive(Default)]
-pub struct StructuresAssetLoader;
 
 #[derive(Clone, Debug, TypeUuid)]
 #[uuid = "97b2a898-da7d-4a72-a192-05e18d309950"]

@@ -6,16 +6,7 @@ use bevy::{
 };
 use serde::Deserialize;
 
-use crate::types::Resource;
-
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
-#[uuid = "1ca725c1-5a0d-484f-8d04-a5a42960e208"]
-pub struct Recipe {
-    pub materials: Vec<(Resource, u32)>,
-    pub products: Vec<(Resource, u32)>,
-    pub crafting_time: f32,
-    pub name: String,
-}
+use crate::types::Recipe;
 
 #[derive(Default)]
 pub struct RecipeAssetLoader;

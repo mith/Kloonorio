@@ -3,9 +3,9 @@ use bevy_egui::EguiContext;
 use iyes_loopless::prelude::*;
 
 use crate::{
-    recipe_loader::{Recipe, RecipeAsset},
+    recipe_loader::RecipeAsset,
     structure_loader::{Structure, StructuresAsset},
-    types::{AppState, GameState},
+    types::{AppState, GameState, Recipe},
 };
 
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {

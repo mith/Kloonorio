@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
 
-use crate::{recipe_loader::Recipe, structure_loader::StructuresAsset, RecipeAsset};
+use crate::{structure_loader::StructuresAsset, RecipeAsset};
 
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash)]
 pub enum AppState {
@@ -69,4 +69,13 @@ pub struct CraftingQueue(pub VecDeque<ActiveCraft>);
 pub struct ActiveCraft {
     pub blueprint: Recipe,
     pub timer: Timer,
+}
+
+#[derive(Clone, Debug, Deserialize, TypeUuid)]
+#[uuid = "1ca725c1-5a0d-484f-8d04-a5a42960e208"]
+pub struct Recipe {
+    pub materials: Vec<(Resource, u32)>,
+    pub products: Vec<(Resource, u32)>,
+    pub crafting_time: f32,
+    pub name: String,
 }
