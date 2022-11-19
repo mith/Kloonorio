@@ -5,19 +5,19 @@ use egui::{epaint, Response, Sense, Stroke};
 
 use crate::{
     burner::Burner,
-    inventory::{drop_within_inventory, Inventory, Output, Source},
+    inventory::{Fuel, Inventory, Output, Source},
     inventory_grid::{
-        self, drop_slot, inventory_grid, item_in_hand, set_item_in_hand, Hand, HoverSlot,
+        drop_slot, inventory_grid, item_in_hand, set_drop_slot, set_item_in_hand, Hand, HoverSlot,
         HIGHLIGHT_COLOR,
     },
     smelter::Smelter,
     structure_loader::{Structure, StructureComponent},
     terrain::{HoveredTile, TerrainStage, TILE_SIZE},
-    types::{ActiveCraft, AppState, CraftingQueue, Player, Recipe, Resource},
+    types::{ActiveCraft, CraftingQueue, Player, Recipe, Resource, UiPhase},
 };
 
 #[derive(Component)]
-struct Placeable {
+pub struct Placeable {
     structure: String,
     size: IVec2,
 }
@@ -30,7 +30,7 @@ pub(crate) struct Building;
 
 fn placeable(
     mut commands: Commands,
-    mut placeable_query: Query<(Entity, &mut Inventory, &Placeable, &HoveredTile)>,
+    mut placeable_query: Query<(Entity, &mut Inventory, &Hand, &HoveredTile)>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,
     asset_server: Res<AssetServer>,
@@ -43,104 +43,113 @@ fn placeable(
         commands.entity(ghost).despawn_recursive();
     }
 
-    for (player, mut inventory, placeable, hovered_tile) in &mut placeable_query {
-        let structure = structures.get(&placeable.structure).unwrap();
-        let texture_handle = asset_server.load(&format!(
-            "textures/{}.png",
-            &structure.name.to_lowercase().replace(" ", "_")
-        ));
-        let texture_atlas = TextureAtlas::from_grid(
-            texture_handle,
-            placeable.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
-            2,
-            1,
-        );
-        let texture_atlas_handle = texture_atlases.add(texture_atlas);
-        let translation =
-            hovered_tile.tile_center + Vec2::new(0.5 * TILE_SIZE.x, 0.5 * TILE_SIZE.y);
-        let transform = Transform::from_translation(translation.extend(1.0));
+    for (player, mut inventory, hand, hovered_tile) in &mut placeable_query {
+        if let Some(stack) = &mut inventory.slots[hand.0.slot].as_mut() {
+            if let Resource::Structure(structure_name) = &stack.resource {
+                let structure = structures.get(structure_name).unwrap();
+                let texture_handle = asset_server.load(&format!(
+                    "textures/{}.png",
+                    &structure.name.to_lowercase().replace(" ", "_")
+                ));
+                let texture_atlas = TextureAtlas::from_grid(
+                    texture_handle,
+                    structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
+                    2,
+                    1,
+                );
+                let texture_atlas_handle = texture_atlases.add(texture_atlas);
+                let translation =
+                    hovered_tile.tile_center + Vec2::new(0.5 * TILE_SIZE.x, 0.5 * TILE_SIZE.y);
+                let transform = Transform::from_translation(translation.extend(1.0));
 
-        if rapier_context
-            .intersection_with_shape(
-                translation,
-                0.,
-                &Collider::cuboid(16., 16.),
-                QueryFilter::new(),
-            )
-            .is_some()
-        {
-            commands
-                .spawn()
-                .insert_bundle(SpriteSheetBundle {
-                    transform,
-                    texture_atlas: texture_atlas_handle,
-                    sprite: TextureAtlasSprite {
-                        color: Color::rgba(1.0, 0.3, 0.3, 0.5),
-                        ..default()
-                    },
-                    ..default()
-                })
-                .insert(Ghost);
-        } else if mouse_input.just_pressed(MouseButton::Left) {
-            info!("Placing {:?}", placeable.structure);
-            commands.entity(player).remove::<Placeable>();
-            if inventory.remove_items(&[(Resource::Structure(structure.name.clone()), 1)]) {
-                let structure_entity = commands
-                    .spawn()
-                    .insert_bundle(SpriteSheetBundle {
-                        texture_atlas: texture_atlas_handle,
-                        ..default()
-                    })
-                    .insert(Collider::cuboid(11., 11.))
-                    .insert_bundle(TransformBundle::from_transform(transform))
-                    .insert(Building)
-                    .insert(Name::new(structure.name.to_string()))
-                    .id();
+                if rapier_context
+                    .intersection_with_shape(
+                        translation,
+                        0.,
+                        &Collider::cuboid(16., 16.),
+                        QueryFilter::new(),
+                    )
+                    .is_some()
+                {
+                    commands
+                        .spawn()
+                        .insert_bundle(SpriteSheetBundle {
+                            transform,
+                            texture_atlas: texture_atlas_handle,
+                            sprite: TextureAtlasSprite {
+                                color: Color::rgba(1.0, 0.3, 0.3, 0.5),
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .insert(Ghost);
+                } else if mouse_input.just_pressed(MouseButton::Left) {
+                    info!("Placing {:?}", structure);
+                    commands.entity(player).remove::<Placeable>();
+                    if inventory.remove_items(&[(Resource::Structure(structure.name.clone()), 1)]) {
+                        let structure_entity = commands
+                            .spawn()
+                            .insert_bundle(SpriteSheetBundle {
+                                texture_atlas: texture_atlas_handle,
+                                ..default()
+                            })
+                            .insert(Collider::cuboid(11., 11.))
+                            .insert_bundle(TransformBundle::from_transform(transform))
+                            .insert(Building)
+                            .insert(Name::new(structure.name.to_string()))
+                            .id();
 
-                for component in &structure.components {
-                    match component {
-                        StructureComponent::Smelter => {
-                            commands.entity(structure_entity).insert(Smelter);
-                        }
-                        StructureComponent::Burner => {
-                            commands.entity(structure_entity).insert(Burner::new());
-                        }
-                        StructureComponent::CraftingQueue => {
-                            commands
-                                .entity(structure_entity)
-                                .insert(CraftingQueue::default());
-                        }
-                        StructureComponent::Inventory(slots) => {
-                            commands
-                                .entity(structure_entity)
-                                .insert(Inventory::new(*slots));
-                        }
-                        StructureComponent::Source(slots) => {
-                            commands.entity(structure_entity).with_children(|p| {
-                                p.spawn().insert(Source).insert(Inventory::new(1));
-                            });
-                        }
-                        StructureComponent::Output(slots) => {
-                            commands.entity(structure_entity).with_children(|p| {
-                                p.spawn().insert(Output).insert(Inventory::new(1));
-                            });
+                        for component in &structure.components {
+                            match component {
+                                StructureComponent::Smelter => {
+                                    commands.entity(structure_entity).insert(Smelter);
+                                }
+                                StructureComponent::Burner => {
+                                    commands.entity(structure_entity).insert(Burner::new());
+                                }
+                                StructureComponent::CraftingQueue => {
+                                    commands
+                                        .entity(structure_entity)
+                                        .insert(CraftingQueue::default());
+                                }
+                                StructureComponent::Inventory(slots) => {
+                                    commands
+                                        .entity(structure_entity)
+                                        .insert(Inventory::new(*slots));
+                                }
+                                StructureComponent::Source(slots) => {
+                                    commands.entity(structure_entity).with_children(|p| {
+                                        p.spawn().insert(Source).insert(Inventory::new(*slots));
+                                    });
+                                }
+                                StructureComponent::Output(slots) => {
+                                    commands.entity(structure_entity).with_children(|p| {
+                                        p.spawn().insert(Output).insert(Inventory::new(*slots));
+                                    });
+                                }
+                                StructureComponent::Fuel(slots) => {
+                                    commands.entity(structure_entity).with_children(|p| {
+                                        p.spawn().insert(Fuel).insert(Inventory::new(*slots));
+                                    });
+                                }
+                            }
                         }
                     }
+                } else {
+                    commands
+                        .spawn()
+                        .insert_bundle(SpriteSheetBundle {
+                            transform,
+                            texture_atlas: texture_atlas_handle,
+                            sprite: TextureAtlasSprite {
+                                color: Color::rgba(1.0, 1.0, 1.0, 0.5),
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .insert(Ghost);
                 }
             }
-        } else {
-            commands
-                .spawn()
-                .insert_bundle(SpriteSheetBundle {
-                    transform,
-                    texture_atlas: texture_atlas_handle,
-                    sprite: TextureAtlasSprite {
-                        color: Color::rgba(1.0, 1.0, 1.0, 0.5),
-                        ..default()
-                    },
-                    ..default()
-                })
-                .insert(Ghost);
         }
     }
 }
@@ -236,9 +245,9 @@ fn character_ui(
         .resizable(false)
         .show(egui_context.ctx_mut(), |ui| {
             for (player_entity, ref mut inventory, ref mut crafting_queue) in &mut inventory_query {
-                if let Ok(hand) = hand_query.get(player_entity) {
-                    set_item_in_hand(ui, Some(hand.clone()))
-                }
+                set_item_in_hand(ui, hand_query.get(player_entity).ok().cloned());
+                set_drop_slot(ui, None);
+
                 ui.horizontal_top(|ui| {
                     let drag = inventory_grid(player_entity, inventory, ui, &icons);
                     ui.separator();
@@ -265,15 +274,15 @@ fn character_ui(
 }
 
 #[derive(SystemLabel)]
-pub struct CharacterUiStage;
+pub struct CharacterUiPhase;
 
 pub struct CharacterUiPlugin;
 impl Plugin for CharacterUiPlugin {
     fn build(&self, app: &mut App) {
         app.add_system_set(
-            iyes_loopless::prelude::ConditionSet::new()
-                .run_in_state(AppState::Running)
-                .label(CharacterUiStage)
+            SystemSet::new()
+                .label(UiPhase)
+                .label(CharacterUiPhase)
                 .after(TerrainStage)
                 .with_system(character_ui)
                 .with_system(placeable)

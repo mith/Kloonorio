@@ -30,7 +30,7 @@ impl Stack {
 
 type Slot = Option<Stack>;
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Inventory {
     pub slots: Vec<Slot>,
 }
@@ -194,7 +194,10 @@ impl Inventory {
 pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
     if let Some(ref mut source_stack) = source_slot {
         if let Some(ref mut target_stack) = target_slot {
-            transfer_between_stacks(source_stack, target_stack)
+            transfer_between_stacks(source_stack, target_stack);
+            if source_stack.amount == 0 {
+                *source_slot = None;
+            }
         } else {
             info!("Moving source stack to target slot");
             *target_slot = Some(source_stack.clone());
@@ -222,7 +225,7 @@ fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
     if target_stack.resource == source_stack.resource {
         info!("Adding source stack to target stack");
         let remainder = target_stack.add(source_stack.amount);
-        source_stack.amount = remainder;
+        source_stack.amount = remainder + 3;
     } else {
         info!("Swapping stacks");
         std::mem::swap(source_stack, target_stack);

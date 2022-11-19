@@ -14,14 +14,16 @@ use bevy_rapier2d::prelude::*;
 use burner::{burner_load, burner_tick, Burner};
 use character_ui::Building;
 use egui::Align2;
-use inventory::{drop_within_inventory, transfer_between_slots, Source};
-use inventory_grid::{inventory_grid, Hand, HoverSlot};
-use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
+use inventory::{drop_within_inventory, transfer_between_slots, Fuel, Source};
+use inventory_grid::{
+    drop_slot, inventory_grid, item_in_hand, set_drop_slot, set_item_in_hand, Hand, HoverSlot,
+};
+use iyes_loopless::prelude::*;
 use loading::LoadingPlugin;
 use recipe_loader::RecipeLoaderPlugin;
 use smelter::smelter_tick;
 use structure_loader::StructureLoaderPlugin;
-use types::{CraftingQueue, Powered, Working};
+use types::{CraftingQueue, Powered, UiPhase, Working};
 
 mod burner;
 mod character_ui;
@@ -97,9 +99,9 @@ fn main() {
             .with_system(burner_tick)
             .with_system(burner_load)
             .with_system(working_texture)
-            .with_system(drop_system)
             .into(),
     )
+    .add_system(drop_system.run_in_state(AppState::Running).after(UiPhase))
     .run();
 }
 
@@ -178,41 +180,6 @@ fn drop_system(
     }
 }
 
-// fn ghost_placeable() {
-//
-//     if let Some(stack) = inventories_query.get_single.slots[hand.0.slot].clone() {
-//         if let Resource::Structure(structure_name) = stack.resource {
-//             if let Ok(player) = player_query.get_single() {
-//                 let structure = structures.get(&structure_name).unwrap();
-//                 commands.entity(player).insert(Placeable {
-//                     structure: structure_name.clone(),
-//                     size: structure.size,
-//                 });
-//             }
-//         }
-//     }
-// // }
-//  let Some(hand) = item_in_hand(ui).clone() {
-//                     if !ui.ui_contains_pointer() {
-//                         if let Some(stack) = inventory.slots[hand.0.slot].clone() {
-//                             if let Resource::Structure(structure_name) = stack.resource {
-//                                 if let Ok(player) = player_query.get_single() {
-//                                     let structure = structures.get(&structure_name).unwrap();
-//                                     commands.entity(player).insert(Placeable {
-//                                             structure: structure_name.clone(),
-//                                             size: structure.size,
-//                                         });
-//                                 }
-//                             }
-//                         }
-//                     } else {
-//                         commands
-//                             .entity(player_query.get_single().unwrap())
-//                                 .remove::<Placeable>();
-//                     }
-//                 }
-//             }
-
 fn building_ui(
     mut commands: Commands,
     mut egui_ctx: ResMut<EguiContext>,
@@ -223,16 +190,42 @@ fn building_ui(
             Without<Building>,
             Without<Source>,
             Without<Output>,
+            Without<Fuel>,
         ),
     >,
     name: Query<&Name>,
     mut building_inventory_query: Query<&mut Inventory, With<Building>>,
-    source_query: Query<&mut Inventory, (With<Source>, Without<Output>, Without<Building>)>,
-    output_query: Query<&mut Inventory, (With<Output>, Without<Source>, Without<Building>)>,
+    source_query: Query<
+        &mut Inventory,
+        (
+            With<Source>,
+            Without<Output>,
+            Without<Building>,
+            Without<Fuel>,
+        ),
+    >,
+    output_query: Query<
+        &mut Inventory,
+        (
+            With<Output>,
+            Without<Source>,
+            Without<Building>,
+            Without<Fuel>,
+        ),
+    >,
+    fuel_query: Query<
+        &mut Inventory,
+        (
+            With<Fuel>,
+            Without<Source>,
+            Without<Output>,
+            Without<Building>,
+        ),
+    >,
     mut crafting_machine_query: Query<(&CraftingQueue, &Children), With<Building>>,
     mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
     icons: Res<HashMap<String, egui::TextureId>>,
-    mut hand_query: Query<(&mut Hand, &mut HoverSlot)>,
+    mut hand_query: Query<&mut Hand>,
 ) {
     if let Ok((player_entity, SelectedBuilding(selected_building), mut player_inventory)) =
         player_query.get_single()
@@ -246,6 +239,9 @@ fn building_ui(
             .resizable(false)
             .open(&mut window_open)
             .show(egui_ctx.ctx_mut(), |ui| {
+                set_item_in_hand(ui, hand_query.get(player_entity).ok().cloned());
+                set_drop_slot(ui, None);
+
                 ui.horizontal(|ui| {
                     egui::Frame::none()
                         .stroke(egui::Stroke::new(2., egui::Color32::from_gray(10)))
@@ -296,7 +292,7 @@ fn building_ui(
                                     ui.separator();
                                     let fuel = children
                                         .iter()
-                                        .flat_map(|c| source_query.get(*c).map(|i| (*c, i)))
+                                        .flat_map(|c| fuel_query.get(*c).map(|i| (*c, i)))
                                         .next()
                                         .unwrap();
                                     burner_widget(ui, &icons, *selected_building, &burner, fuel);
@@ -304,6 +300,20 @@ fn building_ui(
                             });
                         });
                 });
+                if let Some(hand) = item_in_hand(ui) {
+                    commands.entity(player_entity).remove::<Hand>().insert(hand);
+                } else {
+                    commands.entity(player_entity).remove::<Hand>();
+                }
+
+                if let Some(hover_slot) = drop_slot(ui) {
+                    commands
+                        .entity(player_entity)
+                        .remove::<HoverSlot>()
+                        .insert(hover_slot);
+                } else {
+                    commands.entity(player_entity).remove::<HoverSlot>();
+                }
             });
 
         if !window_open {

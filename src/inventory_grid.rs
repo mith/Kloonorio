@@ -125,7 +125,7 @@ pub struct InventoryIndex {
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hand(pub InventoryIndex);
 impl Hand {
-    fn new(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
+    pub fn new(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
         Hand(InventoryIndex {
             entity,
             slot,
@@ -137,7 +137,7 @@ impl Hand {
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HoverSlot(pub InventoryIndex);
 impl HoverSlot {
-    fn new(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
+    pub fn new(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
         HoverSlot(InventoryIndex {
             entity,
             slot,
@@ -206,28 +206,28 @@ pub fn inventory_grid(
 
 pub fn item_in_hand(ui: &mut egui::Ui) -> Option<Hand> {
     let hand_id = egui::Id::new("hand");
-    ui.memory()
-        .data
-        .get_temp_mut_or_insert_with(hand_id, || None)
-        .clone()
+    ui.memory().data.get_temp::<Hand>(hand_id)
 }
 
 pub fn set_item_in_hand(ui: &mut egui::Ui, hand: Option<Hand>) {
     let hand_id = egui::Id::new("hand");
-    ui.memory().data.insert_temp::<Option<Hand>>(hand_id, hand);
+    if let Some(hand) = hand {
+        ui.memory().data.insert_temp(hand_id, hand);
+    } else {
+        ui.memory().data.remove::<Hand>(hand_id);
+    }
 }
 
 pub fn drop_slot(ui: &mut egui::Ui) -> Option<HoverSlot> {
     let drop_id = egui::Id::new("drop");
-    ui.memory()
-        .data
-        .get_temp_mut_or_insert_with(drop_id, || None)
-        .clone()
+    ui.memory().data.get_temp::<HoverSlot>(drop_id)
 }
 
 pub fn set_drop_slot(ui: &mut egui::Ui, drop: Option<HoverSlot>) {
     let drop_id = egui::Id::new("drop");
-    ui.memory()
-        .data
-        .insert_temp::<Option<HoverSlot>>(drop_id, drop);
+    if let Some(drop) = drop {
+        ui.memory().data.insert_temp(drop_id, drop);
+    } else {
+        ui.memory().data.remove::<HoverSlot>(drop_id);
+    }
 }

@@ -17,8 +17,8 @@ pub fn smelter_tick(
     time: Res<Time>,
 ) {
     for (entity, mut crafting_queue, children) in smelter_query.iter_mut() {
-        let source_entity = children.iter().find(|c| source_query.get(entity).is_ok());
-        let output_entity = children.iter().find(|c| output_query.get(entity).is_ok());
+        let source_entity = children.iter().find(|c| source_query.get(**c).is_ok());
+        let output_entity = children.iter().find(|c| output_query.get(**c).is_ok());
 
         let mut source = source_query.get_mut(*source_entity.unwrap()).unwrap();
         let mut output = output_query.get_mut(*output_entity.unwrap()).unwrap();

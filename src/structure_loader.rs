@@ -18,6 +18,7 @@ pub enum StructureComponent {
     Inventory(u32),
     Source(u32),
     Output(u32),
+    Fuel(u32),
 }
 
 #[derive(Clone, Debug, Deserialize, TypeUuid)]

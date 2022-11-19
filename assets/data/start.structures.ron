@@ -7,7 +7,8 @@
 			Burner,
 			CraftingQueue,
 			Source(1),
-			Output(1)
+			Output(1),
+			Fuel(1)
 		]
 	),
 	Structure(
