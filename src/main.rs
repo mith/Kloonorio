@@ -523,3 +523,96 @@ fn craft_ticker(
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use proptest::prelude::*;
+
+    prop_compose! {
+        fn arb_resource()(resource in any::<u32>()) -> Resource {
+            match resource % 4 {
+                0 => Resource::Wood,
+                1 => Resource::Stone,
+                2 => Resource::IronOre,
+                3 => Resource::Coal,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    prop_compose! {
+        fn arb_inventory(size: u32)(resources in prop::collection::vec(arb_resource(), 1..(size as usize))) -> Inventory {
+            let mut inventory = Inventory::new(size);
+            for resource in resources {
+                inventory.add_item(resource, 1);
+            }
+            inventory
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #[test]
+        fn drop_system_no_duplication(inventory in arb_inventory(10), source_slot in 0..4u32, target_slot in 0..10u32) {
+            let mut app = App::new();
+
+
+
+            let mut input = Input::<MouseButton>::default();
+            input.press(MouseButton::Left);
+            app.insert_resource(input);
+
+            let count = inventory.slots
+                .iter()
+                .flatten()
+                .fold(HashMap::new(), |mut acc, stack| {
+                    if acc.contains_key(&stack.resource) {
+                        *acc.get_mut(&stack.resource).unwrap() += stack.amount;
+                    } else {
+                        acc.insert(stack.resource.clone(), stack.amount);
+                    }
+                    acc
+                });
+
+            let player_id = app
+                .world
+                .spawn()
+                .insert(Player)
+                .insert(inventory)
+                .id();
+
+            let inventory_id = player_id;
+
+            let source_item_id = egui::Id::new(inventory_id).with(source_slot);
+            let target_item_id = egui::Id::new(inventory_id).with(target_slot);
+
+            app.world.get_entity_mut(player_id)
+                .unwrap()
+                .insert(Hand::new(inventory_id, source_slot as usize, source_item_id))
+                .insert(HoverSlot::new(inventory_id, target_slot as usize, target_item_id));
+
+            app.update();
+
+            let post_count = app
+                .world
+                .get::<Inventory>(inventory_id)
+                .unwrap()
+                .slots
+                .iter()
+                .flatten()
+                .fold(HashMap::new(), |mut acc, stack| {
+                    if acc.contains_key(&stack.resource) {
+                        *acc.get_mut(&stack.resource).unwrap() += stack.amount;
+                    } else {
+                        acc.insert(stack.resource.clone(), stack.amount);
+                    }
+                    acc
+                });
+
+            for (resource, amount) in post_count {
+                assert_eq!(count.get(&resource), Some(&amount));
+            }
+        }
+    }
+}
