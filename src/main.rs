@@ -1,25 +1,18 @@
 use crate::character_ui::CharacterUiPlugin;
 use bevy::{
-    asset::AssetServerSettings,
-    diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
-    input::mouse::MouseWheel,
-    math::Vec3Swizzles,
-    prelude::*,
-    render::texture::ImageSettings,
-    utils::HashMap,
+    diagnostic::FrameTimeDiagnosticsPlugin, input::mouse::MouseWheel, math::Vec3Swizzles,
+    prelude::*, utils::HashMap,
 };
-use bevy_ecs_tilemap::tiles::TileTexture;
+use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use burner::{burner_load, burner_tick, Burner};
 use character_ui::Building;
 use egui::Align2;
 use inventory::{drop_within_inventory, transfer_between_slots, Fuel, Source};
-use inventory_grid::{
-    drop_slot, inventory_grid, item_in_hand, set_drop_slot, set_item_in_hand, Hand, HoverSlot,
-};
+use inventory_grid::{inventory_grid, Hand, InventoryIndex, SlotEvent};
 use iyes_loopless::prelude::*;
-use loading::LoadingPlugin;
+use loading::{Icons, LoadingPlugin};
 use recipe_loader::RecipeLoaderPlugin;
 use smelter::smelter_tick;
 use structure_loader::StructureLoaderPlugin;
@@ -41,68 +34,70 @@ use crate::inventory::{Inventory, Output};
 use crate::player_movement::PlayerMovementPlugin;
 use crate::recipe_loader::RecipeAsset;
 use crate::terrain::{CursorPos, HoveredTile, TerrainPlugin, COAL, IRON, STONE, TREE};
-use crate::types::{AppState, CursorState, GameState, Player};
+use crate::types::{AppState, GameState, Player};
 
-use crate::types::Resource;
+use crate::types::Product;
 
 fn main() {
     let mut app = App::new();
-    app.insert_resource(AssetServerSettings {
-        watch_for_changes: true,
-        ..default()
-    })
-    .insert_resource(ImageSettings::default_nearest())
-    .init_resource::<GameState>()
-    .init_resource::<CursorState>()
-    .insert_resource(PlayerSettings {
-        max_mining_distance: 20.,
-    })
-    .insert_resource(CameraSettings {
-        min_zoom: 0.1,
-        max_zoom: 10.,
-    })
-    .add_loopless_state(AppState::Loading)
-    // .add_plugin(LogDiagnosticsPlugin::default())
-    .add_plugin(FrameTimeDiagnosticsPlugin::default())
-    .add_plugins(DefaultPlugins)
-    .add_plugin(EguiPlugin)
-    // .insert_resource(WorldInspectorParams {
-    //     name_filter: Some("Interesting".into()),
-    //     ..default()
-    // })
-    // .add_plugin(WorldInspectorPlugin::new())
-    .insert_resource(RapierConfiguration {
-        gravity: Vec2::new(0.0, 0.0),
-        ..default()
-    })
-    .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
-    // .add_plugin(RapierDebugRenderPlugin::default())
-    .add_plugin(TerrainPlugin)
-    .add_plugin(CharacterUiPlugin)
-    .add_plugin(PlayerMovementPlugin)
-    .add_plugin(RecipeLoaderPlugin)
-    .add_plugin(StructureLoaderPlugin)
-    .add_plugin(LoadingPlugin)
-    .add_enter_system(AppState::Running, spawn_player)
-    .add_system_set(
-        ConditionSet::new()
-            .run_in_state(AppState::Running)
-            .with_system(camera_zoom)
-            .with_system(interact)
-            .with_system(interact_completion)
-            .with_system(interact_cancel)
-            .with_system(interaction_ui)
-            .with_system(craft_ticker)
-            .with_system(pick_building)
-            .with_system(building_ui)
-            .with_system(smelter_tick)
-            .with_system(burner_tick)
-            .with_system(burner_load)
-            .with_system(working_texture)
-            .into(),
-    )
-    .add_system(drop_system.run_in_state(AppState::Running).after(UiPhase))
-    .run();
+    app.init_resource::<GameState>()
+        .insert_resource(PlayerSettings {
+            max_mining_distance: 20.,
+        })
+        .insert_resource(CameraSettings {
+            min_zoom: 0.1,
+            max_zoom: 10.,
+        })
+        .add_loopless_state(AppState::Loading)
+        // .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    watch_for_changes: true,
+                    ..default()
+                })
+                .set(ImagePlugin::default_nearest()),
+        )
+        .add_plugin(EguiPlugin)
+        // .insert_resource(WorldInspectorParams {
+        //     name_filter: Some("Interesting".into()),
+        //     ..default()
+        // })
+        // .add_plugin(WorldInspectorPlugin::new())
+        .insert_resource(RapierConfiguration {
+            gravity: Vec2::new(0.0, 0.0),
+            ..default()
+        })
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        // .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(TerrainPlugin)
+        .add_plugin(CharacterUiPlugin)
+        .add_plugin(PlayerMovementPlugin)
+        .add_plugin(RecipeLoaderPlugin)
+        .add_plugin(StructureLoaderPlugin)
+        .add_plugin(LoadingPlugin)
+        .add_enter_system(AppState::Running, spawn_player)
+        .add_event::<SlotEvent>()
+        .add_system_set(
+            ConditionSet::new()
+                .run_in_state(AppState::Running)
+                .with_system(camera_zoom)
+                .with_system(interact)
+                .with_system(interact_completion)
+                .with_system(interact_cancel)
+                .with_system(interaction_ui)
+                .with_system(craft_ticker)
+                .with_system(pick_building)
+                .with_system(building_ui)
+                .with_system(smelter_tick)
+                .with_system(burner_tick)
+                .with_system(burner_load)
+                .with_system(working_texture)
+                .into(),
+        )
+        .add_system(drop_system.run_in_state(AppState::Running).after(UiPhase))
+        .run();
 }
 
 #[derive(Component)]
@@ -123,8 +118,7 @@ fn pick_building(
                 let player = player_query.single();
                 commands
                     .entity(player)
-                    .insert(SelectedBuilding(entity))
-                    .insert(Name::new("Interesting"));
+                    .insert((SelectedBuilding(entity), Name::new("Interesting")));
                 return false;
             }
             true
@@ -153,38 +147,39 @@ fn working_texture(
 }
 
 fn drop_system(
-    mut commands: Commands,
-    mut hand_query: Query<(&mut Hand, &mut HoverSlot, Entity), With<Player>>,
+    mut hand_query: Query<(&mut Hand, Entity), With<Player>>,
+    mut slot_events: EventReader<SlotEvent>,
     mut inventories_query: Query<&mut Inventory>,
-    mouse_input: Res<Input<MouseButton>>,
 ) {
-    if mouse_input.just_pressed(MouseButton::Left) {
-        for (hand, drop, entity) in &mut hand_query {
-            if hand.0.entity == drop.0.entity {
-                let mut inventory = inventories_query.get_mut(hand.0.entity).unwrap();
-                drop_within_inventory(&mut inventory, hand.0.slot, drop.0.slot);
-            } else if let Ok([mut source_inventory, mut target_inventory]) =
-                inventories_query.get_many_mut([hand.0.entity, drop.0.entity])
-            {
-                transfer_between_slots(
-                    source_inventory.slots.get_mut(hand.0.slot).unwrap(),
-                    target_inventory.slots.get_mut(drop.0.slot).unwrap(),
-                );
+    for SlotEvent::Clicked(drop) in slot_events.iter() {
+        for (mut hand, _entity) in &mut hand_query {
+            if let Some(ref item_in_hand) = hand.0 {
+                if item_in_hand.entity == drop.entity {
+                    let mut inventory = inventories_query.get_mut(item_in_hand.entity).unwrap();
+                    drop_within_inventory(&mut inventory, item_in_hand.slot, drop.slot);
+                } else if let Ok([mut source_inventory, mut target_inventory]) =
+                    inventories_query.get_many_mut([item_in_hand.entity, drop.entity])
+                {
+                    transfer_between_slots(
+                        source_inventory.slots.get_mut(item_in_hand.slot).unwrap(),
+                        target_inventory.slots.get_mut(drop.slot).unwrap(),
+                    );
+                }
+            } else if let Ok(inventory) = inventories_query.get_mut(drop.entity) {
+                if inventory.slots[drop.slot].is_some() {
+                    hand.0 = Some(InventoryIndex::new(drop.entity, drop.slot));
+                }
             }
-
-            commands
-                .entity(entity)
-                .remove::<Hand>()
-                .remove::<HoverSlot>();
         }
     }
 }
 
+// This type signature is quite something
 fn building_ui(
     mut commands: Commands,
     mut egui_ctx: ResMut<EguiContext>,
-    mut player_query: Query<
-        (Entity, &SelectedBuilding, &mut Inventory),
+    player_query: Query<
+        (Entity, &SelectedBuilding, &Inventory, &Hand),
         (
             With<Player>,
             Without<Building>,
@@ -224,10 +219,10 @@ fn building_ui(
     >,
     mut crafting_machine_query: Query<(&CraftingQueue, &Children), With<Building>>,
     mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
-    icons: Res<HashMap<String, egui::TextureId>>,
-    mut hand_query: Query<&mut Hand>,
+    icons: Res<Icons>,
+    mut slot_events: EventWriter<SlotEvent>,
 ) {
-    if let Ok((player_entity, SelectedBuilding(selected_building), mut player_inventory)) =
+    if let Ok((player_entity, SelectedBuilding(selected_building), mut player_inventory, hand)) =
         player_query.get_single()
     {
         let name = name
@@ -239,9 +234,6 @@ fn building_ui(
             .resizable(false)
             .open(&mut window_open)
             .show(egui_ctx.ctx_mut(), |ui| {
-                set_item_in_hand(ui, hand_query.get(player_entity).ok().cloned());
-                set_drop_slot(ui, None);
-
                 ui.horizontal(|ui| {
                     egui::Frame::none()
                         .stroke(egui::Stroke::new(2., egui::Color32::from_gray(10)))
@@ -249,7 +241,14 @@ fn building_ui(
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 ui.label("Character");
-                                inventory_grid(player_entity, &mut player_inventory, ui, &icons);
+                                inventory_grid(
+                                    player_entity,
+                                    &mut player_inventory,
+                                    ui,
+                                    &icons,
+                                    hand,
+                                    &mut slot_events,
+                                );
                             });
                         });
                     egui::Frame::none()
@@ -260,7 +259,14 @@ fn building_ui(
                                 if let Ok(mut inventory) =
                                     building_inventory_query.get_mut(*selected_building)
                                 {
-                                    inventory_grid(*selected_building, &mut inventory, ui, &icons);
+                                    inventory_grid(
+                                        *selected_building,
+                                        &mut inventory,
+                                        ui,
+                                        &icons,
+                                        hand,
+                                        &mut slot_events,
+                                    );
                                 }
                                 if let Ok((crafting_queue, children)) =
                                     crafting_machine_query.get_mut(*selected_building)
@@ -279,10 +285,11 @@ fn building_ui(
                                     crafting_machine_widget(
                                         ui,
                                         &icons,
-                                        *selected_building,
                                         &crafting_queue,
                                         source,
                                         output,
+                                        hand,
+                                        &mut slot_events,
                                     );
                                 }
 
@@ -295,25 +302,18 @@ fn building_ui(
                                         .flat_map(|c| fuel_query.get(*c).map(|i| (*c, i)))
                                         .next()
                                         .unwrap();
-                                    burner_widget(ui, &icons, *selected_building, &burner, fuel);
+                                    burner_widget(
+                                        ui,
+                                        &icons,
+                                        &burner,
+                                        fuel,
+                                        hand,
+                                        &mut slot_events,
+                                    );
                                 }
                             });
                         });
                 });
-                if let Some(hand) = item_in_hand(ui) {
-                    commands.entity(player_entity).remove::<Hand>().insert(hand);
-                } else {
-                    commands.entity(player_entity).remove::<Hand>();
-                }
-
-                if let Some(hover_slot) = drop_slot(ui) {
-                    commands
-                        .entity(player_entity)
-                        .remove::<HoverSlot>()
-                        .insert(hover_slot);
-                } else {
-                    commands.entity(player_entity).remove::<HoverSlot>();
-                }
             });
 
         if !window_open {
@@ -325,13 +325,14 @@ fn building_ui(
 fn burner_widget(
     ui: &mut egui::Ui,
     icons: &HashMap<String, egui::TextureId>,
-    entity: Entity,
     burner: &Burner,
     fuel: (Entity, &Inventory),
+    hand: &Hand,
+    slot_events: &mut EventWriter<SlotEvent>,
 ) {
     ui.horizontal(|ui| {
         ui.label("Fuel:");
-        inventory_grid(fuel.0, fuel.1, ui, icons);
+        inventory_grid(fuel.0, fuel.1, ui, icons, hand, slot_events);
         if let Some(timer) = &burner.fuel_timer {
             ui.add(egui::ProgressBar::new(1. - timer.percent()).desired_width(100.));
         } else {
@@ -343,13 +344,14 @@ fn burner_widget(
 fn crafting_machine_widget(
     ui: &mut egui::Ui,
     icons: &HashMap<String, egui::TextureId>,
-    entity: Entity,
     crafting_queue: &CraftingQueue,
     source: (Entity, &Inventory),
     output: (Entity, &Inventory),
+    hand: &Hand,
+    slot_events: &mut EventWriter<SlotEvent>,
 ) {
     ui.horizontal_centered(|ui| {
-        inventory_grid(source.0, source.1, ui, icons);
+        inventory_grid(source.0, source.1, ui, icons, hand, slot_events);
         if let Some(active_craft) = crafting_queue.0.front() {
             ui.add(
                 egui::ProgressBar::new(active_craft.timer.percent())
@@ -363,23 +365,26 @@ fn crafting_machine_widget(
                     .show_percentage(),
             );
         }
-        inventory_grid(output.0, output.1, ui, icons);
+        inventory_grid(output.0, output.1, ui, icons, hand, slot_events);
     });
 }
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
-        .spawn_bundle(SpriteBundle {
-            texture: asset_server.load("textures/character.png"),
-            transform: Transform::from_xyz(0.0, 0.0, 1.0),
-            ..Default::default()
-        })
-        .insert(Player)
-        .insert(Inventory {
-            slots: vec![None; 100],
-        })
-        .insert(CraftingQueue::default())
+        .spawn((
+            SpriteBundle {
+                texture: asset_server.load("textures/character.png"),
+                transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                ..Default::default()
+            },
+            Player,
+            Hand::default(),
+            Inventory {
+                slots: vec![None; 100],
+            },
+            CraftingQueue::default(),
+        ))
         .with_children(|parent| {
-            parent.spawn_bundle(Camera2dBundle {
+            parent.spawn(Camera2dBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 500.0),
                 projection: OrthographicProjection {
                     scale: 0.3,
@@ -390,6 +395,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 }
 
+#[derive(Resource)]
 struct CameraSettings {
     min_zoom: f32,
     max_zoom: f32,
@@ -411,16 +417,6 @@ fn camera_zoom(
     }
 }
 
-fn performance_ui(mut egui_context: ResMut<EguiContext>, diagnostics: Res<Diagnostics>) {
-    egui::Window::new("Performance").show(egui_context.ctx_mut(), |ui| {
-        if let Some(diagnostic) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(average) = diagnostic.average() {
-                ui.label(format!("FPS: {:.2}", average));
-            }
-        }
-    });
-}
-
 #[derive(Component)]
 struct MineCountdown {
     timer: Timer,
@@ -431,6 +427,7 @@ fn is_minable(tile: u32) -> bool {
     matches!(tile, COAL | IRON | STONE | TREE)
 }
 
+#[derive(Resource)]
 struct PlayerSettings {
     max_mining_distance: f32,
 }
@@ -438,7 +435,7 @@ struct PlayerSettings {
 fn interact(
     mut commands: Commands,
     cursor_pos: Res<CursorPos>,
-    tile_query: Query<&TileTexture>,
+    tile_query: Query<&bevy_ecs_tilemap::tiles::TileTextureIndex>,
     mouse_button_input: Res<Input<MouseButton>>,
     player_query: Query<(Entity, &Transform, &HoveredTile), (With<Player>, Without<MineCountdown>)>,
     player_settings: Res<PlayerSettings>,
@@ -459,7 +456,7 @@ fn interact(
             .distance(cursor_pos.0.xy());
         if is_minable(tile_texture.0) && tile_distance < player_settings.max_mining_distance {
             commands.entity(player_entity).insert(MineCountdown {
-                timer: Timer::from_seconds(1.0, false),
+                timer: Timer::from_seconds(1.0, TimerMode::Repeating),
                 target: hovered_tile.entity,
             });
         }
@@ -482,7 +479,7 @@ fn interact_completion(
     mut commands: Commands,
     time: Res<Time>,
     mut query: Query<(Entity, &mut Inventory, &mut MineCountdown)>,
-    tile_query: Query<&TileTexture>,
+    tile_query: Query<&TileTextureIndex>,
 ) {
     for (entity, mut inventory, mut interaction) in &mut query {
         if interaction.timer.tick(time.delta()).just_finished() {
@@ -490,10 +487,10 @@ fn interact_completion(
             let tile_entity = interaction.target;
             if let Ok(tile_texture) = tile_query.get(tile_entity) {
                 match tile_texture.0 {
-                    COAL => inventory.add_item(Resource::Coal, 1),
-                    IRON => inventory.add_item(Resource::IronOre, 1),
-                    STONE => inventory.add_item(Resource::Stone, 1),
-                    TREE => inventory.add_item(Resource::Wood, 1),
+                    COAL => inventory.add_item(Product::Coal, 1),
+                    IRON => inventory.add_item(Product::IronOre, 1),
+                    STONE => inventory.add_item(Product::Stone, 1),
+                    TREE => inventory.add_item(Product::Wood, 1),
                     _ => vec![],
                 };
             }

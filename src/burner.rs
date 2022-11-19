@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     inventory::{Fuel, Inventory},
-    types::{Powered, Resource, Working},
+    types::{Powered, Product, Working},
 };
 
 #[derive(Component)]
@@ -39,8 +39,8 @@ pub fn burner_load(
     for (entity, mut fueled, children) in fueled_query.iter_mut() {
         for child in children.iter() {
             if let Ok(mut fuel_inventory) = fuel_inventory_query.get_mut(*child) {
-                if fuel_inventory.remove_items(&[(Resource::Coal, 1)]) {
-                    fueled.fuel_timer = Some(Timer::from_seconds(10., false));
+                if fuel_inventory.remove_items(&[(Product::Coal, 1)]) {
+                    fueled.fuel_timer = Some(Timer::from_seconds(10., TimerMode::Once));
                     commands.entity(entity).insert(Powered);
                     break;
                 }

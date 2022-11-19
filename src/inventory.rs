@@ -1,17 +1,17 @@
 use bevy::prelude::*;
 
-use crate::types::Resource;
+use crate::types::Product;
 
 const MAX_STACK_SIZE: u32 = 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Stack {
-    pub resource: Resource,
+    pub resource: Product,
     pub amount: u32,
 }
 
 impl Stack {
-    pub fn new(resource: Resource, amount: u32) -> Self {
+    pub fn new(resource: Product, amount: u32) -> Self {
         Self { resource, amount }
     }
 
@@ -42,22 +42,8 @@ impl Inventory {
         }
     }
 
-    pub fn empty(&self) -> bool {
-        self.slots.iter().all(|slot| slot.is_none())
-    }
-
-    pub fn take_all(&mut self) -> Vec<(Resource, u32)> {
-        let mut stacks = Vec::new();
-        for slot in self.slots.iter_mut() {
-            if let Some(stack) = slot.take() {
-                stacks.push((stack.resource, stack.amount));
-            }
-        }
-        stacks
-    }
-
     /// Return true if the inventory has enough space for the items
-    pub fn can_add(&self, items: &[(Resource, u32)]) -> bool {
+    pub fn can_add(&self, items: &[(Product, u32)]) -> bool {
         let mut slots = self.slots.clone();
         let items = items.to_vec();
         for (item_resource, mut item_amount) in items {
@@ -89,7 +75,7 @@ impl Inventory {
     }
 
     /// Add the items to the inventory, returning the remainder
-    pub fn add_items(&mut self, items: &[(Resource, u32)]) -> Vec<(Resource, u32)> {
+    pub fn add_items(&mut self, items: &[(Product, u32)]) -> Vec<(Product, u32)> {
         let mut remainder = Vec::new();
         for (resource, amount) in items {
             let mut amount = *amount;
@@ -132,11 +118,11 @@ impl Inventory {
         remainder
     }
 
-    pub fn add_item(&mut self, resource: Resource, amount: u32) -> Vec<(Resource, u32)> {
+    pub fn add_item(&mut self, resource: Product, amount: u32) -> Vec<(Product, u32)> {
         self.add_items(&[(resource, amount)])
     }
 
-    pub fn has_items(&self, items: &[(Resource, u32)]) -> bool {
+    pub fn has_items(&self, items: &[(Product, u32)]) -> bool {
         for (resource, amount) in items {
             let mut amount = *amount;
             for slot in self.slots.iter() {
@@ -161,7 +147,7 @@ impl Inventory {
     }
 
     /// Removes all items atomically, returning true on success
-    pub fn remove_items(&mut self, items: &[(Resource, u32)]) -> bool {
+    pub fn remove_items(&mut self, items: &[(Product, u32)]) -> bool {
         if !self.has_items(items) {
             return false;
         }
@@ -207,9 +193,11 @@ pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
 }
 
 pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, target_slot: usize) {
-    if let Some(ref mut source_stack) = inventory.slots.get_mut(source_slot).unwrap().clone() {
-        if let Some(ref mut target_stack) = inventory.slots.get_mut(target_slot).unwrap() {
-            transfer_between_stacks(source_stack, target_stack);
+    if let Some(mut source_stack) = inventory.slots.get(source_slot).cloned().flatten() {
+        if let Some(mut target_stack) = inventory.slots.get(target_slot).cloned().flatten() {
+            transfer_between_stacks(&mut source_stack, &mut target_stack);
+            inventory.slots[source_slot] = Some(source_stack);
+            inventory.slots[target_slot] = Some(target_stack);
         } else {
             info!("Moving source stack to target slot");
             inventory.slots[target_slot] = Some(source_stack.clone());
@@ -225,7 +213,7 @@ fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
     if target_stack.resource == source_stack.resource {
         info!("Adding source stack to target stack");
         let remainder = target_stack.add(source_stack.amount);
-        source_stack.amount = remainder + 3;
+        source_stack.amount = remainder;
     } else {
         info!("Swapping stacks");
         std::mem::swap(source_stack, target_stack);
@@ -247,60 +235,128 @@ mod test {
     #[test]
     fn test_has_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
-        assert!(inventory.has_items(&[(Resource::Stone, 5), (Resource::Wood, 10)]));
-        assert!(!inventory.has_items(&[(Resource::Stone, 5), (Resource::Wood, 30)]));
+        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        assert!(inventory.has_items(&[(Product::Stone, 5), (Product::Wood, 10)]));
+        assert!(!inventory.has_items(&[(Product::Stone, 5), (Product::Wood, 30)]));
     }
 
     #[test]
     fn test_remove_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
-        inventory.remove_items(&[(Resource::Stone, 5), (Resource::Wood, 10)]);
-        assert_eq!(inventory.slots[0], Some(Stack::new(Resource::Stone, 5)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Resource::Wood, 10)));
+        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        inventory.remove_items(&[(Product::Stone, 5), (Product::Wood, 10)]);
+        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 5)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Wood, 10)));
     }
 
     #[test]
     fn test_remove_items_empty() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
-        inventory.remove_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
+        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        inventory.remove_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
         assert!(inventory.slots.iter().all(|s| s.is_none()));
     }
 
     #[test]
     fn test_remove_items_not_enough() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
-        assert!(!inventory.remove_items(&[(Resource::Stone, 5), (Resource::Wood, 30)]));
-        assert_eq!(inventory.slots[0], Some(Stack::new(Resource::Stone, 10)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Resource::Wood, 20)));
+        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        assert!(!inventory.remove_items(&[(Product::Stone, 5), (Product::Wood, 30)]));
+        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 10)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Wood, 20)));
     }
     #[test]
     fn test_add_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
-        assert_eq!(inventory.slots[0], Some(Stack::new(Resource::Stone, 10)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Resource::Wood, 20)));
+        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 10)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Wood, 20)));
     }
 
     #[test]
     fn test_add_items_remainder() {
         let mut inventory = Inventory::new(1);
-        let remainder = inventory.add_items(&[(Resource::Stone, 10), (Resource::Wood, 20)]);
-        assert_eq!(inventory.slots[0], Some(Stack::new(Resource::Stone, 10)));
-        assert_eq!(remainder, vec![(Resource::Wood, 20)]);
+        let remainder = inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 10)));
+        assert_eq!(remainder, vec![(Product::Wood, 20)]);
     }
 
     #[test]
     fn test_add_items_stack() {
         let mut inventory = Inventory::new(2);
-        inventory.slots[1] = Some(Stack::new(Resource::Structure("Stone furnace".into()), 10));
-        inventory.add_items(&[(Resource::Structure("Stone furnace".into()), 1)]);
+        inventory.slots[1] = Some(Stack::new(Product::Structure("Stone furnace".into()), 10));
+        inventory.add_items(&[(Product::Structure("Stone furnace".into()), 1)]);
         assert_eq!(
             inventory.slots[1],
-            Some(Stack::new(Resource::Structure("Stone furnace".into()), 11))
+            Some(Stack::new(Product::Structure("Stone furnace".into()), 11))
         );
+    }
+
+    #[test]
+    fn test_transfer_between_stacks() {
+        let mut source_stack = Stack::new(Product::Stone, 10);
+        let mut target_stack = Stack::new(Product::IronOre, 20);
+
+        transfer_between_stacks(&mut source_stack, &mut target_stack);
+
+        assert_eq!(source_stack, Stack::new(Product::IronOre, 20));
+        assert_eq!(target_stack, Stack::new(Product::Stone, 10));
+    }
+
+    #[test]
+    fn test_transfer_between_stacks_same() {
+        let mut source_stack = Stack::new(Product::Stone, 10);
+        let mut target_stack = Stack::new(Product::Stone, 20);
+
+        transfer_between_stacks(&mut source_stack, &mut target_stack);
+
+        assert_eq!(source_stack, Stack::new(Product::Stone, 0));
+        assert_eq!(target_stack, Stack::new(Product::Stone, 30));
+    }
+
+    #[test]
+    fn test_transfer_between_slots() {
+        let mut source_slot = Some(Stack::new(Product::Stone, 10));
+        let mut target_slot = Some(Stack::new(Product::IronOre, 20));
+
+        transfer_between_slots(&mut source_slot, &mut target_slot);
+
+        assert_eq!(source_slot, Some(Stack::new(Product::IronOre, 20)));
+        assert_eq!(target_slot, Some(Stack::new(Product::Stone, 10)));
+    }
+
+    #[test]
+    fn test_transfer_between_slots_same() {
+        let mut source_slot = Some(Stack::new(Product::Stone, 10));
+        let mut target_slot = Some(Stack::new(Product::Stone, 20));
+
+        transfer_between_slots(&mut source_slot, &mut target_slot);
+
+        assert_eq!(source_slot, None);
+        assert_eq!(target_slot, Some(Stack::new(Product::Stone, 30)));
+    }
+
+    #[test]
+    fn test_transfer_between_slots_empty() {
+        let mut source_slot = Some(Stack::new(Product::Stone, 10));
+        let mut target_slot = None;
+
+        transfer_between_slots(&mut source_slot, &mut target_slot);
+
+        assert_eq!(source_slot, None);
+        assert_eq!(target_slot, Some(Stack::new(Product::Stone, 10)));
+    }
+
+    #[test]
+    fn test_drop_within_inventory() {
+        let mut inventory = Inventory::new(12);
+
+        inventory.slots[0] = Some(Stack::new(Product::Stone, 10));
+        inventory.slots[1] = Some(Stack::new(Product::IronOre, 20));
+
+        drop_within_inventory(&mut inventory, 1, 0);
+
+        assert_eq!(inventory.slots[0], Some(Stack::new(Product::IronOre, 20)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Stone, 10)));
     }
 }

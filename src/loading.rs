@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use bevy::{asset::LoadState, prelude::*, utils::HashMap};
 use bevy_egui::EguiContext;
 use iyes_loopless::prelude::*;
@@ -8,8 +10,58 @@ use crate::{
     types::{AppState, GameState, Recipe},
 };
 
+#[derive(Resource, Default)]
+pub struct Structures(HashMap<String, Structure>);
+
+impl Deref for Structures {
+    type Target = HashMap<String, Structure>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Structures {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct Recipes(HashMap<String, Recipe>);
+
+impl Deref for Recipes {
+    type Target = HashMap<String, Recipe>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Recipes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct Icons(HashMap<String, egui::TextureId>);
+
+impl Deref for Icons {
+    type Target = HashMap<String, egui::TextureId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Icons {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
-    asset_server.watch_for_changes().unwrap();
     gamestate.recipes_handle = asset_server.load("data/start.recipes.ron");
     gamestate.structures_handle = asset_server.load("data/start.structures.ron");
     gamestate.icons_handle = asset_server.load_folder("textures/icons").unwrap();
@@ -19,7 +71,7 @@ fn load_icons(
     asset_server: Res<AssetServer>,
     mut gamestate: ResMut<GameState>,
     mut egui_context: ResMut<EguiContext>,
-    mut icons: ResMut<HashMap<String, egui::TextureId>>,
+    mut icons: ResMut<Icons>,
 ) {
     if !gamestate.icons_loaded
         && asset_server.get_group_load_state(gamestate.icons_handle.iter().map(|h| h.id))
@@ -42,7 +94,7 @@ fn load_icons(
 fn load_structures(
     mut gamestate: ResMut<GameState>,
     structures_assets: Res<Assets<StructuresAsset>>,
-    mut structures: ResMut<HashMap<String, Structure>>,
+    mut structures: ResMut<Structures>,
 ) {
     let structures_asset = structures_assets.get(&gamestate.structures_handle);
     if gamestate.structures_loaded && structures_asset.is_none() {
@@ -62,7 +114,7 @@ fn load_structures(
 fn load_recipes(
     mut gamestate: ResMut<GameState>,
     recipes_assets: Res<Assets<RecipeAsset>>,
-    mut recipes: ResMut<HashMap<String, Recipe>>,
+    mut recipes: ResMut<Recipes>,
 ) {
     let recipe_assets = recipes_assets.get(&gamestate.recipes_handle);
     if gamestate.recipes_loaded || recipe_assets.is_none() {
@@ -89,9 +141,9 @@ pub struct LoadingPlugin;
 
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(HashMap::<String, Recipe>::default())
-            .insert_resource(HashMap::<String, Structure>::default())
-            .insert_resource(HashMap::<String, egui::TextureId>::default())
+        app.insert_resource(Structures::default())
+            .insert_resource(Recipes::default())
+            .insert_resource(Icons::default())
             .add_enter_system(AppState::Loading, start_loading)
             .add_system_set(
                 ConditionSet::new()

@@ -1,4 +1,3 @@
-use bevy_egui::EguiContext;
 use iyes_loopless::prelude::ConditionSet;
 
 use rand::seq::SliceRandom;
@@ -58,6 +57,7 @@ impl Plugin for TerrainPlugin {
 const CHUNK_SIZE: UVec2 = UVec2 { x: 8, y: 8 };
 pub(crate) const TILE_SIZE: TilemapTileSize = TilemapTileSize { x: 16., y: 16. };
 
+#[derive(Resource)]
 struct TerrainSettings {
     seed: u32,
     chunk_spawn_radius: i32,
@@ -77,12 +77,12 @@ pub const GRASS: u32 = 2;
 pub const TALL_GRASS: u32 = 3;
 pub const DEEP_WATER: u32 = 4;
 pub const TREE: u32 = 5;
-pub const FLOWERS: u32 = 6;
+pub const _FLOWERS: u32 = 6;
 pub const STONE: u32 = 7;
 pub const COAL: u32 = 8;
 pub const IRON: u32 = 9;
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ChunkManager {
     spawned_chunks: HashSet<IVec2>,
     loading_chunks: HashSet<IVec2>,
@@ -233,9 +233,7 @@ fn spawn_chunk(
     mut chunk_manager: ResMut<ChunkManager>,
     asset_server: Res<AssetServer>,
 ) {
-    let map_type = TilemapType::Square {
-        diagonal_neighbors: true,
-    };
+    let map_type = TilemapType::Square;
     for (chunk_entity, mut task) in &mut chunk_task {
         if let Some((chunk_position, chunk)) = future::block_on(future::poll_once(&mut task.0)) {
             let tilemap_size = TilemapSize {
@@ -256,11 +254,10 @@ fn spawn_chunk(
                 if let Some(texture_id) = tile {
                     let tile_pos = TilePos { x, y };
                     let tile_entity = commands
-                        .spawn()
-                        .insert_bundle(TileBundle {
+                        .spawn(TileBundle {
                             position: tile_pos,
                             tilemap_id: TilemapId(chunk_entity),
-                            texture: TileTexture(*texture_id),
+                            texture_index: TileTextureIndex(*texture_id),
                             ..default()
                         })
                         .id();
@@ -288,9 +285,8 @@ fn spawn_chunk(
             let texture_handle = asset_server.load("textures/terrain.png");
 
             debug!("Adding chunk {:?} to world", chunk_position);
-            commands
-                .entity(chunk_entity)
-                .insert_bundle(TilemapBundle {
+            commands.entity(chunk_entity).insert((
+                TilemapBundle {
                     grid_size: TILE_SIZE.into(),
                     size: CHUNK_SIZE.into(),
                     storage: tile_storage,
@@ -299,8 +295,9 @@ fn spawn_chunk(
                     transform: map_transform,
                     map_type,
                     ..default()
-                })
-                .insert(SpawnedChunk);
+                },
+                SpawnedChunk,
+            ));
 
             commands.entity(chunk_entity).remove::<GenerateChunk>();
             chunk_manager.loading_chunks.remove(&chunk_position);
@@ -330,7 +327,7 @@ fn spawn_chunks_around_camera(
                     let seed = terrain_settings.seed;
                     let task = thread_pool
                         .spawn(async move { generate_chunk_noise(seed, IVec2::new(x, y)).await });
-                    commands.spawn().insert(GenerateChunk(task));
+                    commands.spawn(GenerateChunk(task));
                 }
             }
         }
@@ -342,31 +339,6 @@ pub fn global_pos_to_chunk_pos(camera_pos: &Vec2) -> IVec2 {
     let chunk_size: IVec2 = IVec2::new(CHUNK_SIZE.x as i32, CHUNK_SIZE.y as i32);
     let tile_size: IVec2 = IVec2::new(TILE_SIZE.x as i32, TILE_SIZE.y as i32);
     camera_pos / (chunk_size * tile_size)
-}
-
-fn despawn_outofrange_chunks(
-    mut commands: Commands,
-    camera_query: Query<&Transform, With<Player>>,
-    chunks_query: Query<(Entity, &Transform), With<SpawnedChunk>>,
-    mut chunk_manager: ResMut<ChunkManager>,
-    terrain_settings: Res<TerrainSettings>,
-) {
-    for player_transform in &camera_query {
-        for (entity, chunk_transform) in &chunks_query {
-            let chunk_pos = chunk_transform.translation.xy();
-            let distance = player_transform.translation.xy().distance(chunk_pos);
-            let chunk_spawn_radius = terrain_settings.chunk_spawn_radius;
-            if distance > (chunk_spawn_radius as f32 * CHUNK_SIZE.x as f32 * TILE_SIZE.x) * 2f32 {
-                let x = (chunk_pos.x as f32 / (CHUNK_SIZE.x as f32 * TILE_SIZE.x)).floor() as i32;
-                let y = (chunk_pos.y as f32 / (CHUNK_SIZE.y as f32 * TILE_SIZE.y)).floor() as i32;
-
-                info!("Despawning chunk {:?} at {:?}", (x, y), chunk_pos);
-                chunk_manager.spawned_chunks.remove(&IVec2::new(x, y));
-                chunk_manager.entities.remove(&IVec2::new(x, y));
-                commands.entity(entity).despawn_recursive();
-            }
-        }
-    }
 }
 
 pub fn cursor_pos_in_world(
@@ -386,7 +358,7 @@ pub fn cursor_pos_in_world(
     ndc_to_world.project_point3(ndc.extend(0.0))
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct CursorPos(pub Vec3);
 
 fn update_cursor_pos(
@@ -411,54 +383,6 @@ fn update_cursor_pos(
 
 #[derive(Component)]
 struct HighlightedLabel;
-
-// This is where we check which tile the cursor is hovered over.
-fn highlight_tile_labels(
-    mut commands: Commands,
-    cursor_pos: Res<CursorPos>,
-    tilemap_q: Query<(
-        &TilemapSize,
-        &TilemapGridSize,
-        &TilemapType,
-        &TileStorage,
-        &Transform,
-    )>,
-    highlighted_tiles_q: Query<Entity, With<HighlightedLabel>>,
-    mut tile_label_q: Query<&mut Sprite, With<TileLabel>>,
-) {
-    // Un-highlight any previously highlighted tile labels.
-    for highlighted_tile_entity in highlighted_tiles_q.iter() {
-        if let Ok(mut tile_sprite) = tile_label_q.get_mut(highlighted_tile_entity) {
-            tile_sprite.color = Color::WHITE;
-            commands
-                .entity(highlighted_tile_entity)
-                .remove::<HighlightedLabel>();
-        }
-    }
-    for (map_size, grid_size, map_type, tile_storage, map_transform) in tilemap_q.iter() {
-        // Grab the cursor position from the `Res<CursorPos>`
-        let cursor_pos: Vec3 = cursor_pos.0;
-        // We need to make sure that the cursor's world position is correct relative to the map // due to any map transformation.
-        let cursor_in_map_pos: Vec2 = {
-            // Extend the cursor_pos vec3 by 1.0
-            let cursor_pos = Vec4::from((cursor_pos, 1.0));
-            let cursor_in_map_pos = map_transform.compute_matrix().inverse() * cursor_pos;
-            cursor_in_map_pos.xy()
-        };
-        // Once we have a world position we can transform it into a possible tile position.
-        if let Some(tile_pos) =
-            TilePos::from_world_pos(&cursor_in_map_pos, map_size, grid_size, map_type)
-        {
-            // Highlight the relevant tile's label
-            if let Some(tile_entity) = tile_storage.get(&tile_pos) {
-                if let Ok(mut tile_sprite) = tile_label_q.get_mut(tile_entity) {
-                    tile_sprite.color = Color::RED;
-                    commands.entity(tile_entity).insert(HighlightedLabel);
-                }
-            }
-        }
-    }
-}
 
 #[derive(Component)]
 pub struct HoveredTile {
@@ -511,55 +435,6 @@ pub fn hovered_tile(
             }
         }
     }
-}
-
-fn hover_info_ui(
-    mut egui_context: ResMut<EguiContext>,
-    cursor_pos: Res<CursorPos>,
-    tile_query: Query<&TileTexture>,
-    player_query: Query<&HoveredTile, With<Player>>,
-) {
-    egui::Window::new("Hover Info").show(egui_context.ctx_mut(), |ui| {
-        if let Ok(hovered_tile) = player_query.get_single() {
-            let tile_entity = hovered_tile.entity;
-            let cursor_pos = cursor_pos.0;
-            ui.label(format!("Cursor pos: {:?}", cursor_pos));
-            ui.label(format!("Tile: {:?}", tile_entity));
-            if let Ok(tile_texture) = tile_query.get(tile_entity) {
-                ui.label(format!("Tile Texture: {:?}", tile_texture));
-            } else {
-                ui.label("Tile Texture: None");
-            }
-        }
-    });
-}
-
-fn debug_ui(
-    mut egui_context: ResMut<EguiContext>,
-    chunk_task: Query<(Entity, &mut GenerateChunk)>,
-    camera_query: Query<&GlobalTransform, With<Camera>>,
-    mut terrain_settings: ResMut<TerrainSettings>,
-) {
-    egui::Window::new("Terrain").show(egui_context.ctx_mut(), |ui| {
-        ui.label(format!(
-            "Chunks being generated: {}",
-            chunk_task.iter().count()
-        ));
-        ui.label(format!(
-            "camera position: chunk {}",
-            global_pos_to_chunk_pos(
-                &camera_query
-                    .get_single()
-                    .expect("There should be a camera")
-                    .translation()
-                    .xy()
-            )
-        ));
-        ui.add(
-            egui::Slider::new(&mut terrain_settings.chunk_spawn_radius, 1..=100)
-                .text("chunk spawn radius"),
-        );
-    });
 }
 
 #[cfg(test)]

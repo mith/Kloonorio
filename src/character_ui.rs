@@ -6,46 +6,39 @@ use egui::{epaint, Response, Sense, Stroke};
 use crate::{
     burner::Burner,
     inventory::{Fuel, Inventory, Output, Source},
-    inventory_grid::{
-        drop_slot, inventory_grid, item_in_hand, set_drop_slot, set_item_in_hand, Hand, HoverSlot,
-        HIGHLIGHT_COLOR,
-    },
+    inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
+    loading::{Icons, Recipes, Structures},
     smelter::Smelter,
-    structure_loader::{Structure, StructureComponent},
+    structure_loader::StructureComponent,
     terrain::{HoveredTile, TerrainStage, TILE_SIZE},
-    types::{ActiveCraft, CraftingQueue, Player, Recipe, Resource, UiPhase},
+    types::{ActiveCraft, CraftingQueue, Player, Product, Recipe, UiPhase},
 };
-
-#[derive(Component)]
-pub struct Placeable {
-    structure: String,
-    size: IVec2,
-}
 
 #[derive(Component)]
 struct Ghost;
 
 #[derive(Component)]
-pub(crate) struct Building;
+pub struct Building;
 
 fn placeable(
     mut commands: Commands,
-    mut placeable_query: Query<(Entity, &mut Inventory, &Hand, &HoveredTile)>,
+    mut placeable_query: Query<(&mut Inventory, &Hand, &HoveredTile)>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,
     asset_server: Res<AssetServer>,
     rapier_context: Res<RapierContext>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-    structures: Res<HashMap<String, Structure>>,
+    structures: Res<Structures>,
 ) {
     // delete old ghosts
     for ghost in ghosts.iter() {
         commands.entity(ghost).despawn_recursive();
     }
 
-    for (player, mut inventory, hand, hovered_tile) in &mut placeable_query {
-        if let Some(stack) = &mut inventory.slots[hand.0.slot].as_mut() {
-            if let Resource::Structure(structure_name) = &stack.resource {
+    for (mut inventory, hand, hovered_tile) in &mut placeable_query {
+        // TODO: make this simpler
+        if let Some(Some(stack)) = hand.0.clone().map(|ih| inventory.slots[ih.slot].clone()) {
+            if let Product::Structure(structure_name) = &stack.resource {
                 let structure = structures.get(structure_name).unwrap();
                 let texture_handle = asset_server.load(&format!(
                     "textures/{}.png",
@@ -56,6 +49,8 @@ fn placeable(
                     structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
                     2,
                     1,
+                    None,
+                    None,
                 );
                 let texture_atlas_handle = texture_atlases.add(texture_atlas);
                 let translation =
@@ -71,9 +66,8 @@ fn placeable(
                     )
                     .is_some()
                 {
-                    commands
-                        .spawn()
-                        .insert_bundle(SpriteSheetBundle {
+                    commands.spawn((
+                        SpriteSheetBundle {
                             transform,
                             texture_atlas: texture_atlas_handle,
                             sprite: TextureAtlasSprite {
@@ -81,22 +75,23 @@ fn placeable(
                                 ..default()
                             },
                             ..default()
-                        })
-                        .insert(Ghost);
+                        },
+                        Ghost,
+                    ));
                 } else if mouse_input.just_pressed(MouseButton::Left) {
                     info!("Placing {:?}", structure);
-                    commands.entity(player).remove::<Placeable>();
-                    if inventory.remove_items(&[(Resource::Structure(structure.name.clone()), 1)]) {
+                    if inventory.remove_items(&[(Product::Structure(structure.name.clone()), 1)]) {
                         let structure_entity = commands
-                            .spawn()
-                            .insert_bundle(SpriteSheetBundle {
-                                texture_atlas: texture_atlas_handle,
-                                ..default()
-                            })
-                            .insert(Collider::cuboid(11., 11.))
-                            .insert_bundle(TransformBundle::from_transform(transform))
-                            .insert(Building)
-                            .insert(Name::new(structure.name.to_string()))
+                            .spawn((
+                                SpriteSheetBundle {
+                                    texture_atlas: texture_atlas_handle,
+                                    transform,
+                                    ..default()
+                                },
+                                Collider::cuboid(11., 11.),
+                                Building,
+                                Name::new(structure.name.to_string()),
+                            ))
                             .id();
 
                         for component in &structure.components {
@@ -119,26 +114,25 @@ fn placeable(
                                 }
                                 StructureComponent::Source(slots) => {
                                     commands.entity(structure_entity).with_children(|p| {
-                                        p.spawn().insert(Source).insert(Inventory::new(*slots));
+                                        p.spawn((Source, Inventory::new(*slots)));
                                     });
                                 }
                                 StructureComponent::Output(slots) => {
                                     commands.entity(structure_entity).with_children(|p| {
-                                        p.spawn().insert(Output).insert(Inventory::new(*slots));
+                                        p.spawn((Output, Inventory::new(*slots)));
                                     });
                                 }
                                 StructureComponent::Fuel(slots) => {
                                     commands.entity(structure_entity).with_children(|p| {
-                                        p.spawn().insert(Fuel).insert(Inventory::new(*slots));
+                                        p.spawn((Fuel, Inventory::new(*slots)));
                                     });
                                 }
                             }
                         }
                     }
                 } else {
-                    commands
-                        .spawn()
-                        .insert_bundle(SpriteSheetBundle {
+                    commands.spawn((
+                        SpriteSheetBundle {
                             transform,
                             texture_atlas: texture_atlas_handle,
                             sprite: TextureAtlasSprite {
@@ -146,8 +140,9 @@ fn placeable(
                                 ..default()
                             },
                             ..default()
-                        })
-                        .insert(Ghost);
+                        },
+                        Ghost,
+                    ));
                 }
             }
         }
@@ -215,7 +210,10 @@ pub fn craft_ui(
                             inventory.remove_items(&recipe.materials);
                             build_queue.0.push_back(ActiveCraft {
                                 blueprint: recipe.clone(),
-                                timer: Timer::from_seconds(recipe.crafting_time, false),
+                                timer: Timer::from_seconds(
+                                    recipe.crafting_time,
+                                    TimerMode::Repeating,
+                                ),
                             });
                         }
                     } else {
@@ -234,41 +232,31 @@ pub fn craft_ui(
 }
 
 fn character_ui(
-    mut commands: Commands,
     mut egui_context: ResMut<EguiContext>,
-    mut inventory_query: Query<(Entity, &mut Inventory, &mut CraftingQueue), With<Player>>,
-    blueprints: Res<HashMap<String, Recipe>>,
-    icons: Res<HashMap<String, egui::TextureId>>,
-    hand_query: Query<&Hand>,
+    mut inventory_query: Query<(Entity, &mut Inventory, &Hand, &mut CraftingQueue), With<Player>>,
+    blueprints: Res<Recipes>,
+    icons: Res<Icons>,
+    mut slot_events: EventWriter<SlotEvent>,
 ) {
     egui::Window::new("Character")
         .resizable(false)
         .show(egui_context.ctx_mut(), |ui| {
-            for (player_entity, ref mut inventory, ref mut crafting_queue) in &mut inventory_query {
-                set_item_in_hand(ui, hand_query.get(player_entity).ok().cloned());
-                set_drop_slot(ui, None);
-
+            for (player_entity, ref mut inventory, hand, ref mut crafting_queue) in
+                &mut inventory_query
+            {
                 ui.horizontal_top(|ui| {
-                    let drag = inventory_grid(player_entity, inventory, ui, &icons);
+                    let drag = inventory_grid(
+                        player_entity,
+                        inventory,
+                        ui,
+                        &icons,
+                        hand,
+                        &mut slot_events,
+                    );
                     ui.separator();
                     craft_ui(ui, &blueprints, inventory, crafting_queue, &icons);
                     drag
                 });
-
-                if let Some(hand) = item_in_hand(ui) {
-                    commands.entity(player_entity).remove::<Hand>().insert(hand);
-                } else {
-                    commands.entity(player_entity).remove::<Hand>();
-                }
-
-                if let Some(hover_slot) = drop_slot(ui) {
-                    commands
-                        .entity(player_entity)
-                        .remove::<HoverSlot>()
-                        .insert(hover_slot);
-                } else {
-                    commands.entity(player_entity).remove::<HoverSlot>();
-                }
             }
         });
 }

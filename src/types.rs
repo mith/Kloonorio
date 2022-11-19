@@ -11,12 +11,7 @@ pub enum AppState {
     Running,
 }
 
-#[derive(Default, Component)]
-pub struct CursorState {
-    pub under_cursor: Option<usize>,
-}
-
-#[derive(Default, Component)]
+#[derive(Default, Resource)]
 pub struct GameState {
     pub map_loaded: bool,
     pub spawned: bool,
@@ -33,7 +28,7 @@ pub struct Player;
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid)]
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
-pub enum Resource {
+pub enum Product {
     Coal,
     IronOre,
     Wood,
@@ -43,16 +38,16 @@ pub enum Resource {
     Structure(String),
 }
 
-impl Resource {
+impl Product {
     pub fn name(&self) -> String {
         match self {
-            Resource::Coal => "Coal".to_string(),
-            Resource::IronOre => "Iron ore".to_string(),
-            Resource::Wood => "Wood".to_string(),
-            Resource::Stone => "Stone".to_string(),
-            Resource::IronPlate => "Iron plate".to_string(),
-            Resource::IronGearWheel => "Iron gear wheel".to_string(),
-            Resource::Structure(s) => s.to_string(),
+            Product::Coal => "Coal".to_string(),
+            Product::IronOre => "Iron ore".to_string(),
+            Product::Wood => "Wood".to_string(),
+            Product::Stone => "Stone".to_string(),
+            Product::IronPlate => "Iron plate".to_string(),
+            Product::IronGearWheel => "Iron gear wheel".to_string(),
+            Product::Structure(s) => s.to_string(),
         }
     }
 }
@@ -74,8 +69,8 @@ pub struct ActiveCraft {
 #[derive(Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "1ca725c1-5a0d-484f-8d04-a5a42960e208"]
 pub struct Recipe {
-    pub materials: Vec<(Resource, u32)>,
-    pub products: Vec<(Resource, u32)>,
+    pub materials: Vec<(Product, u32)>,
+    pub products: Vec<(Product, u32)>,
     pub crafting_time: f32,
     pub name: String,
 }

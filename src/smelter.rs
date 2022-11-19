@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::inventory::{Inventory, Output, Source};
-use crate::types::{ActiveCraft, CraftingQueue, Powered, Recipe, Resource, Working};
+use crate::types::{ActiveCraft, CraftingQueue, Powered, Product, Recipe, Working};
 
 #[derive(Component)]
 pub struct Smelter;
@@ -23,16 +23,16 @@ pub fn smelter_tick(
         let mut source = source_query.get_mut(*source_entity.unwrap()).unwrap();
         let mut output = output_query.get_mut(*output_entity.unwrap()).unwrap();
 
-        if source.has_items(&[(Resource::IronOre, 1)])
+        if source.has_items(&[(Product::IronOre, 1)])
             && crafting_queue.0.is_empty()
-            && output.can_add(&[(Resource::IronPlate, 1)])
+            && output.can_add(&[(Product::IronPlate, 1)])
         {
-            source.remove_items(&[(Resource::IronOre, 1)]);
+            source.remove_items(&[(Product::IronOre, 1)]);
             crafting_queue.0.push_back(ActiveCraft {
-                timer: Timer::from_seconds(1., false),
+                timer: Timer::from_seconds(1., TimerMode::Repeating),
                 blueprint: Recipe {
-                    materials: vec![(Resource::IronOre, 1u32)],
-                    products: vec![(Resource::IronPlate, 1u32)],
+                    materials: vec![(Product::IronOre, 1u32)],
+                    products: vec![(Product::IronPlate, 1u32)],
                     crafting_time: 0.5,
                     name: "Iron Plate".into(),
                 },

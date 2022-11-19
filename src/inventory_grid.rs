@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
@@ -6,8 +8,24 @@ use crate::inventory::{Inventory, Stack};
 
 pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
 
+fn item_in_hand(ui: &mut egui::Ui) -> Option<InventoryIndex> {
+    let hand_id = egui::Id::new("hand");
+    ui.memory().data.get_temp::<InventoryIndex>(hand_id)
+}
+
+fn set_item_in_hand(ui: &mut egui::Ui, item: Option<InventoryIndex>) {
+    let hand_id = egui::Id::new("hand");
+    if let Some(item) = item {
+        ui.memory()
+            .data
+            .insert_temp::<InventoryIndex>(hand_id, item);
+    } else {
+        ui.memory().data.remove::<InventoryIndex>(hand_id);
+    }
+}
+
 fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)) -> Response {
-    let is_being_dragged = item_in_hand(ui).filter(|h| h.0.item_id == id).is_some();
+    let is_being_dragged = item_in_hand(ui).filter(|h| h.item_id == id).is_some();
 
     if !is_being_dragged {
         let response = ui.scope(body).response;
@@ -122,17 +140,18 @@ pub struct InventoryIndex {
     pub item_id: egui::Id,
 }
 
-#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Hand(pub InventoryIndex);
-impl Hand {
-    pub fn new(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
-        Hand(InventoryIndex {
+impl InventoryIndex {
+    pub fn new(entity: Entity, slot: SlotIndex) -> Self {
+        Self {
             entity,
             slot,
-            item_id,
-        })
+            item_id: egui::Id::new(entity).with(slot),
+        }
     }
 }
+
+#[derive(Component, Default, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Hand(pub Option<InventoryIndex>);
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HoverSlot(pub InventoryIndex);
@@ -146,11 +165,27 @@ impl HoverSlot {
     }
 }
 
+pub enum SlotEvent {
+    Clicked(InventoryIndex),
+}
+
+impl SlotEvent {
+    pub fn clicked(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
+        Self::Clicked(InventoryIndex {
+            entity,
+            slot,
+            item_id,
+        })
+    }
+}
+
 pub fn inventory_grid(
     entity: Entity,
     inventory: &Inventory,
     ui: &mut egui::Ui,
     icons: &HashMap<String, egui::TextureId>,
+    hand: &Hand,
+    slot_events: &mut EventWriter<SlotEvent>,
 ) {
     let grid_height = (inventory.slots.len() as f32 / 10.).ceil() as usize;
     egui::Grid::new(entity)
@@ -158,76 +193,31 @@ pub fn inventory_grid(
         .max_col_width(32.)
         .spacing([3., 3.])
         .show(ui, |ui| {
+            set_item_in_hand(ui, hand.0.clone());
             for row in 0..grid_height {
                 for col in 0..10 {
                     let slot_index = row * 10 + col;
                     if let Some(slot) = inventory.slots.get(slot_index) {
                         let item_id = egui::Id::new(entity).with(slot_index);
-                        let response = drop_target(ui, item_id, |ui| {
+                        drop_target(ui, item_id, |ui| {
                             if let Some(stack) = slot {
                                 let response = drag_source(ui, item_id, |ui| {
                                     resource_stack(ui, stack, icons);
                                 });
-                                if response.hovered() && item_in_hand(ui).is_none() {
+                                if response.hovered() {
                                     response
                                         .clone()
                                         .on_hover_text_at_pointer(stack.resource.name());
                                 }
                                 if response.clicked() || response.dragged() {
-                                    set_item_in_hand(
-                                        ui,
-                                        Some(Hand::new(entity, slot_index, item_id)),
-                                    );
-                                }
-                            } else {
-                                // If the slot is empty but still in our hand, remove it
-                                if item_in_hand(ui)
-                                    .clone()
-                                    .filter(|hand| {
-                                        hand.0.entity == entity && hand.0.slot == slot_index
-                                    })
-                                    .clone()
-                                    .is_some()
-                                {
-                                    set_item_in_hand(ui, None);
+                                    slot_events
+                                        .send(SlotEvent::clicked(entity, slot_index, item_id));
                                 }
                             }
                         });
-
-                        if response.response.hovered() {
-                            set_drop_slot(ui, Some(HoverSlot::new(entity, slot_index, item_id)));
-                        }
                     }
                 }
                 ui.end_row();
             }
         });
-}
-
-pub fn item_in_hand(ui: &mut egui::Ui) -> Option<Hand> {
-    let hand_id = egui::Id::new("hand");
-    ui.memory().data.get_temp::<Hand>(hand_id)
-}
-
-pub fn set_item_in_hand(ui: &mut egui::Ui, hand: Option<Hand>) {
-    let hand_id = egui::Id::new("hand");
-    if let Some(hand) = hand {
-        ui.memory().data.insert_temp(hand_id, hand);
-    } else {
-        ui.memory().data.remove::<Hand>(hand_id);
-    }
-}
-
-pub fn drop_slot(ui: &mut egui::Ui) -> Option<HoverSlot> {
-    let drop_id = egui::Id::new("drop");
-    ui.memory().data.get_temp::<HoverSlot>(drop_id)
-}
-
-pub fn set_drop_slot(ui: &mut egui::Ui, drop: Option<HoverSlot>) {
-    let drop_id = egui::Id::new("drop");
-    if let Some(drop) = drop {
-        ui.memory().data.insert_temp(drop_id, drop);
-    } else {
-        ui.memory().data.remove::<HoverSlot>(drop_id);
-    }
 }
