@@ -1,158 +1,15 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContext;
-use bevy_rapier2d::prelude::*;
+
 use egui::{epaint, Response, Sense, Stroke};
 
 use crate::{
-    burner::Burner,
-    inventory::{Fuel, Inventory, Output, Source},
+    inventory::Inventory,
     inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
-    loading::{Icons, Recipes, Structures},
-    smelter::Smelter,
-    structure_loader::StructureComponent,
-    terrain::{HoveredTile, TerrainStage, TILE_SIZE},
-    types::{ActiveCraft, CraftingQueue, Player, Product, Recipe, UiPhase},
+    loading::{Icons, Recipes},
+    terrain::TerrainStage,
+    types::{ActiveCraft, CraftingQueue, Player, Recipe, UiPhase},
 };
-
-#[derive(Component)]
-struct Ghost;
-
-#[derive(Component)]
-pub struct Building;
-
-fn placeable(
-    mut commands: Commands,
-    mut placeable_query: Query<(&mut Inventory, &mut Hand, &HoveredTile)>,
-    mouse_input: Res<Input<MouseButton>>,
-    ghosts: Query<Entity, With<Ghost>>,
-    asset_server: Res<AssetServer>,
-    rapier_context: Res<RapierContext>,
-    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-    structures: Res<Structures>,
-) {
-    // delete old ghosts
-    for ghost in ghosts.iter() {
-        commands.entity(ghost).despawn_recursive();
-    }
-
-    for (mut inventory, mut hand, hovered_tile) in &mut placeable_query {
-        // TODO: make this simpler
-        if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
-            if let Product::Structure(structure_name) = &stack.resource {
-                let structure = structures.get(structure_name).unwrap();
-                let texture_handle = asset_server.load(&format!(
-                    "textures/{}.png",
-                    &structure.name.to_lowercase().replace(" ", "_")
-                ));
-                let texture_atlas = TextureAtlas::from_grid(
-                    texture_handle,
-                    structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
-                    2,
-                    1,
-                    None,
-                    None,
-                );
-                let texture_atlas_handle = texture_atlases.add(texture_atlas);
-                let translation =
-                    hovered_tile.tile_center + Vec2::new(0.5 * TILE_SIZE.x, 0.5 * TILE_SIZE.y);
-                let transform = Transform::from_translation(translation.extend(1.0));
-
-                if rapier_context
-                    .intersection_with_shape(
-                        translation,
-                        0.,
-                        &Collider::cuboid(16., 16.),
-                        QueryFilter::new(),
-                    )
-                    .is_some()
-                {
-                    commands.spawn((
-                        SpriteSheetBundle {
-                            transform,
-                            texture_atlas: texture_atlas_handle,
-                            sprite: TextureAtlasSprite {
-                                color: Color::rgba(1.0, 0.3, 0.3, 0.5),
-                                ..default()
-                            },
-                            ..default()
-                        },
-                        Ghost,
-                    ));
-                } else if mouse_input.just_pressed(MouseButton::Left) {
-                    info!("Placing {:?}", structure);
-                    if inventory.remove_items(&[(Product::Structure(structure.name.clone()), 1)]) {
-                        let structure_entity = commands
-                            .spawn((
-                                SpriteSheetBundle {
-                                    texture_atlas: texture_atlas_handle,
-                                    transform,
-                                    ..default()
-                                },
-                                Collider::cuboid(11., 11.),
-                                Building,
-                                Name::new(structure.name.to_string()),
-                            ))
-                            .id();
-
-                        for component in &structure.components {
-                            match component {
-                                StructureComponent::Smelter => {
-                                    commands.entity(structure_entity).insert(Smelter);
-                                }
-                                StructureComponent::Burner => {
-                                    commands.entity(structure_entity).insert(Burner::new());
-                                }
-                                StructureComponent::CraftingQueue => {
-                                    commands
-                                        .entity(structure_entity)
-                                        .insert(CraftingQueue::default());
-                                }
-                                StructureComponent::Inventory(slots) => {
-                                    commands
-                                        .entity(structure_entity)
-                                        .insert(Inventory::new(*slots));
-                                }
-                                StructureComponent::Source(slots) => {
-                                    commands.entity(structure_entity).with_children(|p| {
-                                        p.spawn((Source, Inventory::new(*slots)));
-                                    });
-                                }
-                                StructureComponent::Output(slots) => {
-                                    commands.entity(structure_entity).with_children(|p| {
-                                        p.spawn((Output, Inventory::new(*slots)));
-                                    });
-                                }
-                                StructureComponent::Fuel(slots) => {
-                                    commands.entity(structure_entity).with_children(|p| {
-                                        p.spawn((Fuel, Inventory::new(*slots)));
-                                    });
-                                }
-                            }
-                        }
-
-                        if !inventory.has_items(&[(Product::Structure(structure.name.clone()), 1)])
-                        {
-                            hand.clear();
-                        }
-                    }
-                } else {
-                    commands.spawn((
-                        SpriteSheetBundle {
-                            transform,
-                            texture_atlas: texture_atlas_handle,
-                            sprite: TextureAtlasSprite {
-                                color: Color::rgba(1.0, 1.0, 1.0, 0.5),
-                                ..default()
-                            },
-                            ..default()
-                        },
-                        Ghost,
-                    ));
-                }
-            }
-        }
-    }
-}
 
 pub fn recipe_icon(
     ui: &mut egui::Ui,
@@ -269,8 +126,7 @@ impl Plugin for CharacterUiPlugin {
                 .label(UiPhase)
                 .label(CharacterUiPhase)
                 .after(TerrainStage)
-                .with_system(character_ui)
-                .with_system(placeable),
+                .with_system(character_ui),
         );
     }
 }

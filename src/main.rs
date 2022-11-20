@@ -7,12 +7,12 @@ use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use burner::{burner_load, burner_tick, Burner};
-use character_ui::Building;
 use egui::Align2;
-use inventory::{drop_within_inventory, transfer_between_stacks, Fuel, Slot, Source};
+use inventory::{drop_within_inventory, Fuel, Slot, Source};
 use inventory_grid::{inventory_grid, Hand, InventoryIndex, SlotEvent};
 use iyes_loopless::prelude::*;
 use loading::{Icons, LoadingPlugin};
+use placeable::Building;
 use recipe_loader::RecipeLoaderPlugin;
 use smelter::smelter_tick;
 use structure_loader::StructureLoaderPlugin;
@@ -23,6 +23,7 @@ mod character_ui;
 mod inventory;
 mod inventory_grid;
 mod loading;
+mod placeable;
 mod player_movement;
 mod recipe_loader;
 mod smelter;
@@ -94,6 +95,7 @@ fn main() {
                 .with_system(burner_tick)
                 .with_system(burner_load)
                 .with_system(working_texture)
+                .with_system(placeable::placeable)
                 .into(),
         )
         .add_system(drop_system.run_in_state(AppState::Running).after(UiPhase))
@@ -546,8 +548,6 @@ fn craft_ticker(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{inventory_grid::SlotIndex, types::Product};
-    use bevy::log::LogPlugin;
     use proptest::prelude::*;
 
     prop_compose! {
