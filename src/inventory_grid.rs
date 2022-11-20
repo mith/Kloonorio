@@ -18,7 +18,7 @@ fn set_hand(ui: &mut egui::Ui, hand: &Hand) {
 }
 
 fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)) -> Response {
-    let is_being_dragged = item_in_hand(ui).filter(|h| h.item_id == id).is_some();
+    let is_being_dragged = item_in_hand(ui).filter(|h| h.item_id() == id).is_some();
 
     if !is_being_dragged {
         let response = ui.scope(body).response;
@@ -53,7 +53,7 @@ fn drop_target<R>(
     id: egui::Id,
     body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
-    let being_dragged = item_in_hand(ui).map_or(false, |h| h.item_id == id);
+    let being_dragged = item_in_hand(ui).map_or(false, |h| h.item_id() == id);
     let (rect, response) =
         ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::click_and_drag());
     let (style, bg_fill) = if being_dragged || response.hovered() {
@@ -124,16 +124,15 @@ pub type SlotIndex = usize;
 pub struct InventoryIndex {
     pub entity: Entity,
     pub slot: SlotIndex,
-    pub item_id: egui::Id,
 }
 
 impl InventoryIndex {
     pub fn new(entity: Entity, slot: SlotIndex) -> Self {
-        Self {
-            entity,
-            slot,
-            item_id: egui::Id::new(entity).with(slot),
-        }
+        Self { entity, slot }
+    }
+
+    pub fn item_id(&self) -> egui::Id {
+        egui::Id::new(self.entity).with(self.slot)
     }
 }
 
@@ -141,6 +140,7 @@ impl InventoryIndex {
 pub struct Hand(Option<InventoryIndex>);
 
 impl Hand {
+    #[cfg(test)]
     pub fn new(entity: Entity, slot: SlotIndex) -> Self {
         Self(Some(InventoryIndex::new(entity, slot)))
     }

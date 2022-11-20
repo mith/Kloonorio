@@ -193,11 +193,21 @@ pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
 }
 
 pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, target_slot: usize) {
+    let span = info_span!("drop_within_inventory", source_slot, target_slot);
+    let _enter = span.enter();
     if let Some(mut source_stack) = inventory.slots.get(source_slot).cloned().flatten() {
         if let Some(mut target_stack) = inventory.slots.get(target_slot).cloned().flatten() {
             transfer_between_stacks(&mut source_stack, &mut target_stack);
-            inventory.slots[source_slot] = Some(source_stack);
             inventory.slots[target_slot] = Some(target_stack);
+            inventory.slots[source_slot] = {
+                if source_stack.amount > 0 {
+                    info!(source_stack = ?source_stack, "Keeping source stack");
+                    Some(source_stack)
+                } else {
+                    info!("Dropping source stack");
+                    None
+                }
+            };
         } else {
             info!("Moving source stack to target slot");
             inventory.slots[target_slot] = Some(source_stack.clone());
