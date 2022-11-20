@@ -164,6 +164,7 @@
               rust-analyzer
               lldb
               nil
+              cargo-nextest
             ]
             ++ nativeBuildInputs;
         };
