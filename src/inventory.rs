@@ -4,7 +4,7 @@ use crate::types::Product;
 
 const MAX_STACK_SIZE: u32 = 1000;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Stack {
     pub resource: Product,
     pub amount: u32,

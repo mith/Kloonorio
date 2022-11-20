@@ -8,6 +8,7 @@ use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
 use iyes_loopless::prelude::*;
+use miner::miner_tick;
 
 mod building_ui;
 mod burner;
@@ -16,6 +17,7 @@ mod drag_and_drop;
 mod inventory;
 mod inventory_grid;
 mod loading;
+mod miner;
 mod placeable;
 mod player_movement;
 mod recipe_loader;
@@ -73,7 +75,7 @@ fn main() {
             ..default()
         })
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
-        // .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(TerrainPlugin)
         .add_plugin(CharacterUiPlugin)
         .add_plugin(PlayerMovementPlugin)
@@ -97,6 +99,7 @@ fn main() {
                 .with_system(burner_tick)
                 .with_system(burner_load)
                 .with_system(working_texture)
+                .with_system(miner_tick)
                 .with_system(placeable::placeable)
                 .into(),
         )
@@ -153,6 +156,12 @@ fn working_texture(
 }
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let mut inventory = Inventory {
+        slots: vec![None; 100],
+    };
+    inventory.add_item(Product::Structure("Burner mining drill".into()), 100);
+    inventory.add_item(Product::Coal, 200);
+    inventory.add_item(Product::IronOre, 200);
     commands
         .spawn((
             SpriteBundle {
@@ -162,9 +171,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             Player,
             Hand::default(),
-            Inventory {
-                slots: vec![None; 100],
-            },
+            inventory,
             CraftingQueue::default(),
         ))
         .with_children(|parent| {
@@ -219,7 +226,7 @@ struct PlayerSettings {
 fn interact(
     mut commands: Commands,
     cursor_pos: Res<CursorPos>,
-    tile_query: Query<&bevy_ecs_tilemap::tiles::TileTextureIndex>,
+    tile_query: Query<&TileTextureIndex>,
     mouse_button_input: Res<Input<MouseButton>>,
     player_query: Query<(Entity, &Transform, &HoveredTile), (With<Player>, Without<MineCountdown>)>,
     player_settings: Res<PlayerSettings>,

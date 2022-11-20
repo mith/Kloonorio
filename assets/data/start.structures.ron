@@ -17,5 +17,14 @@
 		components: [
 			Inventory(8)
 		]
+	),
+	Structure(
+		name: "Burner mining drill",
+		size: (2, 2),
+		components: [
+			Burner,
+			Miner(2),
+			Fuel(1)
+		]
 	)
 ]

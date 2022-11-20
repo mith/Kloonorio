@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
 use crate::burner::Burner;
+use crate::miner::Miner;
 use crate::smelter::Smelter;
 use crate::structure_loader::{Structure, StructureComponent};
 
@@ -183,6 +184,9 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                 commands.entity(structure_entity).with_children(|p| {
                     p.spawn((Fuel, Inventory::new(*slots)));
                 });
+            }
+            StructureComponent::Miner(speed) => {
+                commands.entity(structure_entity).insert(Miner::new(*speed));
             }
         }
     }

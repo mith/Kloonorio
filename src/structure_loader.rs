@@ -19,6 +19,7 @@ pub enum StructureComponent {
     Source(u32),
     Output(u32),
     Fuel(u32),
+    Miner(f32),
 }
 
 #[derive(Clone, Debug, Deserialize, TypeUuid)]

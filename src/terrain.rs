@@ -54,8 +54,8 @@ impl Plugin for TerrainPlugin {
     }
 }
 
-const CHUNK_SIZE: UVec2 = UVec2 { x: 8, y: 8 };
-pub(crate) const TILE_SIZE: TilemapTileSize = TilemapTileSize { x: 16., y: 16. };
+pub const CHUNK_SIZE: UVec2 = UVec2 { x: 8, y: 8 };
+pub const TILE_SIZE: TilemapTileSize = TilemapTileSize { x: 16., y: 16. };
 
 #[derive(Resource)]
 struct TerrainSettings {
@@ -435,6 +435,39 @@ pub fn hovered_tile(
             }
         }
     }
+}
+
+pub fn tile_at_point(
+    point: Vec2,
+    chunks_query: &Query<
+        (
+            &Transform,
+            &TileStorage,
+            &TilemapSize,
+            &TilemapGridSize,
+            &TilemapType,
+        ),
+        With<SpawnedChunk>,
+    >,
+) -> Option<Entity> {
+    for (chunk_transform, tile_storage, chunk_size, grid_size, map_type) in chunks_query {
+        let point_in_chunk_pos: Vec2 = {
+            // Extend the cursor_pos vec3 by 1.0
+            let cursor_pos = Vec4::from((point, 0., 1.));
+            let cursor_in_chunk_pos = chunk_transform.compute_matrix().inverse() * cursor_pos;
+            cursor_in_chunk_pos.xy()
+        };
+
+        if let Some(tile_pos) =
+            TilePos::from_world_pos(&point_in_chunk_pos, chunk_size, grid_size, map_type)
+        {
+            if let Some(tile_entity) = tile_storage.get(&tile_pos) {
+                return Some(tile_entity);
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

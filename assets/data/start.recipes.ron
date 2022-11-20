@@ -22,5 +22,11 @@
 		products: [(Structure("Wooden chest"), 1)],
 		crafting_time: 0.5,
 		name: "Wooden chest"
-	)
+	),
+	Recipe(
+		materials: [(IronPlate, 3), (IronGearWheel, 3), (Structure("Stone furnace"), 1)],
+		products: [(Structure("Burner mining drill"), 1)],
+		crafting_time: 0.5,
+		name: "Burner mining drill",
+	),
 ]
