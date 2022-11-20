@@ -22,7 +22,7 @@ pub struct Building;
 
 fn placeable(
     mut commands: Commands,
-    mut placeable_query: Query<(&mut Inventory, &Hand, &HoveredTile)>,
+    mut placeable_query: Query<(&mut Inventory, &mut Hand, &HoveredTile)>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,
     asset_server: Res<AssetServer>,
@@ -35,9 +35,9 @@ fn placeable(
         commands.entity(ghost).despawn_recursive();
     }
 
-    for (mut inventory, hand, hovered_tile) in &mut placeable_query {
+    for (mut inventory, mut hand, hovered_tile) in &mut placeable_query {
         // TODO: make this simpler
-        if let Some(Some(stack)) = hand.0.clone().map(|ih| inventory.slots[ih.slot].clone()) {
+        if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
             if let Product::Structure(structure_name) = &stack.resource {
                 let structure = structures.get(structure_name).unwrap();
                 let texture_handle = asset_server.load(&format!(
@@ -128,6 +128,11 @@ fn placeable(
                                     });
                                 }
                             }
+                        }
+
+                        if !inventory.has_items(&[(Product::Structure(structure.name.clone()), 1)])
+                        {
+                            hand.clear();
                         }
                     }
                 } else {
@@ -245,17 +250,9 @@ fn character_ui(
                 &mut inventory_query
             {
                 ui.horizontal_top(|ui| {
-                    let drag = inventory_grid(
-                        player_entity,
-                        inventory,
-                        ui,
-                        &icons,
-                        hand,
-                        &mut slot_events,
-                    );
+                    inventory_grid(player_entity, inventory, ui, &icons, hand, &mut slot_events);
                     ui.separator();
                     craft_ui(ui, &blueprints, inventory, crafting_queue, &icons);
-                    drag
                 });
             }
         });
@@ -273,8 +270,7 @@ impl Plugin for CharacterUiPlugin {
                 .label(CharacterUiPhase)
                 .after(TerrainStage)
                 .with_system(character_ui)
-                .with_system(placeable)
-                .into(),
+                .with_system(placeable),
         );
     }
 }

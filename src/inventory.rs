@@ -28,7 +28,7 @@ impl Stack {
     }
 }
 
-type Slot = Option<Stack>;
+pub type Slot = Option<Stack>;
 
 #[derive(Component, Debug)]
 pub struct Inventory {
@@ -203,10 +203,12 @@ pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, targ
             inventory.slots[target_slot] = Some(source_stack.clone());
             inventory.slots[source_slot] = None;
         }
+    } else {
+        error!("Source slot is empty");
     }
 }
 
-fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
+pub fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
     if source_stack == target_stack {
         return;
     }

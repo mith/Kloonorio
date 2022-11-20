@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
@@ -10,18 +8,13 @@ pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
 
 fn item_in_hand(ui: &mut egui::Ui) -> Option<InventoryIndex> {
     let hand_id = egui::Id::new("hand");
-    ui.memory().data.get_temp::<InventoryIndex>(hand_id)
+    ui.memory().data.get_temp::<Hand>(hand_id).and_then(|h| h.0)
 }
 
-fn set_item_in_hand(ui: &mut egui::Ui, item: Option<InventoryIndex>) {
+fn set_hand(ui: &mut egui::Ui, hand: &Hand) {
     let hand_id = egui::Id::new("hand");
-    if let Some(item) = item {
-        ui.memory()
-            .data
-            .insert_temp::<InventoryIndex>(hand_id, item);
-    } else {
-        ui.memory().data.remove::<InventoryIndex>(hand_id);
-    }
+    ui.memory().data.remove::<Hand>(hand_id);
+    ui.memory().data.insert_temp::<Hand>(hand_id, hand.clone());
 }
 
 fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)) -> Response {
@@ -39,7 +32,7 @@ fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)
         if response.hovered() {
             ui.output().cursor_icon = CursorIcon::Grab;
         }
-        return response;
+        response
     } else {
         ui.output().cursor_icon = CursorIcon::Grabbing;
 
@@ -51,7 +44,7 @@ fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)
             let delta = pointer_pos - response.rect.center() + egui::Vec2::new(10., 10.);
             ui.ctx().translate_layer(layer_id, delta);
         }
-        return response;
+        response
     }
 }
 
@@ -60,21 +53,15 @@ fn drop_target<R>(
     id: egui::Id,
     body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
-    let being_dragged = ui
-        .memory()
-        .data
-        .get_temp::<egui::Id>(egui::Id::new("hand"))
-        .map_or(false, |h| h == id);
-    let outer_rect_bounds = ui.available_rect_before_wrap();
-    let (rect, response) = ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::hover());
+    let being_dragged = item_in_hand(ui).map_or(false, |h| h.item_id == id);
+    let (rect, response) =
+        ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::click_and_drag());
     let (style, bg_fill) = if being_dragged || response.hovered() {
         (ui.visuals().widgets.active, HIGHLIGHT_COLOR)
     } else {
         (ui.visuals().widgets.inactive, egui::Color32::from_gray(45))
     };
-    if response.dragged() {
-        ui.ctx().output().cursor_icon = CursorIcon::Grab;
-    }
+
     ui.painter().add(epaint::RectShape {
         rounding: style.rounding,
         fill: bg_fill,
@@ -82,7 +69,7 @@ fn drop_target<R>(
         rect,
     });
 
-    let mut content_ui = ui.child_ui(outer_rect_bounds, *ui.layout());
+    let mut content_ui = ui.child_ui(rect, *ui.layout());
     let ret = body(&mut content_ui);
     InnerResponse::new(ret, response)
 }
@@ -151,31 +138,34 @@ impl InventoryIndex {
 }
 
 #[derive(Component, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Hand(pub Option<InventoryIndex>);
+pub struct Hand(Option<InventoryIndex>);
 
-#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct HoverSlot(pub InventoryIndex);
-impl HoverSlot {
-    pub fn new(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
-        HoverSlot(InventoryIndex {
-            entity,
-            slot,
-            item_id,
-        })
+impl Hand {
+    pub fn new(entity: Entity, slot: SlotIndex) -> Self {
+        Self(Some(InventoryIndex::new(entity, slot)))
+    }
+
+    pub fn get_item(&self) -> Option<InventoryIndex> {
+        self.0.clone()
+    }
+
+    pub fn set_item(&mut self, entity: Entity, slot: SlotIndex) {
+        self.0 = Some(InventoryIndex::new(entity, slot));
+    }
+
+    pub fn clear(&mut self) {
+        self.0 = None;
     }
 }
 
+#[derive(Debug)]
 pub enum SlotEvent {
     Clicked(InventoryIndex),
 }
 
 impl SlotEvent {
-    pub fn clicked(entity: Entity, slot: SlotIndex, item_id: egui::Id) -> Self {
-        Self::Clicked(InventoryIndex {
-            entity,
-            slot,
-            item_id,
-        })
+    pub fn clicked(entity: Entity, slot: SlotIndex) -> Self {
+        Self::Clicked(InventoryIndex::new(entity, slot))
     }
 }
 
@@ -193,28 +183,27 @@ pub fn inventory_grid(
         .max_col_width(32.)
         .spacing([3., 3.])
         .show(ui, |ui| {
-            set_item_in_hand(ui, hand.0.clone());
+            set_hand(ui, hand);
             for row in 0..grid_height {
                 for col in 0..10 {
                     let slot_index = row * 10 + col;
                     if let Some(slot) = inventory.slots.get(slot_index) {
                         let item_id = egui::Id::new(entity).with(slot_index);
-                        drop_target(ui, item_id, |ui| {
+                        let response = drop_target(ui, item_id, |ui| {
                             if let Some(stack) = slot {
                                 let response = drag_source(ui, item_id, |ui| {
                                     resource_stack(ui, stack, icons);
                                 });
                                 if response.hovered() {
-                                    response
-                                        .clone()
-                                        .on_hover_text_at_pointer(stack.resource.name());
-                                }
-                                if response.clicked() || response.dragged() {
-                                    slot_events
-                                        .send(SlotEvent::clicked(entity, slot_index, item_id));
+                                    response.on_hover_text_at_pointer(stack.resource.name());
                                 }
                             }
-                        });
+                        })
+                        .response;
+                        if response.clicked() {
+                            info!(inventory = ?entity, slot = slot_index, "Clicked slot");
+                            slot_events.send(SlotEvent::clicked(entity, slot_index));
+                        }
                     }
                 }
                 ui.end_row();

@@ -9,7 +9,7 @@ use bevy_rapier2d::prelude::*;
 use burner::{burner_load, burner_tick, Burner};
 use character_ui::Building;
 use egui::Align2;
-use inventory::{drop_within_inventory, transfer_between_slots, Fuel, Source};
+use inventory::{drop_within_inventory, transfer_between_stacks, Fuel, Slot, Source};
 use inventory_grid::{inventory_grid, Hand, InventoryIndex, SlotEvent};
 use iyes_loopless::prelude::*;
 use loading::{Icons, LoadingPlugin};
@@ -30,7 +30,7 @@ mod structure_loader;
 mod terrain;
 mod types;
 
-use crate::inventory::{Inventory, Output};
+use crate::inventory::{transfer_between_slots, Inventory, Output, Stack};
 use crate::player_movement::PlayerMovementPlugin;
 use crate::recipe_loader::RecipeAsset;
 use crate::terrain::{CursorPos, HoveredTile, TerrainPlugin, COAL, IRON, STONE, TREE};
@@ -147,27 +147,46 @@ fn working_texture(
 }
 
 fn drop_system(
-    mut hand_query: Query<(&mut Hand, Entity), With<Player>>,
+    mut hand_query: Query<&mut Hand, With<Player>>,
     mut slot_events: EventReader<SlotEvent>,
     mut inventories_query: Query<&mut Inventory>,
 ) {
-    for SlotEvent::Clicked(drop) in slot_events.iter() {
-        for (mut hand, _entity) in &mut hand_query {
-            if let Some(ref item_in_hand) = hand.0 {
+    for event @ SlotEvent::Clicked(drop) in slot_events.iter() {
+        let span = info_span!("Handling drop event", ?event);
+        let _enter = span.enter();
+        for mut hand in hand_query.iter_mut() {
+            info!(hand = ?hand);
+            if let Some(item_in_hand) = hand.get_item() {
                 if item_in_hand.entity == drop.entity {
-                    let mut inventory = inventories_query.get_mut(item_in_hand.entity).unwrap();
-                    drop_within_inventory(&mut inventory, item_in_hand.slot, drop.slot);
-                } else if let Ok([mut source_inventory, mut target_inventory]) =
+                    if item_in_hand.slot == drop.slot {
+                        hand.clear();
+                    } else {
+                        let mut inventory = inventories_query.get_mut(item_in_hand.entity).unwrap();
+                        drop_within_inventory(&mut inventory, item_in_hand.slot, drop.slot);
+                    }
+                } else if let Ok([ref mut source_inventory, ref mut target_inventory]) =
                     inventories_query.get_many_mut([item_in_hand.entity, drop.entity])
                 {
-                    transfer_between_slots(
-                        source_inventory.slots.get_mut(item_in_hand.slot).unwrap(),
-                        target_inventory.slots.get_mut(drop.slot).unwrap(),
-                    );
+                    let source_slot: &mut Slot =
+                        source_inventory.slots.get_mut(item_in_hand.slot).unwrap();
+                    let target_slot: &mut Slot = target_inventory.slots.get_mut(drop.slot).unwrap();
+                    transfer_between_slots(source_slot, target_slot);
                 }
             } else if let Ok(inventory) = inventories_query.get_mut(drop.entity) {
                 if inventory.slots[drop.slot].is_some() {
-                    hand.0 = Some(InventoryIndex::new(drop.entity, drop.slot));
+                    let inventory_index = InventoryIndex::new(drop.entity, drop.slot);
+                    info!(inventory_index = ?inventory_index, "Putting clicked slot in hand");
+                    hand.set_item(drop.entity, drop.slot);
+                }
+            }
+
+            // If the hand contains an InventoryIndex pointing to an empty slot, empty the hand
+            if let Some(item_in_hand) = hand.get_item() {
+                let inventory = inventories_query.get(item_in_hand.entity).unwrap();
+                let slot: &Option<Stack> = &inventory.slots[item_in_hand.slot];
+                if slot.is_none() {
+                    hand.clear();
+                    info!(?hand, "Emptied hand");
                 }
             }
         }
@@ -222,7 +241,7 @@ fn building_ui(
     icons: Res<Icons>,
     mut slot_events: EventWriter<SlotEvent>,
 ) {
-    if let Ok((player_entity, SelectedBuilding(selected_building), mut player_inventory, hand)) =
+    if let Ok((player_entity, SelectedBuilding(selected_building), player_inventory, hand)) =
         player_query.get_single()
     {
         let name = name
@@ -243,7 +262,7 @@ fn building_ui(
                                 ui.label("Character");
                                 inventory_grid(
                                     player_entity,
-                                    &mut player_inventory,
+                                    player_inventory,
                                     ui,
                                     &icons,
                                     hand,
@@ -256,12 +275,12 @@ fn building_ui(
                         .inner_margin(5.)
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
-                                if let Ok(mut inventory) =
+                                if let Ok(inventory) =
                                     building_inventory_query.get_mut(*selected_building)
                                 {
                                     inventory_grid(
                                         *selected_building,
-                                        &mut inventory,
+                                        &inventory,
                                         ui,
                                         &icons,
                                         hand,
@@ -285,7 +304,7 @@ fn building_ui(
                                     crafting_machine_widget(
                                         ui,
                                         &icons,
-                                        &crafting_queue,
+                                        crafting_queue,
                                         source,
                                         output,
                                         hand,
@@ -527,25 +546,27 @@ fn craft_ticker(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{inventory_grid::SlotIndex, types::Product};
+    use bevy::log::LogPlugin;
     use proptest::prelude::*;
 
     prop_compose! {
-        fn arb_resource()(resource in any::<u32>()) -> Resource {
-            match resource % 4 {
-                0 => Resource::Wood,
-                1 => Resource::Stone,
-                2 => Resource::IronOre,
-                3 => Resource::Coal,
+        fn arb_product()(product in any::<u32>()) -> Product {
+            match product % 4 {
+                0 => Product::Wood,
+                1 => Product::Stone,
+                2 => Product::IronOre,
+                3 => Product::Coal,
                 _ => unreachable!(),
             }
         }
     }
 
     prop_compose! {
-        fn arb_inventory(size: u32)(resources in prop::collection::vec(arb_resource(), 1..(size as usize))) -> Inventory {
+        fn arb_inventory(size: u32)(products in prop::collection::vec(arb_product(), 1..(size as usize))) -> Inventory {
             let mut inventory = Inventory::new(size);
-            for resource in resources {
-                inventory.add_item(resource, 1);
+            for product in products {
+                inventory.add_item(product, 1);
             }
             inventory
         }
@@ -577,20 +598,18 @@ mod test {
 
             let player_id = app
                 .world
-                .spawn()
-                .insert(Player)
-                .insert(inventory)
+                .spawn((Player, inventory))
                 .id();
 
             let inventory_id = player_id;
 
-            let source_item_id = egui::Id::new(inventory_id).with(source_slot);
-            let target_item_id = egui::Id::new(inventory_id).with(target_slot);
-
             app.world.get_entity_mut(player_id)
                 .unwrap()
-                .insert(Hand::new(inventory_id, source_slot as usize, source_item_id))
-                .insert(HoverSlot::new(inventory_id, target_slot as usize, target_item_id));
+                .insert(Hand::new(inventory_id, source_slot as usize));
+
+            app.add_event::<SlotEvent>();
+
+            app.world.resource_mut::<Events<SlotEvent>>().send(SlotEvent::clicked(inventory_id, target_slot as usize));
 
             app.update();
 
@@ -614,5 +633,86 @@ mod test {
                 assert_eq!(count.get(&resource), Some(&amount));
             }
         }
+    }
+
+    #[test]
+    fn drop_system_put_in_hand() {
+        let mut app = App::new();
+
+        let mut inventory = Inventory::new(10);
+
+        inventory.add_item(Product::Wood, 1);
+
+        let player_id = app.world.spawn((Player, inventory)).id();
+
+        let hand = Hand::default();
+
+        app.world.get_entity_mut(player_id).unwrap().insert(hand);
+
+        app.add_event::<SlotEvent>();
+        app.world
+            .resource_mut::<Events<SlotEvent>>()
+            .send(SlotEvent::clicked(player_id, 0));
+
+        app.add_system(drop_system);
+
+        app.update();
+
+        assert_eq!(
+            app.world.get::<Hand>(player_id).unwrap().get_item(),
+            Some(InventoryIndex::new(player_id, 0))
+        );
+    }
+
+    #[test]
+    fn drop_system_to_empty_clear_hand() {
+        let mut app = App::new();
+
+        let mut inventory = Inventory::new(10);
+
+        inventory.add_item(Product::Wood, 1);
+
+        let player_id = app.world.spawn((Player, inventory)).id();
+
+        let hand = Hand::new(player_id, 0);
+
+        app.world.get_entity_mut(player_id).unwrap().insert(hand);
+
+        app.add_event::<SlotEvent>();
+        app.world
+            .resource_mut::<Events<SlotEvent>>()
+            .send(SlotEvent::clicked(player_id, 1));
+
+        app.add_system(drop_system);
+
+        app.update();
+
+        assert_eq!(app.world.get::<Hand>(player_id).unwrap().get_item(), None);
+    }
+
+    #[test]
+    fn drop_system_same_slot() {
+        let mut app = App::new();
+
+        let mut inventory = Inventory::new(10);
+
+        inventory.add_item(Product::Wood, 1);
+
+        let player_id = app.world.spawn((Player, inventory)).id();
+
+        let hand = Hand::new(player_id, 0);
+
+        app.world.get_entity_mut(player_id).unwrap().insert(hand);
+
+        app.add_event::<SlotEvent>();
+        app.world
+            .resource_mut::<Events<SlotEvent>>()
+            .send(SlotEvent::clicked(player_id, 0));
+
+        app.add_system(drop_system);
+
+        app.update();
+
+        assert_eq!(app.world.get::<Hand>(player_id).unwrap().get_item(), None);
     }
 }
