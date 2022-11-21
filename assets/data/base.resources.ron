@@ -1,0 +1,17 @@
+[
+    Intermediate(
+        name: "Wood",
+    ),
+    Intermediate(
+        name: "Coal",
+    ),
+    Intermediate(
+        name: "Iron ore",
+    ),
+    Intermediate(
+        name: "Iron plate",
+    ),
+    Intermediate(
+        name: "Iron gear wheel",
+    ),
+]

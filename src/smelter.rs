@@ -23,16 +23,16 @@ pub fn smelter_tick(
         let mut source = source_query.get_mut(*source_entity.unwrap()).unwrap();
         let mut output = output_query.get_mut(*output_entity.unwrap()).unwrap();
 
-        if source.has_items(&[(Product::IronOre, 1)])
+        if source.has_items(&[(Product::Intermediate("Iron ore".into()), 1)])
             && crafting_queue.0.is_empty()
-            && output.can_add(&[(Product::IronPlate, 1)])
+            && output.can_add(&[(Product::Intermediate("Iron plate".into()), 1)])
         {
-            source.remove_items(&[(Product::IronOre, 1)]);
+            source.remove_items(&[(Product::Intermediate("Iron ore".into()), 1)]);
             crafting_queue.0.push_back(ActiveCraft {
                 timer: Timer::from_seconds(1., TimerMode::Repeating),
                 blueprint: Recipe {
-                    materials: vec![(Product::IronOre, 1u32)],
-                    products: vec![(Product::IronPlate, 1u32)],
+                    materials: vec![(Product::Intermediate("Iron ore".into()), 1u32)],
+                    products: vec![(Product::Intermediate("Iron plate".into()), 1u32)],
                     crafting_time: 0.5,
                     name: "Iron Plate".into(),
                 },

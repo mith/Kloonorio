@@ -5,6 +5,7 @@ use bevy_egui::EguiContext;
 use iyes_loopless::prelude::*;
 
 use crate::{
+    intermediate_loader::{Intermediate, IntermediateAsset},
     recipe_loader::RecipeAsset,
     structure_loader::{Structure, StructuresAsset},
     types::{AppState, GameState, Recipe},
@@ -61,10 +62,44 @@ impl DerefMut for Icons {
     }
 }
 
+#[derive(Resource, Default)]
+pub struct Resources(HashMap<String, Intermediate>);
+
+impl Deref for Resources {
+    type Target = HashMap<String, Intermediate>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Resources {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
     gamestate.recipes_handle = asset_server.load("data/start.recipes.ron");
     gamestate.structures_handle = asset_server.load("data/start.structures.ron");
     gamestate.icons_handle = asset_server.load_folder("textures/icons").unwrap();
+    gamestate.resources_handle = asset_server.load("data/base.resources.ron");
+}
+
+fn load_resources(
+    mut gamestate: ResMut<GameState>,
+    resource_assets: Res<Assets<IntermediateAsset>>,
+    mut resources: ResMut<Resources>,
+) {
+    let resource_asset = resource_assets.get(&gamestate.resources_handle);
+    if gamestate.resources_loaded || resource_asset.is_none() {
+        return;
+    }
+
+    if let Some(IntermediateAsset(loaded_resource)) = resource_asset {
+        resources.extend(loaded_resource.iter().map(|r| (r.name.clone(), r.clone())));
+        gamestate.resources_loaded = true;
+    }
 }
 
 fn load_icons(
@@ -97,7 +132,7 @@ fn load_structures(
     mut structures: ResMut<Structures>,
 ) {
     let structures_asset = structures_assets.get(&gamestate.structures_handle);
-    if gamestate.structures_loaded && structures_asset.is_none() {
+    if gamestate.structures_loaded || structures_asset.is_none() {
         return;
     }
 
@@ -132,7 +167,11 @@ fn load_recipes(
 }
 
 fn check_loading(gamestate: Res<GameState>, mut commands: Commands) {
-    if gamestate.recipes_loaded && gamestate.structures_loaded && gamestate.icons_loaded {
+    if gamestate.recipes_loaded
+        && gamestate.structures_loaded
+        && gamestate.icons_loaded
+        && gamestate.resources_loaded
+    {
         commands.insert_resource(NextState(AppState::Running));
     }
 }
@@ -144,6 +183,7 @@ impl Plugin for LoadingPlugin {
         app.insert_resource(Structures::default())
             .insert_resource(Recipes::default())
             .insert_resource(Icons::default())
+            .insert_resource(Resources::default())
             .add_enter_system(AppState::Loading, start_loading)
             .add_system_set(
                 ConditionSet::new()
@@ -151,6 +191,7 @@ impl Plugin for LoadingPlugin {
                     .with_system(load_recipes)
                     .with_system(load_structures)
                     .with_system(load_icons)
+                    .with_system(load_resources)
                     .with_system(check_loading)
                     .into(),
             );

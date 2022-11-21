@@ -1,30 +1,30 @@
 [
 	Recipe(
-	    materials: [(Stone, 5)],
+	    materials: [(Intermediate("Stone"), 5)],
 	    products: [(Structure("Stone furnace"), 1)],
 	    crafting_time: 0.5,
 	    name: "Stone furnace",
 	),
 	Recipe(
-		materials: [(IronOre, 1)],
-		products: [(IronPlate, 1)],
+		materials: [(Intermediate("Iron ore"), 1)],
+		products: [(Intermediate("Iron plate"), 1)],
 		crafting_time: 0.5,
 		name: "Iron plate",
 	),
 	Recipe(
-		materials: [(IronPlate, 1)],
-		products: [(IronGearWheel, 1)],
+		materials: [(Intermediate("Iron plate"), 1)],
+		products: [(Intermediate("Iron gear wheel"), 1)],
 		crafting_time: 0.5,
 		name: "Iron gear wheel",
 	),
 	Recipe(
-		materials: [(Wood, 2)],
+		materials: [(Intermediate("Wood"), 2)],
 		products: [(Structure("Wooden chest"), 1)],
 		crafting_time: 0.5,
 		name: "Wooden chest"
 	),
 	Recipe(
-		materials: [(IronPlate, 3), (IronGearWheel, 3), (Structure("Stone furnace"), 1)],
+		materials: [(Intermediate("Iron plate"), 3), (Intermediate("Iron gear wheel"), 3), (Structure("Stone furnace"), 1)],
 		products: [(Structure("Burner mining drill"), 1)],
 		crafting_time: 0.5,
 		name: "Burner mining drill",

@@ -24,17 +24,17 @@ impl Miner {
 
 fn texture_id_to_product(index: TileTextureIndex) -> Product {
     match index.0 {
-        COAL => Product::Coal,
-        IRON => Product::IronOre,
-        STONE => Product::Stone,
-        TREE => Product::Wood,
+        COAL => Product::Intermediate("Coal".into()),
+        IRON => Product::Intermediate("Iron ore".into()),
+        STONE => Product::Intermediate("Stone".into()),
+        TREE => Product::Intermediate("Wood".into()),
         _ => panic!("Unknown product"),
     }
 }
 
 fn product_to_texture(product: Product) -> String {
     match product {
-        Product::Wood => "tree".to_string(),
+        Product::Intermediate(name) => name.to_lowercase().replace(" ", "_"),
         _ => "no_icon".to_string(),
     }
 }

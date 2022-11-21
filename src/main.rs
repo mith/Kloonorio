@@ -7,6 +7,7 @@ use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
+use intermediate_loader::IntermediateLoaderPlugin;
 use iyes_loopless::prelude::*;
 use miner::miner_tick;
 
@@ -14,6 +15,7 @@ mod building_ui;
 mod burner;
 mod character_ui;
 mod drag_and_drop;
+mod intermediate_loader;
 mod inventory;
 mod inventory_grid;
 mod loading;
@@ -81,6 +83,7 @@ fn main() {
         .add_plugin(PlayerMovementPlugin)
         .add_plugin(RecipeLoaderPlugin)
         .add_plugin(StructureLoaderPlugin)
+        .add_plugin(IntermediateLoaderPlugin)
         .add_plugin(LoadingPlugin)
         .add_enter_system(AppState::Running, spawn_player)
         .add_event::<SlotEvent>()
@@ -160,8 +163,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
         slots: vec![None; 100],
     };
     inventory.add_item(Product::Structure("Burner mining drill".into()), 100);
-    inventory.add_item(Product::Coal, 200);
-    inventory.add_item(Product::IronOre, 200);
+    inventory.add_item(Product::Intermediate("Coal".into()), 200);
+    inventory.add_item(Product::Intermediate("Iron ore".into()), 200);
     commands
         .spawn((
             SpriteBundle {
@@ -278,10 +281,10 @@ fn interact_completion(
             let tile_entity = interaction.target;
             if let Ok(tile_texture) = tile_query.get(tile_entity) {
                 match tile_texture.0 {
-                    COAL => inventory.add_item(Product::Coal, 1),
-                    IRON => inventory.add_item(Product::IronOre, 1),
-                    STONE => inventory.add_item(Product::Stone, 1),
-                    TREE => inventory.add_item(Product::Wood, 1),
+                    COAL => inventory.add_item(Product::Intermediate("Coal".into()), 1),
+                    IRON => inventory.add_item(Product::Intermediate("Iron ore".into()), 1),
+                    STONE => inventory.add_item(Product::Intermediate("Stone".into()), 1),
+                    TREE => inventory.add_item(Product::Intermediate("Wood".into()), 1),
                     _ => vec![],
                 };
             }

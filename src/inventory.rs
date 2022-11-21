@@ -247,50 +247,104 @@ mod test {
     #[test]
     fn test_has_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
-        assert!(inventory.has_items(&[(Product::Stone, 5), (Product::Wood, 10)]));
-        assert!(!inventory.has_items(&[(Product::Stone, 5), (Product::Wood, 30)]));
+        inventory.add_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
+        assert!(inventory.has_items(&[
+            (Product::Intermediate("Stone".into()), 5),
+            (Product::Intermediate("Wood".into()), 10)
+        ]));
+        assert!(!inventory.has_items(&[
+            (Product::Intermediate("Stone".into()), 5),
+            (Product::Intermediate("Wood".into()), 30)
+        ]));
     }
 
     #[test]
     fn test_remove_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
-        inventory.remove_items(&[(Product::Stone, 5), (Product::Wood, 10)]);
-        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 5)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Wood, 10)));
+        inventory.add_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
+        inventory.remove_items(&[
+            (Product::Intermediate("Stone".into()), 5),
+            (Product::Intermediate("Wood".into()), 10),
+        ]);
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Product::Intermediate("Stone".into()), 5))
+        );
+        assert_eq!(
+            inventory.slots[1],
+            Some(Stack::new(Product::Intermediate("Wood".into()), 10))
+        );
     }
 
     #[test]
     fn test_remove_items_empty() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
-        inventory.remove_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
+        inventory.add_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
+        inventory.remove_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
         assert!(inventory.slots.iter().all(|s| s.is_none()));
     }
 
     #[test]
     fn test_remove_items_not_enough() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
-        assert!(!inventory.remove_items(&[(Product::Stone, 5), (Product::Wood, 30)]));
-        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 10)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Wood, 20)));
+        inventory.add_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
+        assert!(!inventory.remove_items(&[
+            (Product::Intermediate("Stone".into()), 5),
+            (Product::Intermediate("Wood".into()), 30)
+        ]));
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
+        assert_eq!(
+            inventory.slots[1],
+            Some(Stack::new(Product::Intermediate("Wood".into()), 20))
+        );
     }
     #[test]
     fn test_add_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
-        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 10)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Wood, 20)));
+        inventory.add_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
+        assert_eq!(
+            inventory.slots[1],
+            Some(Stack::new(Product::Intermediate("Wood".into()), 20))
+        );
     }
 
     #[test]
     fn test_add_items_remainder() {
         let mut inventory = Inventory::new(1);
-        let remainder = inventory.add_items(&[(Product::Stone, 10), (Product::Wood, 20)]);
-        assert_eq!(inventory.slots[0], Some(Stack::new(Product::Stone, 10)));
-        assert_eq!(remainder, vec![(Product::Wood, 20)]);
+        let remainder = inventory.add_items(&[
+            (Product::Intermediate("Stone".into()), 10),
+            (Product::Intermediate("Wood".into()), 20),
+        ]);
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
+        assert_eq!(remainder, vec![(Product::Intermediate("Wood".into()), 20)]);
     }
 
     #[test]
@@ -306,69 +360,99 @@ mod test {
 
     #[test]
     fn test_transfer_between_stacks() {
-        let mut source_stack = Stack::new(Product::Stone, 10);
-        let mut target_stack = Stack::new(Product::IronOre, 20);
+        let mut source_stack = Stack::new(Product::Intermediate("Stone".into()), 10);
+        let mut target_stack = Stack::new(Product::Intermediate("Iron ore".into()), 20);
 
         transfer_between_stacks(&mut source_stack, &mut target_stack);
 
-        assert_eq!(source_stack, Stack::new(Product::IronOre, 20));
-        assert_eq!(target_stack, Stack::new(Product::Stone, 10));
+        assert_eq!(
+            source_stack,
+            Stack::new(Product::Intermediate("Iron ore".into()), 20)
+        );
+        assert_eq!(
+            target_stack,
+            Stack::new(Product::Intermediate("Stone".into()), 10)
+        );
     }
 
     #[test]
     fn test_transfer_between_stacks_same() {
-        let mut source_stack = Stack::new(Product::Stone, 10);
-        let mut target_stack = Stack::new(Product::Stone, 20);
+        let mut source_stack = Stack::new(Product::Intermediate("Stone".into()), 10);
+        let mut target_stack = Stack::new(Product::Intermediate("Stone".into()), 20);
 
         transfer_between_stacks(&mut source_stack, &mut target_stack);
 
-        assert_eq!(source_stack, Stack::new(Product::Stone, 0));
-        assert_eq!(target_stack, Stack::new(Product::Stone, 30));
+        assert_eq!(
+            source_stack,
+            Stack::new(Product::Intermediate("Stone".into()), 0)
+        );
+        assert_eq!(
+            target_stack,
+            Stack::new(Product::Intermediate("Stone".into()), 30)
+        );
     }
 
     #[test]
     fn test_transfer_between_slots() {
-        let mut source_slot = Some(Stack::new(Product::Stone, 10));
-        let mut target_slot = Some(Stack::new(Product::IronOre, 20));
+        let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
+        let mut target_slot = Some(Stack::new(Product::Intermediate("Iron ore".into()), 20));
 
         transfer_between_slots(&mut source_slot, &mut target_slot);
 
-        assert_eq!(source_slot, Some(Stack::new(Product::IronOre, 20)));
-        assert_eq!(target_slot, Some(Stack::new(Product::Stone, 10)));
+        assert_eq!(
+            source_slot,
+            Some(Stack::new(Product::Intermediate("Iron ore".into()), 20))
+        );
+        assert_eq!(
+            target_slot,
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
     }
 
     #[test]
     fn test_transfer_between_slots_same() {
-        let mut source_slot = Some(Stack::new(Product::Stone, 10));
-        let mut target_slot = Some(Stack::new(Product::Stone, 20));
+        let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
+        let mut target_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 20));
 
         transfer_between_slots(&mut source_slot, &mut target_slot);
 
         assert_eq!(source_slot, None);
-        assert_eq!(target_slot, Some(Stack::new(Product::Stone, 30)));
+        assert_eq!(
+            target_slot,
+            Some(Stack::new(Product::Intermediate("Stone".into()), 30))
+        );
     }
 
     #[test]
     fn test_transfer_between_slots_empty() {
-        let mut source_slot = Some(Stack::new(Product::Stone, 10));
+        let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
         let mut target_slot = None;
 
         transfer_between_slots(&mut source_slot, &mut target_slot);
 
         assert_eq!(source_slot, None);
-        assert_eq!(target_slot, Some(Stack::new(Product::Stone, 10)));
+        assert_eq!(
+            target_slot,
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
     }
 
     #[test]
     fn test_drop_within_inventory() {
         let mut inventory = Inventory::new(12);
 
-        inventory.slots[0] = Some(Stack::new(Product::Stone, 10));
-        inventory.slots[1] = Some(Stack::new(Product::IronOre, 20));
+        inventory.slots[0] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
+        inventory.slots[1] = Some(Stack::new(Product::Intermediate("Iron ore".into()), 20));
 
         drop_within_inventory(&mut inventory, 1, 0);
 
-        assert_eq!(inventory.slots[0], Some(Stack::new(Product::IronOre, 20)));
-        assert_eq!(inventory.slots[1], Some(Stack::new(Product::Stone, 10)));
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Product::Intermediate("Iron ore".into()), 20))
+        );
+        assert_eq!(
+            inventory.slots[1],
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
     }
 }

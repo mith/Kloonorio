@@ -65,10 +65,10 @@ mod test {
     prop_compose! {
     fn arb_product()(product in any::<u32>()) -> Product {
         match product % 4 {
-            0 => Product::Wood,
-            1 => Product::Stone,
-            2 => Product::IronOre,
-            3 => Product::Coal,
+            0 => Product::Intermediate("Wood".into()),
+            1 => Product::Intermediate("Stone".into()),
+            2 => Product::Intermediate("Iron ore".into()),
+            3 => Product::Intermediate("Coal".into()),
             _ => unreachable!(),
         }
         }
@@ -153,7 +153,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Product::Wood, 1);
+        inventory.add_item(Product::Intermediate("Wood".into()), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -182,7 +182,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Product::Wood, 1);
+        inventory.add_item(Product::Intermediate("Wood".into()), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -208,7 +208,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Product::Wood, 1);
+        inventory.add_item(Product::Intermediate("Wood".into()), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -234,8 +234,8 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.slots[0] = Some(Stack::new(Product::Wood, 1));
-        inventory.slots[1] = Some(Stack::new(Product::Wood, 1));
+        inventory.slots[0] = Some(Stack::new(Product::Intermediate("Wood".into()), 1));
+        inventory.slots[1] = Some(Stack::new(Product::Intermediate("Wood".into()), 1));
 
         let player_id = app.world.spawn((Player, inventory)).id();
 

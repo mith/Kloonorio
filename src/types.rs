@@ -3,7 +3,9 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
 
-use crate::{structure_loader::StructuresAsset, RecipeAsset};
+use crate::{
+    intermediate_loader::IntermediateAsset, structure_loader::StructuresAsset, RecipeAsset,
+};
 
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash)]
 pub enum AppState {
@@ -21,6 +23,8 @@ pub struct GameState {
     pub structures_loaded: bool,
     pub icons_loaded: bool,
     pub icons_handle: Vec<HandleUntyped>,
+    pub resources_loaded: bool,
+    pub resources_handle: Handle<IntermediateAsset>,
 }
 
 #[derive(Component)]
@@ -29,25 +33,14 @@ pub struct Player;
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid)]
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
 pub enum Product {
-    Coal,
-    IronOre,
-    Wood,
-    Stone,
-    IronPlate,
-    IronGearWheel,
+    Intermediate(String),
     Structure(String),
 }
 
 impl Product {
     pub fn name(&self) -> String {
         match self {
-            Product::Coal => "Coal".to_string(),
-            Product::IronOre => "Iron ore".to_string(),
-            Product::Wood => "Wood".to_string(),
-            Product::Stone => "Stone".to_string(),
-            Product::IronPlate => "Iron plate".to_string(),
-            Product::IronGearWheel => "Iron gear wheel".to_string(),
-            Product::Structure(s) => s.to_string(),
+            Product::Intermediate(name) | Product::Structure(name) => name.clone(),
         }
     }
 }
