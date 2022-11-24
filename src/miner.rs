@@ -1,9 +1,9 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_ecs_tilemap::prelude::*;
-use bevy_rapier2d::prelude::Collider;
+use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
-    inventory::Stack,
+    inventory::{Inventory, Stack},
     is_minable,
     terrain::{tile_at_point, SpawnedChunk, COAL, IRON, STONE, TILE_SIZE, TREE},
     types::{Powered, Product, Working},
@@ -55,6 +55,8 @@ pub fn miner_tick(
     tile_query: Query<&TileTextureIndex>,
     time: Res<Time>,
     asset_server: Res<AssetServer>,
+    rapier_context: Res<RapierContext>,
+    mut inventories_query: Query<&mut Inventory>,
 ) {
     for (miner_entity, transform, mut miner) in miner_query.iter_mut() {
         let span = info_span!("Miner tick", miner = ?miner_entity);
@@ -66,28 +68,43 @@ pub fn miner_tick(
                         let product = texture_id_to_product(tile_texture.clone());
                         info!("Produced {:?}", product);
                         let dump_point =
-                            transform.translation + Vec3::new(TILE_SIZE.x, TILE_SIZE.y, 0.) * 2.;
+                            transform.translation - Vec3::new(TILE_SIZE.x, TILE_SIZE.y, 0.) * 2.0;
                         info!(
                             "Dumping at {:?} (miner at {:?})",
                             dump_point, transform.translation
                         );
 
-                        let path =
-                            format!("textures/icons/{}.png", product_to_texture(product.clone()));
-                        info!("Loading texture at {:?}", path);
-                        commands.spawn((
-                            Stack::new(product.clone(), 1),
-                            Collider::cuboid(3., 3.),
-                            SpriteBundle {
-                                texture: asset_server.load(path),
-                                transform: Transform::from_translation(dump_point),
-                                sprite: Sprite {
-                                    custom_size: Some(Vec2::new(6., 6.)),
+                        if let Some(collider_entity) = rapier_context.intersection_with_shape(
+                            dump_point.xy(),
+                            0.,
+                            &Collider::cuboid(16., 16.),
+                            QueryFilter::new(),
+                        ) {
+                            if let Ok(inventory) =
+                                inventories_query.get_mut(collider_entity).as_mut()
+                            {
+                                inventory.add_items(&[(product, 1)]);
+                            }
+                        } else {
+                            let path = format!(
+                                "textures/icons/{}.png",
+                                product_to_texture(product.clone())
+                            );
+                            info!("Loading texture at {:?}", path);
+                            commands.spawn((
+                                Stack::new(product.clone(), 1),
+                                Collider::cuboid(3., 3.),
+                                SpriteBundle {
+                                    texture: asset_server.load(path),
+                                    transform: Transform::from_translation(dump_point),
+                                    sprite: Sprite {
+                                        custom_size: Some(Vec2::new(6., 6.)),
+                                        ..default()
+                                    },
                                     ..default()
                                 },
-                                ..default()
-                            },
-                        ));
+                            ));
+                        }
 
                         commands.entity(miner_entity).insert(Working);
                     }
@@ -95,4 +112,9 @@ pub fn miner_tick(
             }
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
 }
