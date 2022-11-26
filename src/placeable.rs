@@ -48,18 +48,7 @@ pub fn placeable(
                 let texture_atlas_handle =
                     create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
 
-                let tile_size_v = Vec2::new(TILE_SIZE.x, TILE_SIZE.y);
-                let min_corner: Vec2 =
-                    cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0 * tile_size_v);
-
-                let grid_fitted_min_corner = (min_corner / tile_size_v).ceil() * tile_size_v;
-
-                let structure_rect = Rect::from_corners(
-                    grid_fitted_min_corner,
-                    grid_fitted_min_corner + structure.size.as_vec2() * tile_size_v,
-                );
-
-                let translation = structure_rect.center() - tile_size_v / 2.0;
+                let translation = cursor_to_structure_position(&cursor_pos, structure);
 
                 let transform = Transform::from_translation(translation.extend(1.0));
 
@@ -67,7 +56,7 @@ pub fn placeable(
                     .intersection_with_shape(
                         translation,
                         0.,
-                        &Collider::cuboid(16., 16.),
+                        &structure_collider(structure),
                         QueryFilter::new(),
                     )
                     .is_some()
@@ -105,6 +94,18 @@ pub fn placeable(
     }
 }
 
+fn cursor_to_structure_position(cursor_pos: &Res<CursorPos>, structure: &Structure) -> Vec2 {
+    let tile_size_v = Vec2::new(TILE_SIZE.x, TILE_SIZE.y);
+    let min_corner: Vec2 = cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0 * tile_size_v);
+    let grid_fitted_min_corner = (min_corner / tile_size_v).ceil() * tile_size_v;
+    let structure_rect = Rect::from_corners(
+        grid_fitted_min_corner,
+        grid_fitted_min_corner + structure.size.as_vec2() * tile_size_v,
+    );
+    let translation = structure_rect.center() - tile_size_v / 2.0;
+    translation
+}
+
 pub fn create_structure_texture_atlas(
     asset_server: &Res<AssetServer>,
     structure: &Structure,
@@ -139,12 +140,19 @@ pub fn place_structure(
                 transform,
                 ..default()
             },
-            Collider::cuboid(11., 11.),
+            structure_collider(structure),
             Building,
             Name::new(structure.name.to_string()),
         ))
         .id();
     spawn_components(commands, structure, structure_entity);
+}
+
+fn structure_collider(structure: &Structure) -> Collider {
+    Collider::cuboid(
+        structure.collider.x * 0.5 * TILE_SIZE.x,
+        structure.collider.y * 0.5 * TILE_SIZE.y,
+    )
 }
 
 pub fn spawn_ghost(

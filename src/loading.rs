@@ -80,8 +80,8 @@ impl DerefMut for Resources {
 }
 
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
-    gamestate.recipes_handle = asset_server.load("data/start.recipes.ron");
-    gamestate.structures_handle = asset_server.load("data/start.structures.ron");
+    gamestate.recipes_handle = asset_server.load("data/base.recipes.ron");
+    gamestate.structures_handle = asset_server.load("data/base.structures.ron");
     gamestate.icons_handle = asset_server.load_folder("textures/icons").unwrap();
     gamestate.resources_handle = asset_server.load("data/base.resources.ron");
 }

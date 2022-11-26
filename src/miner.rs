@@ -57,6 +57,7 @@ pub fn miner_tick(
     asset_server: Res<AssetServer>,
     rapier_context: Res<RapierContext>,
     mut inventories_query: Query<&mut Inventory>,
+    children: Query<&Children>,
 ) {
     for (miner_entity, transform, mut miner) in miner_query.iter_mut() {
         let span = info_span!("Miner tick", miner = ?miner_entity);
@@ -67,8 +68,8 @@ pub fn miner_tick(
                     if miner.timer.tick(time.delta()).just_finished() {
                         let product = texture_id_to_product(tile_texture.clone());
                         info!("Produced {:?}", product);
-                        let dump_point =
-                            transform.translation - Vec3::new(TILE_SIZE.x, TILE_SIZE.y, 0.) * 2.0;
+                        let dump_point = transform.translation
+                            - Vec3::new(TILE_SIZE.x * 0.5, TILE_SIZE.y * 1.5, 0.);
                         info!(
                             "Dumping at {:?} (miner at {:?})",
                             dump_point, transform.translation
@@ -77,13 +78,24 @@ pub fn miner_tick(
                         if let Some(collider_entity) = rapier_context.intersection_with_shape(
                             dump_point.xy(),
                             0.,
-                            &Collider::cuboid(16., 16.),
+                            &Collider::ball(2.),
                             QueryFilter::new(),
                         ) {
                             if let Ok(inventory) =
                                 inventories_query.get_mut(collider_entity).as_mut()
                             {
                                 inventory.add_items(&[(product, 1)]);
+                            } else {
+                                info!(
+                                    "No inventory component found on entity, searching children."
+                                );
+                                for child in children.iter_descendants(collider_entity) {
+                                    if let Ok(inventory) = inventories_query.get_mut(child).as_mut()
+                                    {
+                                        inventory.add_items(&[(product, 1)]);
+                                        break;
+                                    }
+                                }
                             }
                         } else {
                             let path = format!(

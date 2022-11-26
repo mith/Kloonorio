@@ -2,6 +2,7 @@
 	Structure(
 		name: "Stone furnace",
 		size: (2, 2),
+		collider: (1.1, 1.4),
 		components: [
 			Smelter,
 			Burner,
@@ -14,6 +15,7 @@
 	Structure(
 		name: "Wooden chest",
 		size: (1, 1),
+		collider: (0.8, 0.8),
 		components: [
 			Inventory(8)
 		]
@@ -21,6 +23,7 @@
 	Structure(
 		name: "Burner mining drill",
 		size: (2, 2),
+		collider: (1.8, 1.8),
 		components: [
 			Burner,
 			Miner(2),

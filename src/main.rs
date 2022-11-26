@@ -7,9 +7,7 @@ use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
-use intermediate_loader::IntermediateLoaderPlugin;
 use iyes_loopless::prelude::*;
-use miner::miner_tick;
 
 mod building_ui;
 mod burner;
@@ -33,9 +31,11 @@ use crate::{
     burner::{burner_load, burner_tick},
     character_ui::CharacterUiPlugin,
     drag_and_drop::drop_system,
+    intermediate_loader::IntermediateLoaderPlugin,
     inventory::Inventory,
     inventory_grid::{Hand, SlotEvent},
     loading::LoadingPlugin,
+    miner::miner_tick,
     placeable::Building,
     player_movement::PlayerMovementPlugin,
     recipe_loader::{RecipeAsset, RecipeLoaderPlugin},
@@ -183,6 +183,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut inventory = Inventory {
         slots: vec![None; 100],
     };
+    inventory.add_item(Product::Structure("Wooden chest".into()), 100);
     inventory.add_item(Product::Structure("Burner mining drill".into()), 100);
     inventory.add_item(Product::Intermediate("Coal".into()), 200);
     inventory.add_item(Product::Intermediate("Iron ore".into()), 200);

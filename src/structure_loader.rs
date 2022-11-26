@@ -27,6 +27,7 @@ pub enum StructureComponent {
 pub struct Structure {
     pub name: String,
     pub size: IVec2,
+    pub collider: Vec2,
     pub components: Vec<StructureComponent>,
 }
 
