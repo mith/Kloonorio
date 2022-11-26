@@ -81,46 +81,61 @@ pub fn miner_tick(
                             &Collider::ball(2.),
                             QueryFilter::new(),
                         ) {
-                            if let Ok(inventory) =
-                                inventories_query.get_mut(collider_entity).as_mut()
-                            {
-                                inventory.add_items(&[(product, 1)]);
-                            } else {
-                                info!(
-                                    "No inventory component found on entity, searching children."
-                                );
-                                for child in children.iter_descendants(collider_entity) {
-                                    if let Ok(inventory) = inventories_query.get_mut(child).as_mut()
-                                    {
-                                        inventory.add_items(&[(product, 1)]);
-                                        break;
-                                    }
-                                }
-                            }
-                        } else {
-                            let path = format!(
-                                "textures/icons/{}.png",
-                                product_to_texture(product.clone())
+                            dump_into_entity_inventory(
+                                &mut inventories_query,
+                                collider_entity,
+                                product.clone(),
+                                &children,
                             );
-                            info!("Loading texture at {:?}", path);
-                            commands.spawn((
-                                Stack::new(product.clone(), 1),
-                                Collider::cuboid(3., 3.),
-                                SpriteBundle {
-                                    texture: asset_server.load(path),
-                                    transform: Transform::from_translation(dump_point),
-                                    sprite: Sprite {
-                                        custom_size: Some(Vec2::new(6., 6.)),
-                                        ..default()
-                                    },
-                                    ..default()
-                                },
-                            ));
+                        } else {
+                            spawn_stack(&mut commands, product, &asset_server, dump_point);
                         }
 
                         commands.entity(miner_entity).insert(Working);
                     }
                 }
+            }
+        }
+    }
+}
+
+fn spawn_stack(
+    commands: &mut Commands,
+    product: Product,
+    asset_server: &Res<AssetServer>,
+    dump_point: Vec3,
+) {
+    let path = format!("textures/icons/{}.png", product_to_texture(product.clone()));
+    info!("Loading texture at {:?}", path);
+    commands.spawn((
+        Stack::new(product.clone(), 1),
+        Collider::cuboid(3., 3.),
+        SpriteBundle {
+            texture: asset_server.load(path),
+            transform: Transform::from_translation(dump_point),
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(6., 6.)),
+                ..default()
+            },
+            ..default()
+        },
+    ));
+}
+
+fn dump_into_entity_inventory(
+    inventories_query: &mut Query<&mut Inventory>,
+    collider_entity: Entity,
+    product: Product,
+    children: &Query<&Children>,
+) {
+    if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
+        inventory.add_items(&[(product, 1)]);
+    } else {
+        info!("No inventory component found on entity, searching children.");
+        for child in children.iter_descendants(collider_entity) {
+            if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
+                inventory.add_items(&[(product, 1)]);
+                break;
             }
         }
     }
