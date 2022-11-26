@@ -29,4 +29,10 @@
 		crafting_time: 0.5,
 		name: "Burner mining drill",
 	),
+	Recipe(
+		materials: [(Intermediate("Iron plate"), 1), (Intermediate("Iron gear wheel"), 1)],
+		products: [(Structure("Burner inserter"), 1)],
+		crafting_time: 0.5,
+		name: "Burner inserter",
+	)
 ]

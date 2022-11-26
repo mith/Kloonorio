@@ -7,12 +7,14 @@ use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
+use inserter::inserter_tick;
 use iyes_loopless::prelude::*;
 
 mod building_ui;
 mod burner;
 mod character_ui;
 mod drag_and_drop;
+mod inserter;
 mod intermediate_loader;
 mod inventory;
 mod inventory_grid;
@@ -25,6 +27,7 @@ mod smelter;
 mod structure_loader;
 mod terrain;
 mod types;
+mod util;
 
 use crate::{
     building_ui::building_ui,
@@ -103,6 +106,7 @@ fn main() {
                 .with_system(burner_load)
                 .with_system(working_texture)
                 .with_system(miner_tick)
+                .with_system(inserter_tick)
                 .with_system(hovering_ui)
                 .with_system(placeable::placeable)
                 .into(),
@@ -185,6 +189,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
     inventory.add_item(Product::Structure("Wooden chest".into()), 100);
     inventory.add_item(Product::Structure("Burner mining drill".into()), 100);
+    inventory.add_item(Product::Structure("Stone furnace".into()), 100);
+    inventory.add_item(Product::Structure("Burner inserter".into()), 100);
     inventory.add_item(Product::Intermediate("Coal".into()), 200);
     inventory.add_item(Product::Intermediate("Iron ore".into()), 200);
     commands

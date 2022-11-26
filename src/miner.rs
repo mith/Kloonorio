@@ -1,12 +1,13 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_ecs_tilemap::prelude::*;
-use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
+use bevy_rapier2d::prelude::RapierContext;
 
 use crate::{
     inventory::{Inventory, Stack},
     is_minable,
-    terrain::{tile_at_point, SpawnedChunk, COAL, IRON, STONE, TILE_SIZE, TREE},
-    types::{Powered, Product, Working},
+    terrain::{tile_at_point, SpawnedChunk, TILE_SIZE},
+    types::{Powered, Working},
+    util::{drop_stack_at_point, texture_id_to_product},
 };
 
 #[derive(Component)]
@@ -19,23 +20,6 @@ impl Miner {
         Miner {
             timer: Timer::from_seconds(speed, TimerMode::Repeating),
         }
-    }
-}
-
-fn texture_id_to_product(index: TileTextureIndex) -> Product {
-    match index.0 {
-        COAL => Product::Intermediate("Coal".into()),
-        IRON => Product::Intermediate("Iron ore".into()),
-        STONE => Product::Intermediate("Stone".into()),
-        TREE => Product::Intermediate("Wood".into()),
-        _ => panic!("Unknown product"),
-    }
-}
-
-fn product_to_texture(product: Product) -> String {
-    match product {
-        Product::Intermediate(name) => name.to_lowercase().replace(" ", "_"),
-        _ => "no_icon".to_string(),
     }
 }
 
@@ -66,30 +50,24 @@ pub fn miner_tick(
             if let Ok(tile_texture) = tile_query.get(tile_entity) {
                 if is_minable(tile_texture.0) {
                     if miner.timer.tick(time.delta()).just_finished() {
-                        let product = texture_id_to_product(tile_texture.clone());
-                        info!("Produced {:?}", product);
-                        let dump_point = transform.translation
+                        let stack = Stack::new(texture_id_to_product(tile_texture.clone()), 1);
+                        info!("Produced {:?}", stack);
+                        let drop_point = transform.translation
                             - Vec3::new(TILE_SIZE.x * 0.5, TILE_SIZE.y * 1.5, 0.);
                         info!(
                             "Dumping at {:?} (miner at {:?})",
-                            dump_point, transform.translation
+                            drop_point, transform.translation
                         );
 
-                        if let Some(collider_entity) = rapier_context.intersection_with_shape(
-                            dump_point.xy(),
-                            0.,
-                            &Collider::ball(2.),
-                            QueryFilter::new(),
-                        ) {
-                            dump_into_entity_inventory(
-                                &mut inventories_query,
-                                collider_entity,
-                                product.clone(),
-                                &children,
-                            );
-                        } else {
-                            spawn_stack(&mut commands, product, &asset_server, dump_point);
-                        }
+                        drop_stack_at_point(
+                            &mut commands,
+                            &rapier_context,
+                            &asset_server,
+                            &mut inventories_query,
+                            &children,
+                            stack,
+                            drop_point,
+                        );
 
                         commands.entity(miner_entity).insert(Working);
                     }
@@ -97,51 +75,4 @@ pub fn miner_tick(
             }
         }
     }
-}
-
-fn spawn_stack(
-    commands: &mut Commands,
-    product: Product,
-    asset_server: &Res<AssetServer>,
-    dump_point: Vec3,
-) {
-    let path = format!("textures/icons/{}.png", product_to_texture(product.clone()));
-    info!("Loading texture at {:?}", path);
-    commands.spawn((
-        Stack::new(product.clone(), 1),
-        Collider::cuboid(3., 3.),
-        SpriteBundle {
-            texture: asset_server.load(path),
-            transform: Transform::from_translation(dump_point),
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(6., 6.)),
-                ..default()
-            },
-            ..default()
-        },
-    ));
-}
-
-fn dump_into_entity_inventory(
-    inventories_query: &mut Query<&mut Inventory>,
-    collider_entity: Entity,
-    product: Product,
-    children: &Query<&Children>,
-) {
-    if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
-        inventory.add_items(&[(product, 1)]);
-    } else {
-        info!("No inventory component found on entity, searching children.");
-        for child in children.iter_descendants(collider_entity) {
-            if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
-                inventory.add_items(&[(product, 1)]);
-                break;
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
 }

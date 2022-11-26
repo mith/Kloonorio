@@ -4,6 +4,7 @@ use bevy_rapier2d::prelude::*;
 
 use crate::{
     burner::Burner,
+    inserter::Inserter,
     inventory::{Fuel, Inventory, Output, Source},
     inventory_grid::Hand,
     loading::Structures,
@@ -208,6 +209,11 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
             }
             StructureComponent::Miner(speed) => {
                 commands.entity(structure_entity).insert(Miner::new(*speed));
+            }
+            StructureComponent::Inserter(speed, capacity) => {
+                commands
+                    .entity(structure_entity)
+                    .insert(Inserter::new(*speed, *capacity));
             }
         }
     }

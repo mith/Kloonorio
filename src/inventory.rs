@@ -176,6 +176,53 @@ impl Inventory {
         }
         true
     }
+
+    pub fn add_stack(&mut self, stack: Stack) -> Option<Stack> {
+        let mut stack = stack;
+        for slot in self.slots.iter_mut() {
+            if let Some(existing_stack) = slot {
+                if existing_stack.resource == stack.resource {
+                    let overflow = existing_stack.add(stack.amount);
+                    if overflow == 0 {
+                        return None;
+                    } else {
+                        stack.amount = overflow;
+                    }
+                }
+            } else {
+                *slot = Some(stack);
+                return None;
+            }
+        }
+        Some(stack)
+    }
+
+    pub fn take_stack(&mut self, max_size: u32) -> Option<Stack> {
+        let mut return_stack: Option<Stack> = None;
+
+        for slot in self.slots.iter_mut() {
+            if let Some(existing_stack) = slot {
+                if let Some(ref mut stack) = return_stack {
+                    if stack.resource == existing_stack.resource {
+                        let taking_n = max_size.min(existing_stack.amount);
+                        stack.amount += taking_n;
+                        existing_stack.amount -= taking_n;
+                        if existing_stack.amount == 0 {
+                            *slot = None;
+                        }
+                    }
+                } else {
+                    let taking_n = existing_stack.amount.min(max_size);
+                    return_stack = Some(Stack::new(existing_stack.resource.clone(), taking_n));
+                    existing_stack.amount -= taking_n;
+                    if existing_stack.amount == 0 {
+                        *slot = None;
+                    }
+                }
+            }
+        }
+        return_stack
+    }
 }
 pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
     if let Some(ref mut source_stack) = source_slot {
@@ -356,6 +403,53 @@ mod test {
             inventory.slots[1],
             Some(Stack::new(Product::Structure("Stone furnace".into()), 11))
         );
+    }
+
+    #[test]
+    fn add_stack() {
+        let mut inventory = Inventory::new(12);
+        inventory.add_stack(Stack::new(Product::Intermediate("Stone".into()), 10));
+        assert_eq!(
+            inventory.slots[0],
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
+    }
+
+    #[test]
+    fn add_stack_remainder() {
+        let mut inventory = Inventory::new(0);
+        let remainder = inventory.add_stack(Stack::new(Product::Intermediate("Stone".into()), 10));
+        assert_eq!(
+            remainder,
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
+    }
+
+    #[test]
+    fn take_stack() {
+        let mut inventory = Inventory::new(12);
+        inventory.add_stack(Stack::new(Product::Intermediate("Stone".into()), 10));
+        let taken = inventory.take_stack(100);
+
+        assert_eq!(
+            taken,
+            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
+        );
+        assert!(inventory.slots.iter().all(|s| s.is_none()));
+    }
+
+    #[test]
+    fn take_stack_multiple_slots() {
+        let mut inventory = Inventory::new(12);
+        inventory.slots[0] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
+        inventory.slots[1] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
+        let taken = inventory.take_stack(100);
+
+        assert_eq!(
+            taken,
+            Some(Stack::new(Product::Intermediate("Stone".into()), 20))
+        );
+        assert!(inventory.slots.iter().all(|s| s.is_none()));
     }
 
     #[test]

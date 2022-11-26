@@ -29,5 +29,15 @@
 			Miner(2),
 			Fuel(1)
 		]
+	),
+	Structure(
+		name: "Burner inserter",
+		size: (1, 1),
+		collider: (0.6, 0.6),
+		components: [
+			Burner,
+			Inserter(2, 4),
+			Fuel(1)
+		]
 	)
 ]
