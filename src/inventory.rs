@@ -245,7 +245,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_has_items() {
+    fn has_items() {
         let mut inventory = Inventory::new(12);
         inventory.add_items(&[
             (Product::Intermediate("Stone".into()), 10),
@@ -262,7 +262,7 @@ mod test {
     }
 
     #[test]
-    fn test_remove_items() {
+    fn remove_items() {
         let mut inventory = Inventory::new(12);
         inventory.add_items(&[
             (Product::Intermediate("Stone".into()), 10),
@@ -283,7 +283,7 @@ mod test {
     }
 
     #[test]
-    fn test_remove_items_empty() {
+    fn remove_items_empty() {
         let mut inventory = Inventory::new(12);
         inventory.add_items(&[
             (Product::Intermediate("Stone".into()), 10),
@@ -297,7 +297,7 @@ mod test {
     }
 
     #[test]
-    fn test_remove_items_not_enough() {
+    fn remove_items_not_enough() {
         let mut inventory = Inventory::new(12);
         inventory.add_items(&[
             (Product::Intermediate("Stone".into()), 10),
@@ -317,7 +317,7 @@ mod test {
         );
     }
     #[test]
-    fn test_add_items() {
+    fn add_items() {
         let mut inventory = Inventory::new(12);
         inventory.add_items(&[
             (Product::Intermediate("Stone".into()), 10),
@@ -334,7 +334,7 @@ mod test {
     }
 
     #[test]
-    fn test_add_items_remainder() {
+    fn add_items_remainder() {
         let mut inventory = Inventory::new(1);
         let remainder = inventory.add_items(&[
             (Product::Intermediate("Stone".into()), 10),
@@ -348,7 +348,7 @@ mod test {
     }
 
     #[test]
-    fn test_add_items_stack() {
+    fn add_items_stack() {
         let mut inventory = Inventory::new(2);
         inventory.slots[1] = Some(Stack::new(Product::Structure("Stone furnace".into()), 10));
         inventory.add_items(&[(Product::Structure("Stone furnace".into()), 1)]);
@@ -359,7 +359,7 @@ mod test {
     }
 
     #[test]
-    fn test_transfer_between_stacks() {
+    fn transfer_between_stacks_swap() {
         let mut source_stack = Stack::new(Product::Intermediate("Stone".into()), 10);
         let mut target_stack = Stack::new(Product::Intermediate("Iron ore".into()), 20);
 
@@ -376,7 +376,7 @@ mod test {
     }
 
     #[test]
-    fn test_transfer_between_stacks_same() {
+    fn transfer_between_stacks_same() {
         let mut source_stack = Stack::new(Product::Intermediate("Stone".into()), 10);
         let mut target_stack = Stack::new(Product::Intermediate("Stone".into()), 20);
 
@@ -393,7 +393,7 @@ mod test {
     }
 
     #[test]
-    fn test_transfer_between_slots() {
+    fn transfer_between_slots_swap() {
         let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
         let mut target_slot = Some(Stack::new(Product::Intermediate("Iron ore".into()), 20));
 
@@ -410,7 +410,7 @@ mod test {
     }
 
     #[test]
-    fn test_transfer_between_slots_same() {
+    fn transfer_between_slots_merge_stacks() {
         let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
         let mut target_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 20));
 
@@ -424,7 +424,7 @@ mod test {
     }
 
     #[test]
-    fn test_transfer_between_slots_empty() {
+    fn transfer_between_slots_empty() {
         let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
         let mut target_slot = None;
 
@@ -438,7 +438,7 @@ mod test {
     }
 
     #[test]
-    fn test_drop_within_inventory() {
+    fn drop_within_inventory_swap() {
         let mut inventory = Inventory::new(12);
 
         inventory.slots[0] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
