@@ -1,3 +1,4 @@
+use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -6,7 +7,7 @@ use crate::miner::Miner;
 use crate::smelter::Smelter;
 use crate::structure_loader::{Structure, StructureComponent};
 
-use crate::terrain::TILE_SIZE;
+use crate::terrain::{CursorPos, TILE_SIZE};
 
 use crate::types::{CraftingQueue, Product};
 
@@ -24,9 +25,13 @@ pub struct Ghost;
 #[derive(Component)]
 pub struct Building;
 
+#[derive(Component)]
+pub struct Contains(Vec<Entity>);
+
 pub fn placeable(
     mut commands: Commands,
-    mut placeable_query: Query<(&mut Inventory, &mut Hand, &HoveredTile)>,
+    mut placeable_query: Query<(&mut Inventory, &mut Hand)>,
+    cursor_pos: Res<CursorPos>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,
     asset_server: Res<AssetServer>,
@@ -39,15 +44,27 @@ pub fn placeable(
         commands.entity(ghost).despawn_recursive();
     }
 
-    for (mut inventory, mut hand, hovered_tile) in &mut placeable_query {
+    for (mut inventory, mut hand) in &mut placeable_query {
         // TODO: make this simpler
         if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
             if let Product::Structure(structure_name) = &stack.resource {
                 let structure = structures.get(structure_name).unwrap();
                 let texture_atlas_handle =
                     create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
-                let translation =
-                    hovered_tile.tile_center + Vec2::new(0.5 * TILE_SIZE.x, 0.5 * TILE_SIZE.y);
+
+                let tile_size_v = Vec2::new(TILE_SIZE.x, TILE_SIZE.y);
+                let min_corner: Vec2 =
+                    cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0 * tile_size_v);
+
+                let grid_fitted_min_corner = (min_corner / tile_size_v).ceil() * tile_size_v;
+
+                let structure_rect = Rect::from_corners(
+                    grid_fitted_min_corner,
+                    grid_fitted_min_corner + structure.size.as_vec2() * tile_size_v,
+                );
+
+                let translation = structure_rect.center() - tile_size_v / 2.0;
+
                 let transform = Transform::from_translation(translation.extend(1.0));
 
                 if rapier_context
