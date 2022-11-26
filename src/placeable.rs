@@ -2,22 +2,18 @@ use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
-use crate::burner::Burner;
-use crate::miner::Miner;
-use crate::smelter::Smelter;
-use crate::structure_loader::{Structure, StructureComponent};
-
-use crate::terrain::{CursorPos, TILE_SIZE};
-
-use crate::types::{CraftingQueue, Product};
-
-use crate::loading::Structures;
-
-use crate::terrain::HoveredTile;
-
-use crate::inventory_grid::Hand;
-
-use crate::inventory::{Fuel, Inventory, Output, Source};
+use crate::{
+    burner::Burner,
+    inventory::{Fuel, Inventory, Output, Source},
+    inventory_grid::Hand,
+    loading::Structures,
+    miner::Miner,
+    smelter::Smelter,
+    structure_loader::{Structure, StructureComponent},
+    terrain::{CursorPos, TILE_SIZE},
+    types::{CraftingQueue, Product},
+    HoveringUI,
+};
 
 #[derive(Component)]
 pub struct Ghost;
@@ -30,7 +26,7 @@ pub struct Contains(Vec<Entity>);
 
 pub fn placeable(
     mut commands: Commands,
-    mut placeable_query: Query<(&mut Inventory, &mut Hand)>,
+    mut placeable_query: Query<(&mut Inventory, &mut Hand), Without<HoveringUI>>,
     cursor_pos: Res<CursorPos>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,

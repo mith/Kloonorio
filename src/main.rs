@@ -103,6 +103,7 @@ fn main() {
                 .with_system(burner_load)
                 .with_system(working_texture)
                 .with_system(miner_tick)
+                .with_system(hovering_ui)
                 .with_system(placeable::placeable)
                 .into(),
         )
@@ -136,6 +137,26 @@ fn pick_building(
         }
         true
     });
+}
+
+#[derive(Component)]
+pub struct HoveringUI;
+
+fn hovering_ui(
+    mut commands: Commands,
+    mut egui_context: ResMut<EguiContext>,
+    hovering_player_query: Query<Entity, (With<Player>, With<HoveringUI>)>,
+    non_hovering_player_query: Query<Entity, (With<Player>, Without<HoveringUI>)>,
+) {
+    if egui_context.ctx_mut().is_pointer_over_area() {
+        for entity in non_hovering_player_query.iter() {
+            commands.entity(entity).insert(HoveringUI);
+        }
+    } else {
+        for entity in hovering_player_query.iter() {
+            commands.entity(entity).remove::<HoveringUI>();
+        }
+    }
 }
 
 fn working_texture(
