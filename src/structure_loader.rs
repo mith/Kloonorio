@@ -6,17 +6,19 @@ use bevy::{
 };
 use serde::Deserialize;
 
+use crate::types::Product;
+
 #[derive(Default)]
 pub struct StructuresAssetLoader;
 
-#[derive(Clone, Copy, Debug, Deserialize, TypeUuid)]
+#[derive(Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "990c9ea7-3c00-4d6b-b9f0-c62b86bb9973"]
 pub enum StructureComponent {
     Smelter,
     Burner,
     CraftingQueue,
     Inventory(u32),
-    Source(u32),
+    Source(u32, Vec<Product>),
     Output(u32),
     Fuel(u32),
     Miner(f32),

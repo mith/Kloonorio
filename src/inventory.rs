@@ -33,17 +33,34 @@ pub type Slot = Option<Stack>;
 #[derive(Component, Debug)]
 pub struct Inventory {
     pub slots: Vec<Slot>,
+    pub allowed_products: Option<Vec<Product>>,
 }
 
 impl Inventory {
     pub fn new(size: u32) -> Self {
         Self {
-            slots: (0..size).map(|_| None).collect(),
+            slots: vec![None; size as usize],
+            allowed_products: None,
+        }
+    }
+
+    pub fn new_with_filter(size: u32, allowed_products: Vec<Product>) -> Self {
+        Self {
+            slots: vec![None; size as usize],
+            allowed_products: Some(allowed_products),
         }
     }
 
     /// Return true if the inventory has enough space for the items
     pub fn can_add(&self, items: &[(Product, u32)]) -> bool {
+        if let Some(allowed_products) = &self.allowed_products {
+            for (product, _) in items {
+                if !allowed_products.contains(product) {
+                    return false;
+                }
+            }
+        }
+
         let mut slots = self.slots.clone();
         let items = items.to_vec();
         for (item_resource, mut item_amount) in items {

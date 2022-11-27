@@ -3,7 +3,7 @@ use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
-    inventory::{Inventory, Stack},
+    inventory::{Fuel, Inventory, Output, Source, Stack},
     terrain::{COAL, IRON, STONE, TREE},
     types::Product,
 };
@@ -49,27 +49,35 @@ pub fn spawn_stack(
     ));
 }
 
-pub fn dump_into_entity_inventory(
-    inventories_query: &mut Query<&mut Inventory>,
+pub fn drop_into_entity_inventory(
+    inventories_query: &mut Query<&mut Inventory, Without<Output>>,
     collider_entity: Entity,
     stack: Stack,
     children: &Query<&Children>,
-) {
+) -> bool {
     if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
-        inventory.add_stack(stack);
+        if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
+            inventory.add_stack(stack);
+            return true;
+        } else {
+            return false;
+        }
     } else {
         info!("No inventory component found on entity, searching children.");
         for child in children.iter_descendants(collider_entity) {
             if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
-                inventory.add_stack(stack);
-                break;
+                if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
+                    inventory.add_stack(stack);
+                    return true;
+                }
             }
         }
+        return false;
     }
 }
 
 pub fn take_stack_from_entity_inventory(
-    inventories_query: &mut Query<&mut Inventory>,
+    inventories_query: &mut Query<&mut Inventory, (Without<Fuel>, Without<Source>)>,
     collider_entity: Entity,
     children: &Query<&Children>,
     max_size: u32,
@@ -89,23 +97,26 @@ pub fn take_stack_from_entity_inventory(
     }
 }
 
+/// Drop a stack in a suitable inventory or drop it on the floor. Returns false when neither could
+/// be done
 pub fn drop_stack_at_point(
     commands: &mut Commands,
     rapier_context: &Res<RapierContext>,
     asset_server: &Res<AssetServer>,
-    inventories_query: &mut Query<&mut Inventory>,
+    inventories_query: &mut Query<&mut Inventory, Without<Output>>,
     children: &Query<&Children>,
     stack: Stack,
     drop_point: Vec3,
-) {
+) -> bool {
     if let Some(collider_entity) = rapier_context.intersection_with_shape(
         drop_point.xy(),
         0.,
         &Collider::ball(2.),
         QueryFilter::new(),
     ) {
-        dump_into_entity_inventory(inventories_query, collider_entity, stack, children);
+        drop_into_entity_inventory(inventories_query, collider_entity, stack, children)
     } else {
         spawn_stack(commands, stack, asset_server, drop_point);
+        true
     }
 }

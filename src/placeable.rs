@@ -192,9 +192,9 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                     .entity(structure_entity)
                     .insert(Inventory::new(*slots));
             }
-            StructureComponent::Source(slots) => {
+            StructureComponent::Source(slots, filter) => {
                 commands.entity(structure_entity).with_children(|p| {
-                    p.spawn((Source, Inventory::new(*slots)));
+                    p.spawn((Source, Inventory::new_with_filter(*slots, filter.clone())));
                 });
             }
             StructureComponent::Output(slots) => {
@@ -204,7 +204,13 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
             }
             StructureComponent::Fuel(slots) => {
                 commands.entity(structure_entity).with_children(|p| {
-                    p.spawn((Fuel, Inventory::new(*slots)));
+                    p.spawn((
+                        Fuel,
+                        Inventory::new_with_filter(
+                            *slots,
+                            vec![Product::Intermediate("Coal".into())],
+                        ),
+                    ));
                 });
             }
             StructureComponent::Miner(speed) => {

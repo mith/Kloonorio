@@ -184,9 +184,7 @@ fn working_texture(
 }
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let mut inventory = Inventory {
-        slots: vec![None; 100],
-    };
+    let mut inventory = Inventory::new(100);
     inventory.add_item(Product::Structure("Wooden chest".into()), 100);
     inventory.add_item(Product::Structure("Burner mining drill".into()), 100);
     inventory.add_item(Product::Structure("Stone furnace".into()), 100);

@@ -7,7 +7,7 @@
 			Smelter,
 			Burner,
 			CraftingQueue,
-			Source(1),
+			Source(1, [Intermediate("Iron ore")]),
 			Output(1),
 			Fuel(1)
 		]

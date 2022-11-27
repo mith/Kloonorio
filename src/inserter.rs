@@ -2,7 +2,7 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
-    inventory::{Inventory, Stack},
+    inventory::{Fuel, Inventory, Output, Source, Stack},
     terrain::TILE_SIZE,
     types::Powered,
     util::{drop_stack_at_point, take_stack_from_entity_inventory},
@@ -33,7 +33,10 @@ pub fn inserter_tick(
     children: Query<&Children>,
     time: Res<Time>,
     rapier_context: Res<RapierContext>,
-    mut inventories_query: Query<&mut Inventory>,
+    mut inventories_set: ParamSet<(
+        Query<&mut Inventory, (Without<Fuel>, Without<Source>)>,
+        Query<&mut Inventory, Without<Output>>,
+    )>,
     asset_server: Res<AssetServer>,
 ) {
     for (inserter_entity, inserter_transform, mut inserter) in &mut inserter_query {
@@ -45,19 +48,17 @@ pub fn inserter_tick(
                 let drop_point = inserter_transform.translation
                     + inserter_transform.rotation * Vec3::new(TILE_SIZE.x, 0., 0.);
 
-                info!("Dropping {:?}", holding);
-
-                drop_stack_at_point(
+                if drop_stack_at_point(
                     &mut commands,
                     &rapier_context,
                     &asset_server,
-                    &mut inventories_query,
+                    &mut inventories_set.p1(),
                     &children,
                     holding,
                     drop_point,
-                );
-
-                inserter.holding = None;
+                ) {
+                    inserter.holding = None;
+                }
             }
         } else {
             let pickup_point = inserter_transform.translation
@@ -69,7 +70,7 @@ pub fn inserter_tick(
                 QueryFilter::new(),
             ) {
                 inserter.holding = take_stack_from_entity_inventory(
-                    &mut inventories_query,
+                    &mut inventories_set.p0(),
                     collider_entity,
                     &children,
                     inserter.capacity,

@@ -3,7 +3,7 @@ use bevy_ecs_tilemap::prelude::*;
 use bevy_rapier2d::prelude::RapierContext;
 
 use crate::{
-    inventory::{Inventory, Stack},
+    inventory::{Inventory, Output, Stack},
     is_minable,
     terrain::{tile_at_point, SpawnedChunk, TILE_SIZE},
     types::{Powered, Working},
@@ -40,7 +40,7 @@ pub fn miner_tick(
     time: Res<Time>,
     asset_server: Res<AssetServer>,
     rapier_context: Res<RapierContext>,
-    mut inventories_query: Query<&mut Inventory>,
+    mut inventories_query: Query<&mut Inventory, Without<Output>>,
     children: Query<&Children>,
 ) {
     for (miner_entity, transform, mut miner) in miner_query.iter_mut() {
