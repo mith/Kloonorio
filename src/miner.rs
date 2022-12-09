@@ -1,11 +1,11 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
-use bevy_ecs_tilemap::prelude::*;
+
 use bevy_rapier2d::prelude::RapierContext;
 
 use crate::{
     inventory::{Inventory, Output, Stack},
     is_minable,
-    terrain::{tile_at_point, SpawnedChunk, TILE_SIZE},
+    terrain::{Terrain, TILE_SIZE},
     types::{Powered, Working},
     util::{drop_stack_at_point, texture_id_to_product},
 };
@@ -26,17 +26,7 @@ impl Miner {
 pub fn miner_tick(
     mut commands: Commands,
     mut miner_query: Query<(Entity, &Transform, &mut Miner), With<Powered>>,
-    chunks_query: Query<
-        (
-            &Transform,
-            &TileStorage,
-            &TilemapSize,
-            &TilemapGridSize,
-            &TilemapType,
-        ),
-        With<SpawnedChunk>,
-    >,
-    tile_query: Query<&TileTextureIndex>,
+    terrain: Terrain,
     time: Res<Time>,
     asset_server: Res<AssetServer>,
     rapier_context: Res<RapierContext>,
@@ -46,18 +36,15 @@ pub fn miner_tick(
     for (miner_entity, transform, mut miner) in miner_query.iter_mut() {
         let span = info_span!("Miner tick", miner = ?miner_entity);
         let _enter = span.enter();
-        if let Some(tile_entity) = tile_at_point(transform.translation.xy(), &chunks_query) {
-            if let Ok(tile_texture) = tile_query.get(tile_entity) {
+        if let Some(tile_entity) = terrain.tile_entity_at_point(transform.translation.xy()) {
+            if let Some(tile_texture) = terrain.tile_texture_index(tile_entity) {
                 if is_minable(tile_texture.0) {
                     if miner.timer.tick(time.delta()).just_finished() {
                         let stack = Stack::new(texture_id_to_product(tile_texture.clone()), 1);
                         info!("Produced {:?}", stack);
                         let drop_point = transform.translation
                             - Vec3::new(TILE_SIZE.x * 0.5, TILE_SIZE.y * 1.5, 0.);
-                        info!(
-                            "Dumping at {:?} (miner at {:?})",
-                            drop_point, transform.translation
-                        );
+                        info!("Dropping at {:?}", drop_point);
 
                         drop_stack_at_point(
                             &mut commands,
@@ -68,7 +55,8 @@ pub fn miner_tick(
                             stack,
                             drop_point,
                         );
-
+                        commands.entity(tile_entity).remove::<Working>();
+                    } else {
                         commands.entity(miner_entity).insert(Working);
                     }
                 }

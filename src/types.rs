@@ -46,9 +46,11 @@ impl Product {
 }
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct Powered;
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct Working;
 
 #[derive(Component, Default)]

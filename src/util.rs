@@ -1,9 +1,17 @@
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::{
+    ecs::{
+        query::{QueryEntityError, ReadOnlyWorldQuery, WorldQuery},
+        system::SystemParam,
+    },
+    math::Vec3Swizzles,
+    prelude::*,
+};
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
     inventory::{Fuel, Inventory, Output, Source, Stack},
+    placeable::Building,
     terrain::{COAL, IRON, STONE, TREE},
     types::Product,
 };
@@ -118,5 +126,57 @@ pub fn drop_stack_at_point(
     } else {
         spawn_stack(commands, stack, asset_server, drop_point);
         true
+    }
+}
+
+#[derive(WorldQuery)]
+#[world_query(mutable)]
+pub struct InventoryQuery<F>
+where
+    F: ReadOnlyWorldQuery,
+{
+    pub inventory: &'static mut Inventory,
+    _filter: F,
+}
+
+pub type FuelInventoryQuery = InventoryQuery<(
+    With<Fuel>,
+    Without<Source>,
+    Without<Output>,
+    Without<Building>,
+)>;
+
+pub type SourceInventoryQuery = InventoryQuery<(
+    With<Source>,
+    Without<Fuel>,
+    Without<Output>,
+    Without<Building>,
+)>;
+
+pub type OutputInventoryQuery = InventoryQuery<(
+    With<Output>,
+    Without<Fuel>,
+    Without<Source>,
+    Without<Building>,
+)>;
+
+#[derive(SystemParam)]
+pub struct Inventories<'w, 's> {
+    pub inventories: Query<'w, 's, &'static mut Inventory>,
+    pub fuel_inventories: Query<'w, 's, FuelInventoryQuery>,
+    pub source_inventories: Query<'w, 's, SourceInventoryQuery>,
+    pub output_inventories: Query<'w, 's, OutputInventoryQuery>,
+}
+
+impl<'w, 's> Inventories<'w, 's> {
+    pub fn get_inventory(&mut self, entity: Entity) -> Result<Mut<Inventory>, QueryEntityError> {
+        self.inventories.get_mut(entity)
+    }
+
+    pub fn get_fuel_inventory(&self, children: &Children) -> Option<&Inventory> {
+        children
+            .iter()
+            .flat_map(|c| self.fuel_inventories.get(*c).map(|i| i.inventory))
+            .next()
     }
 }

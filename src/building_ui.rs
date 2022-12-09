@@ -8,10 +8,10 @@ use crate::{
     loading::Icons,
     placeable::Building,
     types::{CraftingQueue, Player},
+    util::{FuelInventoryQuery, InventoryQuery, OutputInventoryQuery, SourceInventoryQuery},
     SelectedBuilding,
 };
 
-// This type signature is quite something
 pub fn building_ui(
     mut commands: Commands,
     mut egui_ctx: ResMut<EguiContext>,
@@ -27,33 +27,9 @@ pub fn building_ui(
     >,
     name: Query<&Name>,
     mut building_inventory_query: Query<&mut Inventory, With<Building>>,
-    source_query: Query<
-        &mut Inventory,
-        (
-            With<Source>,
-            Without<Output>,
-            Without<Building>,
-            Without<Fuel>,
-        ),
-    >,
-    output_query: Query<
-        &mut Inventory,
-        (
-            With<Output>,
-            Without<Source>,
-            Without<Building>,
-            Without<Fuel>,
-        ),
-    >,
-    fuel_query: Query<
-        &mut Inventory,
-        (
-            With<Fuel>,
-            Without<Source>,
-            Without<Output>,
-            Without<Building>,
-        ),
-    >,
+    source_query: Query<SourceInventoryQuery>,
+    output_query: Query<OutputInventoryQuery>,
+    fuel_query: Query<FuelInventoryQuery>,
     mut crafting_machine_query: Query<(&CraftingQueue, &Children), With<Building>>,
     mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
     icons: Res<Icons>,
@@ -68,6 +44,7 @@ pub fn building_ui(
 
         let mut window_open = true;
         egui::Window::new(name)
+            .id(egui::Id::new("building_ui"))
             .resizable(false)
             .open(&mut window_open)
             .show(egui_ctx.ctx_mut(), |ui| {
@@ -147,16 +124,18 @@ pub fn building_ui(
     }
 }
 
+/// Get the inventory of a child entity.
+/// Returns a tuple of the child entity and the inventory.
 fn get_inventory_child<'b, I>(
     children: &Children,
-    output_query: &'b Query<&mut Inventory, I>,
+    output_query: &'b Query<InventoryQuery<I>>,
 ) -> (Entity, &'b Inventory)
 where
     I: ReadOnlyWorldQuery,
 {
     let output = children
         .iter()
-        .flat_map(|c| output_query.get(*c).map(|i| (*c, i)))
+        .flat_map(|c| output_query.get(*c).map(|i| (*c, i.inventory)))
         .next()
         .unwrap();
     output
@@ -207,4 +186,66 @@ fn crafting_machine_widget(
         }
         inventory_grid(output.0, output.1, ui, icons, hand, slot_events);
     });
+}
+
+#[cfg(test)]
+mod test {
+    use crate::types::Product;
+
+    use super::*;
+
+    #[derive(Resource)]
+    struct Target(Entity);
+
+    #[derive(Resource)]
+    struct Result(Entity);
+
+    fn test_system(
+        mut commands: Commands,
+        mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
+        fuel_query: Query<FuelInventoryQuery>,
+        target_entity: Res<Target>,
+    ) {
+        if let Ok((mut _burner, children)) = burner_query.get_mut(target_entity.0) {
+            let fuel = get_inventory_child(children, &fuel_query);
+            commands.insert_resource(Result(fuel.0));
+        }
+    }
+
+    #[test]
+    fn get_inventory_child_only_own() {
+        let mut app = App::new();
+
+        let mut a_child: Option<Entity> = None;
+
+        let building_a_id = app
+            .world
+            .spawn((Burner::new(), Building))
+            .with_children(|a| {
+                let mut inventory = Inventory::new(1);
+                inventory.add_item(Product::Intermediate("Wood".into()), 1);
+                a_child = Some(a.spawn((Fuel, inventory)).id());
+            })
+            .id();
+
+        let _building_b_id = app
+            .world
+            .spawn((Burner::new(), Building))
+            .with_children(|b| {
+                let mut inventory = Inventory::new(1);
+                inventory.add_item(Product::Intermediate("Coal".into()), 1);
+                b.spawn((Fuel, inventory));
+            })
+            .id();
+
+        // Add target entity
+        app.insert_resource(Target(building_a_id));
+
+        app.add_system(test_system);
+        app.update();
+
+        let result = app.world.resource::<Result>();
+
+        assert_eq!(result.0, a_child.unwrap());
+    }
 }

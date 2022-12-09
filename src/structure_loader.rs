@@ -2,7 +2,7 @@ use bevy::{
     asset::{AssetLoader, LoadContext, LoadedAsset},
     prelude::*,
     reflect::TypeUuid,
-    utils::BoxedFuture,
+    utils::{BoxedFuture, HashSet},
 };
 use serde::Deserialize;
 
@@ -18,7 +18,7 @@ pub enum StructureComponent {
     Burner,
     CraftingQueue,
     Inventory(u32),
-    Source(u32, Vec<Product>),
+    Source(u32, HashSet<Product>),
     Output(u32),
     Fuel(u32),
     Miner(f32),

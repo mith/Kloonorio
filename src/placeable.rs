@@ -1,5 +1,5 @@
-use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
+use bevy::{math::Vec3Swizzles, utils::HashSet};
 use bevy_rapier2d::prelude::*;
 
 use crate::{
@@ -27,7 +27,7 @@ pub struct Contains(Vec<Entity>);
 
 pub fn placeable(
     mut commands: Commands,
-    mut placeable_query: Query<(&mut Inventory, &mut Hand), Without<HoveringUI>>,
+    mut placeable_query: Query<(Entity, &mut Hand), Without<HoveringUI>>,
     cursor_pos: Res<CursorPos>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,
@@ -35,14 +35,15 @@ pub fn placeable(
     rapier_context: Res<RapierContext>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     structures: Res<Structures>,
+    mut inventories_query: Query<&mut Inventory>,
 ) {
     // delete old ghosts
     for ghost in ghosts.iter() {
         commands.entity(ghost).despawn_recursive();
     }
 
-    for (mut inventory, mut hand) in &mut placeable_query {
-        // TODO: make this simpler
+    for (hand_entity, mut hand) in &mut placeable_query {
+        let mut inventory = inventories_query.get_mut(hand_entity).unwrap();
         if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
             if let Product::Structure(structure_name) = &stack.resource {
                 let structure = structures.get(structure_name).unwrap();
@@ -208,7 +209,7 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                         Fuel,
                         Inventory::new_with_filter(
                             *slots,
-                            vec![Product::Intermediate("Coal".into())],
+                            HashSet::from_iter([Product::Intermediate("Coal".into())]),
                         ),
                     ));
                 });

@@ -116,6 +116,7 @@ fn main() {
 }
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct SelectedBuilding(Entity);
 
 fn pick_building(
@@ -134,9 +135,8 @@ fn pick_building(
     rapier_context.intersections_with_point(cursor, QueryFilter::new(), |entity| {
         if let Ok(_building) = building_query.get(entity) {
             let player = player_query.single();
-            commands
-                .entity(player)
-                .insert((SelectedBuilding(entity), Name::new("Interesting")));
+            commands.entity(player).insert(SelectedBuilding(entity));
+            info!("Selected building: {:?}", entity);
             return false;
         }
         true
@@ -144,6 +144,7 @@ fn pick_building(
 }
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct HoveringUI;
 
 fn hovering_ui(

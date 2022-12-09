@@ -4,7 +4,7 @@ use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 use crate::{
     inventory::{Fuel, Inventory, Output, Source, Stack},
     terrain::TILE_SIZE,
-    types::Powered,
+    types::{Powered, Working},
     util::{drop_stack_at_point, take_stack_from_entity_inventory},
 };
 
@@ -75,6 +75,13 @@ pub fn inserter_tick(
                     &children,
                     inserter.capacity,
                 );
+                if inserter.holding.is_some() {
+                    commands.entity(inserter_entity).insert(Working);
+                } else {
+                    commands.entity(inserter_entity).remove::<Working>();
+                }
+            } else {
+                commands.entity(inserter_entity).remove::<Working>();
             }
         }
     }

@@ -1,7 +1,15 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashSet};
 
 use crate::types::Product;
 
+#[derive(Component)]
+pub struct Source;
+
+#[derive(Component)]
+pub struct Output;
+
+#[derive(Component)]
+pub struct Fuel;
 const MAX_STACK_SIZE: u32 = 1000;
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
@@ -33,7 +41,7 @@ pub type Slot = Option<Stack>;
 #[derive(Component, Debug)]
 pub struct Inventory {
     pub slots: Vec<Slot>,
-    pub allowed_products: Option<Vec<Product>>,
+    pub allowed_products: Option<HashSet<Product>>,
 }
 
 impl Inventory {
@@ -44,7 +52,7 @@ impl Inventory {
         }
     }
 
-    pub fn new_with_filter(size: u32, allowed_products: Vec<Product>) -> Self {
+    pub fn new_with_filter(size: u32, allowed_products: HashSet<Product>) -> Self {
         Self {
             slots: vec![None; size as usize],
             allowed_products: Some(allowed_products),
@@ -295,14 +303,6 @@ pub fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stac
         std::mem::swap(source_stack, target_stack);
     }
 }
-#[derive(Component)]
-pub struct Source;
-
-#[derive(Component)]
-pub struct Output;
-
-#[derive(Component)]
-pub struct Fuel;
 
 #[cfg(test)]
 mod test {
