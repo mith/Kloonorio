@@ -8,6 +8,7 @@ use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
 use inserter::inserter_tick;
+use isometric_sprite::IsometricSpritePlugin;
 use iyes_loopless::prelude::*;
 
 mod building_ui;
@@ -18,6 +19,7 @@ mod inserter;
 mod intermediate_loader;
 mod inventory;
 mod inventory_grid;
+mod isometric_sprite;
 mod loading;
 mod miner;
 mod placeable;
@@ -82,6 +84,7 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(TerrainPlugin)
+        .add_plugin(IsometricSpritePlugin)
         .add_plugin(CharacterUiPlugin)
         .add_plugin(PlayerMovementPlugin)
         .add_plugin(RecipeLoaderPlugin)
@@ -104,11 +107,12 @@ fn main() {
                 .with_system(smelter_tick)
                 .with_system(burner_tick)
                 .with_system(burner_load)
-                .with_system(working_texture)
+                // .with_system(working_texture)
                 .with_system(miner_tick)
                 .with_system(inserter_tick)
                 .with_system(hovering_ui)
                 .with_system(placeable::placeable)
+                .with_system(placeable::placeable_rotation)
                 .into(),
         )
         .add_system(drop_system.run_in_state(AppState::Running).after(UiPhase))

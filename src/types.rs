@@ -30,6 +30,9 @@ pub struct GameState {
 #[derive(Component)]
 pub struct Player;
 
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct Rotation(pub f32);
+
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid)]
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
 pub enum Product {

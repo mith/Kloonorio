@@ -2,13 +2,19 @@ use bevy::prelude::*;
 use bevy::utils::HashMap;
 use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
 
-use crate::inventory::{Inventory, Stack};
+use crate::{
+    inventory::{Inventory, Stack},
+    types::Rotation,
+};
 
 pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
 
 fn item_in_hand(ui: &mut egui::Ui) -> Option<InventoryIndex> {
     let hand_id = egui::Id::new("hand");
-    ui.memory().data.get_temp::<Hand>(hand_id).and_then(|h| h.0)
+    ui.memory()
+        .data
+        .get_temp::<Hand>(hand_id)
+        .and_then(|h| h.item)
 }
 
 fn set_hand(ui: &mut egui::Ui, hand: &Hand) {
@@ -136,25 +142,31 @@ impl InventoryIndex {
     }
 }
 
-#[derive(Component, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Hand(Option<InventoryIndex>);
+#[derive(Component, Default, Debug, Clone, PartialEq)]
+pub struct Hand {
+    pub item: Option<InventoryIndex>,
+    pub rotation: Option<Rotation>,
+}
 
 impl Hand {
     #[cfg(test)]
     pub fn new(entity: Entity, slot: SlotIndex) -> Self {
-        Self(Some(InventoryIndex::new(entity, slot)))
+        Self {
+            item: Some(InventoryIndex::new(entity, slot)),
+            rotation: None,
+        }
     }
 
     pub fn get_item(&self) -> Option<InventoryIndex> {
-        self.0.clone()
+        self.item.clone()
     }
 
     pub fn set_item(&mut self, entity: Entity, slot: SlotIndex) {
-        self.0 = Some(InventoryIndex::new(entity, slot));
+        self.item = Some(InventoryIndex::new(entity, slot));
     }
 
     pub fn clear(&mut self) {
-        self.0 = None;
+        self.item = None;
     }
 }
 

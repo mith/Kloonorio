@@ -1,7 +1,11 @@
+use std::f32::consts::PI;
+
 use bevy::prelude::*;
 use bevy::{math::Vec3Swizzles, utils::HashSet};
 use bevy_rapier2d::prelude::*;
 
+use crate::isometric_sprite::{self, IsometricSprite, IsometricSpriteBundle, RotationAtlasIndexes};
+use crate::types::Rotation;
 use crate::{
     burner::Burner,
     inserter::Inserter,
@@ -37,6 +41,8 @@ pub fn placeable(
     structures: Res<Structures>,
     mut inventories_query: Query<&mut Inventory>,
 ) {
+    let span = info_span!("Placeable");
+    let _enter = span.enter();
     // delete old ghosts
     for ghost in ghosts.iter() {
         commands.entity(ghost).despawn_recursive();
@@ -51,8 +57,10 @@ pub fn placeable(
                     create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
 
                 let translation = cursor_to_structure_position(&cursor_pos, structure);
+                let rotation = hand.rotation.as_ref().unwrap_or(&Rotation(0.)).clone();
 
-                let transform = Transform::from_translation(translation.extend(1.0));
+                let transform = Transform::from_translation(translation.extend(1.0))
+                    .with_rotation(Quat::from_rotation_z(rotation.0));
 
                 if rapier_context
                     .intersection_with_shape(
@@ -96,6 +104,21 @@ pub fn placeable(
     }
 }
 
+pub fn placeable_rotation(
+    keys: Res<Input<KeyCode>>,
+    mut placeable_query: Query<&mut Hand, Without<HoveringUI>>,
+) {
+    if keys.just_pressed(KeyCode::R) {
+        if let Ok(mut hand) = placeable_query.get_single_mut() {
+            hand.rotation = Some(Rotation(
+                (hand.rotation.as_ref().unwrap_or(&Rotation(0.)).0 + (PI * 0.5)) % (PI * 2.),
+            ));
+
+            info!("Rotated to {:?}", hand.rotation);
+        }
+    }
+}
+
 fn cursor_to_structure_position(cursor_pos: &Res<CursorPos>, structure: &Structure) -> Vec2 {
     let tile_size_v = Vec2::new(TILE_SIZE.x, TILE_SIZE.y);
     let min_corner: Vec2 = cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0 * tile_size_v);
@@ -120,7 +143,7 @@ pub fn create_structure_texture_atlas(
     let texture_atlas = TextureAtlas::from_grid(
         texture_handle,
         structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
-        2,
+        4,
         1,
         None,
         None,
@@ -135,11 +158,16 @@ pub fn place_structure(
     transform: Transform,
     structure: &Structure,
 ) {
+    let atlas = RotationAtlasIndexes(vec![(0., 0), (PI * 0.5, 1), (PI, 2), (PI * 1.5, 3)]);
     let structure_entity = commands
         .spawn((
-            SpriteSheetBundle {
+            IsometricSpriteBundle {
                 texture_atlas: texture_atlas_handle,
                 transform,
+                sprite: IsometricSprite {
+                    rotation_index: atlas,
+                    ..default()
+                },
                 ..default()
             },
             structure_collider(structure),
@@ -163,11 +191,16 @@ pub fn spawn_ghost(
     texture_atlas_handle: Handle<TextureAtlas>,
     color: Color,
 ) {
+    let atlas = RotationAtlasIndexes(vec![(0., 0), (PI * 0.5, 1), (PI, 2), (PI * 1.5, 3)]);
     commands.spawn((
-        SpriteSheetBundle {
+        IsometricSpriteBundle {
             transform,
             texture_atlas: texture_atlas_handle,
-            sprite: TextureAtlasSprite { color, ..default() },
+            sprite: IsometricSprite {
+                color,
+                rotation_index: atlas,
+                ..default()
+            },
             ..default()
         },
         Ghost,
@@ -223,5 +256,37 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                     .insert(Inserter::new(*speed, *capacity));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn placeable_rotation_one_rotation() {
+        let mut app = App::new();
+
+        let mut placeable = Hand::default();
+
+        let hand_id = app.world.spawn(placeable.clone()).id();
+
+        let mut input = Input::<KeyCode>::default();
+        input.press(KeyCode::R);
+        app.world.insert_resource(input);
+
+        app.add_system(placeable_rotation);
+        app.update();
+
+        assert_eq!(
+            app.world
+                .get::<Hand>(hand_id)
+                .unwrap()
+                .rotation
+                .as_ref()
+                .unwrap()
+                .0,
+            PI * 0.5
+        );
     }
 }
