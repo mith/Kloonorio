@@ -4,6 +4,7 @@ use bevy::{
 };
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_egui::{EguiContext, EguiPlugin};
+use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
@@ -77,7 +78,7 @@ fn main() {
         //     name_filter: Some("Interesting".into()),
         //     ..default()
         // })
-        // .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, 0.0),
             ..default()
@@ -244,11 +245,10 @@ fn camera_zoom(
 ) {
     for mut projection in &mut query {
         for event in mouse_wheel_events.iter() {
-            projection.scale -= event.y * 0.1;
+            projection.scale -= projection.scale * event.y * camera_settings.zoom_speed;
             projection.scale = projection
                 .scale
-                .max(camera_settings.min_zoom)
-                .min(camera_settings.max_zoom);
+                .clamp(camera_settings.min_zoom, camera_settings.max_zoom);
         }
     }
 }
