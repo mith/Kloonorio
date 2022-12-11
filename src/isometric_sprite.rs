@@ -5,9 +5,16 @@ use bevy::{
     render::{Extract, RenderApp, RenderStage},
     sprite::{Anchor, ExtractedSprite, ExtractedSprites, SpriteSystem},
 };
+use serde::Deserialize;
 
-#[derive(Debug, Clone, Reflect)]
+#[derive(Debug, Clone, Deserialize, Reflect)]
 pub struct RotationAtlasIndexes(pub Vec<(f32, usize)>);
+
+impl Default for RotationAtlasIndexes {
+    fn default() -> Self {
+        Self(vec![(0., 0), (PI * 0.5, 1), (PI, 2), (PI * 1.5, 3)])
+    }
+}
 
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct IsometricSprite {

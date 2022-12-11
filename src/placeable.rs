@@ -1,11 +1,9 @@
-use std::f32::consts::PI;
-
 use bevy::prelude::*;
 use bevy::{math::Vec3Swizzles, utils::HashSet};
 use bevy_rapier2d::prelude::*;
 
 use crate::inserter::{Dropoff, Pickup};
-use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle, RotationAtlasIndexes};
+use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
 use crate::terrain::TILE_SIZE;
 use crate::types::Rotation;
 use crate::{
@@ -110,15 +108,30 @@ pub fn placeable(
 
 pub fn placeable_rotation(
     keys: Res<Input<KeyCode>>,
-    mut placeable_query: Query<&mut Hand, Without<HoveringUI>>,
+    mut placeable_query: Query<(Entity, &mut Hand), Without<HoveringUI>>,
+    inventory_query: Query<&Inventory>,
+    structures: Res<Structures>,
 ) {
     if keys.just_pressed(KeyCode::R) {
-        if let Ok(mut hand) = placeable_query.get_single_mut() {
-            hand.rotation = Some(Rotation(
-                (hand.rotation.as_ref().unwrap_or(&Rotation(0.)).0 + (PI * 0.5)) % (PI * 2.),
-            ));
+        if let Ok((hand_entity, mut hand)) = placeable_query.get_single_mut() {
+            let inventory = inventory_query.get(hand_entity).unwrap();
+            if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
+                if let Product::Structure(structure_name) = &stack.resource {
+                    let structure = structures.get(structure_name).unwrap();
 
-            info!("Rotated to {:?}", hand.rotation);
+                    let new_rotation = structure
+                        .rotation_atlas
+                        .0
+                        .iter()
+                        .find(|(rot, _)| hand.rotation.as_ref().unwrap_or(&Rotation(0.)).0 < *rot)
+                        .unwrap_or_else(|| structure.rotation_atlas.0.get(0).unwrap())
+                        .0;
+
+                    hand.rotation = Some(Rotation(new_rotation));
+
+                    info!("Rotated to {:?}", hand.rotation);
+                }
+            }
         }
     }
 }
@@ -146,7 +159,7 @@ pub fn create_structure_texture_atlas(
     let texture_atlas = TextureAtlas::from_grid(
         texture_handle,
         structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
-        4,
+        structure.rotation_atlas.0.len(),
         1,
         None,
         None,
@@ -161,14 +174,13 @@ pub fn place_structure(
     transform: Transform,
     structure: &Structure,
 ) {
-    let atlas = RotationAtlasIndexes(vec![(0., 0), (PI * 0.5, 1), (PI, 2), (PI * 1.5, 3)]);
     let structure_entity = commands
         .spawn((
             IsometricSpriteBundle {
                 texture_atlas: texture_atlas_handle,
                 transform,
                 sprite: IsometricSprite {
-                    rotation_index: atlas,
+                    rotation_index: structure.rotation_atlas.clone(),
                     custom_size: Some(structure.size.as_vec2()),
                     ..default()
                 },
@@ -193,7 +205,6 @@ pub fn spawn_ghost(
     color: Color,
     structure: &Structure,
 ) {
-    let atlas = RotationAtlasIndexes(vec![(0., 0), (PI * 0.5, 1), (PI, 2), (PI * 1.5, 3)]);
     commands.spawn((
         Name::new("Ghost".to_string()),
         IsometricSpriteBundle {
@@ -201,7 +212,7 @@ pub fn spawn_ghost(
             texture_atlas: texture_atlas_handle,
             sprite: IsometricSprite {
                 color,
-                rotation_index: atlas,
+                rotation_index: structure.rotation_atlas.clone(),
                 custom_size: Some(structure.size.as_vec2()),
                 ..default()
             },
@@ -291,6 +302,8 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
 
 #[cfg(test)]
 mod test {
+    use std::f32::consts::PI;
+
     use super::*;
 
     #[test]
@@ -328,6 +341,7 @@ mod test {
             size: IVec2::new(1, 1),
             collider: Vec2::new(1., 1.),
             components: vec![],
+            rotation_atlas: default(),
         };
 
         let result = cursor_to_structure_position(&cursor_pos, &structure);

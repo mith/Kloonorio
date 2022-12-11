@@ -6,7 +6,7 @@ use bevy::{
 };
 use serde::Deserialize;
 
-use crate::types::Product;
+use crate::{isometric_sprite::RotationAtlasIndexes, types::Product};
 
 #[derive(Default)]
 pub struct StructuresAssetLoader;
@@ -31,6 +31,8 @@ pub struct Structure {
     pub name: String,
     pub size: IVec2,
     pub collider: Vec2,
+    #[serde(default)]
+    pub rotation_atlas: RotationAtlasIndexes,
     pub components: Vec<StructureComponent>,
 }
 

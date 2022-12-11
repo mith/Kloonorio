@@ -3,6 +3,7 @@
 		name: "Stone furnace",
 		size: (2, 2),
 		collider: (1.6, 1.9),
+		rotation_atlas: ([(0., 0)]),
 		components: [
 			Smelter,
 			Burner,
@@ -16,6 +17,7 @@
 		name: "Wooden chest",
 		size: (1, 1),
 		collider: (0.8, 0.8),
+		rotation_atlas: ([(0., 0)]),
 		components: [
 			Inventory(8)
 		]
@@ -24,6 +26,7 @@
 		name: "Burner mining drill",
 		size: (2, 2),
 		collider: (1.8, 1.8),
+		rotation_atlas: ([(0., 0)]),
 		components: [
 			Burner,
 			Miner(2),
