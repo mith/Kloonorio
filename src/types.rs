@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Display};
 
 use bevy::{prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
@@ -40,10 +40,11 @@ pub enum Product {
     Structure(String),
 }
 
-impl Product {
-    pub fn name(&self) -> String {
+impl Display for Product {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Product::Intermediate(name) | Product::Structure(name) => name.clone(),
+            Product::Intermediate(name) => write!(f, "{}", name),
+            Product::Structure(name) => write!(f, "{}", name),
         }
     }
 }

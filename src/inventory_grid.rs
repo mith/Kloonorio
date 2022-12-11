@@ -111,7 +111,7 @@ pub fn resource_icon(
     stack: &Stack,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
 ) -> Response {
-    let icon_name = &stack.resource.name().to_lowercase().replace(" ", "_");
+    let icon_name = &stack.resource.to_string().to_lowercase().replace(" ", "_");
     let response = {
         if let Some(egui_img) = icons.get(icon_name) {
             ui.image(*egui_img, [32., 32.])
@@ -207,7 +207,7 @@ pub fn inventory_grid(
                                     resource_stack(ui, stack, icons);
                                 });
                                 if response.hovered() {
-                                    response.on_hover_text_at_pointer(stack.resource.name());
+                                    response.on_hover_text_at_pointer(stack.resource.to_string());
                                 }
                             }
                         })

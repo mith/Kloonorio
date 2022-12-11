@@ -5,7 +5,7 @@ use bevy_rapier2d::prelude::RapierContext;
 use crate::{
     inventory::{Inventory, Output, Stack},
     is_minable,
-    terrain::{Terrain, TILE_SIZE},
+    terrain::Terrain,
     types::{Powered, Working},
     util::{drop_stack_at_point, texture_id_to_product},
 };
@@ -42,8 +42,7 @@ pub fn miner_tick(
                     if miner.timer.tick(time.delta()).just_finished() {
                         let stack = Stack::new(texture_id_to_product(tile_texture.clone()), 1);
                         info!("Produced {:?}", stack);
-                        let drop_point = transform.translation
-                            - Vec3::new(TILE_SIZE.x * 0.5, TILE_SIZE.y * 1.5, 0.);
+                        let drop_point = transform.translation - Vec3::new(0.5, 1.5, 0.);
                         info!("Dropping at {:?}", drop_point);
 
                         drop_stack_at_point(

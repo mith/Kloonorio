@@ -43,6 +43,7 @@ pub fn spawn_stack(
     let path = format!("textures/icons/{}.png", product_to_texture(&stack.resource));
     debug!("Loading texture at {:?}", path);
     commands.spawn((
+        Name::new(stack.resource.to_string()),
         stack,
         Collider::cuboid(3., 3.),
         SpriteBundle {

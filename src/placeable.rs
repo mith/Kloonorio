@@ -6,6 +6,7 @@ use bevy_rapier2d::prelude::*;
 
 use crate::inserter::{Dropoff, Pickup};
 use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle, RotationAtlasIndexes};
+use crate::terrain::TILE_SIZE;
 use crate::types::Rotation;
 use crate::{
     burner::Burner,
@@ -16,7 +17,7 @@ use crate::{
     miner::Miner,
     smelter::Smelter,
     structure_loader::{Structure, StructureComponent},
-    terrain::{CursorPos, TILE_SIZE},
+    terrain::CursorPos,
     types::{CraftingQueue, Product},
     HoveringUI,
 };
@@ -77,6 +78,7 @@ pub fn placeable(
                         transform,
                         texture_atlas_handle,
                         Color::rgba(1.0, 0.3, 0.3, 0.5),
+                        structure,
                     );
                 } else if mouse_input.just_pressed(MouseButton::Left) {
                     if inventory.remove_items(&[(Product::Structure(structure.name.clone()), 1)]) {
@@ -98,6 +100,7 @@ pub fn placeable(
                         transform,
                         texture_atlas_handle,
                         Color::rgba(1.0, 1.0, 1.0, 0.5),
+                        structure,
                     );
                 }
             }
@@ -120,15 +123,14 @@ pub fn placeable_rotation(
     }
 }
 
-fn cursor_to_structure_position(cursor_pos: &Res<CursorPos>, structure: &Structure) -> Vec2 {
-    let tile_size_v = Vec2::new(TILE_SIZE.x, TILE_SIZE.y);
-    let min_corner: Vec2 = cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0 * tile_size_v);
-    let grid_fitted_min_corner = (min_corner / tile_size_v).ceil() * tile_size_v;
+fn cursor_to_structure_position(cursor_pos: &CursorPos, structure: &Structure) -> Vec2 {
+    let min_corner: Vec2 = cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0);
+    let grid_fitted_min_corner = min_corner.ceil();
     let structure_rect = Rect::from_corners(
         grid_fitted_min_corner,
-        grid_fitted_min_corner + structure.size.as_vec2() * tile_size_v,
+        grid_fitted_min_corner + structure.size.as_vec2(),
     );
-    let translation = structure_rect.center() - tile_size_v / 2.0;
+    let translation = structure_rect.center() - Vec2::splat(0.5);
     translation
 }
 
@@ -167,6 +169,7 @@ pub fn place_structure(
                 transform,
                 sprite: IsometricSprite {
                     rotation_index: atlas,
+                    custom_size: Some(structure.size.as_vec2()),
                     ..default()
                 },
                 ..default()
@@ -180,10 +183,7 @@ pub fn place_structure(
 }
 
 fn structure_collider(structure: &Structure) -> Collider {
-    Collider::cuboid(
-        structure.collider.x * 0.5 * TILE_SIZE.x,
-        structure.collider.y * 0.5 * TILE_SIZE.y,
-    )
+    Collider::cuboid(structure.collider.x * 0.5, structure.collider.y * 0.5)
 }
 
 pub fn spawn_ghost(
@@ -191,15 +191,18 @@ pub fn spawn_ghost(
     transform: Transform,
     texture_atlas_handle: Handle<TextureAtlas>,
     color: Color,
+    structure: &Structure,
 ) {
     let atlas = RotationAtlasIndexes(vec![(0., 0), (PI * 0.5, 1), (PI, 2), (PI * 1.5, 3)]);
     commands.spawn((
+        Name::new("Ghost".to_string()),
         IsometricSpriteBundle {
             transform,
             texture_atlas: texture_atlas_handle,
             sprite: IsometricSprite {
                 color,
                 rotation_index: atlas,
+                custom_size: Some(structure.size.as_vec2()),
                 ..default()
             },
             ..default()
@@ -267,15 +270,15 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                     .entity(structure_entity)
                     .insert(Inserter::new(*speed, *capacity))
                     .with_children(|p| {
-                        let collider = Collider::ball(2.);
+                        let collider = Collider::ball(0.125);
                         p.spawn((
-                            TransformBundle::from(Transform::from_xyz(TILE_SIZE.x, 0., 0.)),
+                            TransformBundle::from(Transform::from_xyz(1., 0., 0.)),
                             Pickup,
                             Sensor,
                             collider.clone(),
                         ));
                         p.spawn((
-                            TransformBundle::from(Transform::from_xyz(-TILE_SIZE.x, 0., 0.)),
+                            TransformBundle::from(Transform::from_xyz(-1., 0., 0.)),
                             Dropoff,
                             Sensor,
                             collider,
@@ -315,5 +318,20 @@ mod test {
                 .0,
             PI * 0.5
         );
+    }
+
+    #[test]
+    fn cursor_to_structure_position_zero() {
+        let cursor_pos = CursorPos(Vec3::ZERO);
+        let structure = Structure {
+            name: "test".into(),
+            size: IVec2::new(1, 1),
+            collider: Vec2::new(1., 1.),
+            components: vec![],
+        };
+
+        let result = cursor_to_structure_position(&cursor_pos, &structure);
+
+        assert_eq!(result, Vec2::ZERO);
     }
 }

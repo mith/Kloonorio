@@ -57,8 +57,9 @@ fn main() {
             max_mining_distance: 20.,
         })
         .insert_resource(CameraSettings {
-            min_zoom: 0.1,
-            max_zoom: 10.,
+            zoom_speed: 0.1,
+            min_zoom: 0.001,
+            max_zoom: 1.,
         })
         .add_loopless_state(AppState::Loading)
         // .add_plugin(LogDiagnosticsPlugin::default())
@@ -199,10 +200,15 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     inventory.add_item(Product::Intermediate("Iron ore".into()), 200);
     commands
         .spawn((
+            Name::new("Player"),
             SpriteBundle {
                 texture: asset_server.load("textures/character.png"),
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                ..Default::default()
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(2., 2.)),
+                    ..default()
+                },
+                ..default()
             },
             Player,
             Hand::default(),
@@ -210,19 +216,23 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             CraftingQueue::default(),
         ))
         .with_children(|parent| {
-            parent.spawn(Camera2dBundle {
-                transform: Transform::from_xyz(0.0, 0.0, 500.0),
-                projection: OrthographicProjection {
-                    scale: 0.3,
-                    ..Default::default()
+            parent.spawn((
+                Name::new("Player camera"),
+                Camera2dBundle {
+                    transform: Transform::from_xyz(0.0, 0.0, 500.0),
+                    projection: OrthographicProjection {
+                        scale: 0.01,
+                        ..Default::default()
+                    },
+                    ..default()
                 },
-                ..default()
-            });
+            ));
         });
 }
 
 #[derive(Resource)]
 struct CameraSettings {
+    zoom_speed: f32,
     min_zoom: f32,
     max_zoom: f32,
 }

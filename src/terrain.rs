@@ -1,4 +1,4 @@
-use iyes_loopless::prelude::ConditionSet;
+use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 
 use rand::seq::SliceRandom;
 
@@ -89,6 +89,7 @@ pub struct ChunkManager {
     spawned_chunks: HashSet<IVec2>,
     loading_chunks: HashSet<IVec2>,
     pub entities: HashMap<IVec2, Entity>,
+    terrain_root: Option<Entity>,
 }
 
 #[derive(Debug)]
@@ -244,8 +245,8 @@ fn spawn_chunk(
             };
 
             let map_transform = Transform::from_translation(Vec3::new(
-                chunk_position.x as f32 * CHUNK_SIZE.x as f32 * TILE_SIZE.x,
-                chunk_position.y as f32 * CHUNK_SIZE.y as f32 * TILE_SIZE.y,
+                chunk_position.x as f32 * CHUNK_SIZE.x as f32,
+                chunk_position.y as f32 * CHUNK_SIZE.y as f32,
                 0.0,
             ));
 
@@ -286,15 +287,20 @@ fn spawn_chunk(
 
             let texture_handle = asset_server.load("textures/terrain.png");
 
-            debug!("Adding chunk {:?} to world", chunk_position);
+            info!(position = ?chunk_position, "Adding chunk to world");
             commands.entity(chunk_entity).insert((
+                Name::new(format!("Chunk {},{}", chunk_position.x, chunk_position.y)),
                 TilemapBundle {
                     grid_size: TILE_SIZE.into(),
                     size: CHUNK_SIZE.into(),
                     storage: tile_storage,
                     texture: TilemapTexture::Single(texture_handle),
                     tile_size: TILE_SIZE,
-                    transform: map_transform,
+                    transform: map_transform.with_scale(Vec3::new(
+                        1. / TILE_SIZE.x,
+                        1. / TILE_SIZE.y,
+                        1.,
+                    )),
                     map_type,
                     ..default()
                 },
@@ -339,8 +345,7 @@ fn spawn_chunks_around_camera(
 pub fn global_pos_to_chunk_pos(camera_pos: &Vec2) -> IVec2 {
     let camera_pos = camera_pos.as_ivec2();
     let chunk_size: IVec2 = IVec2::new(CHUNK_SIZE.x as i32, CHUNK_SIZE.y as i32);
-    let tile_size: IVec2 = IVec2::new(TILE_SIZE.x as i32, TILE_SIZE.y as i32);
-    camera_pos / (chunk_size * tile_size)
+    camera_pos / chunk_size
 }
 
 pub fn cursor_pos_in_world(
