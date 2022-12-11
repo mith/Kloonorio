@@ -4,7 +4,8 @@ use bevy::prelude::*;
 use bevy::{math::Vec3Swizzles, utils::HashSet};
 use bevy_rapier2d::prelude::*;
 
-use crate::isometric_sprite::{self, IsometricSprite, IsometricSpriteBundle, RotationAtlasIndexes};
+use crate::inserter::{Dropoff, Pickup};
+use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle, RotationAtlasIndexes};
 use crate::types::Rotation;
 use crate::{
     burner::Burner,
@@ -67,7 +68,7 @@ pub fn placeable(
                         translation,
                         0.,
                         &structure_collider(structure),
-                        QueryFilter::new(),
+                        QueryFilter::new().exclude_sensors(),
                     )
                     .is_some()
                 {
@@ -208,35 +209,44 @@ pub fn spawn_ghost(
 }
 
 pub fn spawn_components(commands: &mut Commands, structure: &Structure, structure_entity: Entity) {
+    let span = info_span!("spawn_components", structure = ?structure.name);
+    let _enter = span.enter();
     for component in &structure.components {
         match component {
             StructureComponent::Smelter => {
+                debug!("Spawning smelter");
                 commands.entity(structure_entity).insert(Smelter);
             }
             StructureComponent::Burner => {
+                debug!("Spawning burner");
                 commands.entity(structure_entity).insert(Burner::new());
             }
             StructureComponent::CraftingQueue => {
+                debug!("Spawning crafting queue");
                 commands
                     .entity(structure_entity)
                     .insert(CraftingQueue::default());
             }
             StructureComponent::Inventory(slots) => {
+                debug!("Spawning inventory");
                 commands
                     .entity(structure_entity)
                     .insert(Inventory::new(*slots));
             }
             StructureComponent::Source(slots, filter) => {
+                debug!("Spawning source");
                 commands.entity(structure_entity).with_children(|p| {
                     p.spawn((Source, Inventory::new_with_filter(*slots, filter.clone())));
                 });
             }
             StructureComponent::Output(slots) => {
+                debug!("Spawning output");
                 commands.entity(structure_entity).with_children(|p| {
                     p.spawn((Output, Inventory::new(*slots)));
                 });
             }
             StructureComponent::Fuel(slots) => {
+                debug!("Spawning fuel");
                 commands.entity(structure_entity).with_children(|p| {
                     p.spawn((
                         Fuel,
@@ -248,12 +258,29 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                 });
             }
             StructureComponent::Miner(speed) => {
+                debug!("Spawning miner");
                 commands.entity(structure_entity).insert(Miner::new(*speed));
             }
             StructureComponent::Inserter(speed, capacity) => {
+                debug!("Spawning inserter");
                 commands
                     .entity(structure_entity)
-                    .insert(Inserter::new(*speed, *capacity));
+                    .insert(Inserter::new(*speed, *capacity))
+                    .with_children(|p| {
+                        let collider = Collider::ball(2.);
+                        p.spawn((
+                            TransformBundle::from(Transform::from_xyz(TILE_SIZE.x, 0., 0.)),
+                            Pickup,
+                            Sensor,
+                            collider.clone(),
+                        ));
+                        p.spawn((
+                            TransformBundle::from(Transform::from_xyz(-TILE_SIZE.x, 0., 0.)),
+                            Dropoff,
+                            Sensor,
+                            collider,
+                        ));
+                    });
             }
         }
     }
@@ -267,7 +294,7 @@ mod test {
     fn placeable_rotation_one_rotation() {
         let mut app = App::new();
 
-        let mut placeable = Hand::default();
+        let placeable = Hand::default();
 
         let hand_id = app.world.spawn(placeable.clone()).id();
 

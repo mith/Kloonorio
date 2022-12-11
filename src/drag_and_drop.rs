@@ -15,7 +15,7 @@ pub fn drop_system(
         let span = info_span!("Handling drop event", ?event);
         let _enter = span.enter();
         for mut hand in hand_query.iter_mut() {
-            info!(hand = ?hand);
+            info_span!("hand", hand = ?hand);
             if let Some(item_in_hand) = hand.get_item() {
                 if item_in_hand.entity == drop.entity {
                     if item_in_hand.slot == drop.slot {
@@ -31,6 +31,8 @@ pub fn drop_system(
                         source_inventory.slots.get_mut(item_in_hand.slot).unwrap();
                     let target_slot: &mut Slot = target_inventory.slots.get_mut(drop.slot).unwrap();
                     transfer_between_slots(source_slot, target_slot);
+                } else {
+                    error!("Could not get inventories");
                 }
             } else if let Ok(inventory) = inventories_query.get_mut(drop.entity) {
                 if inventory.slots[drop.slot].is_some() {
@@ -47,7 +49,7 @@ pub fn drop_system(
                 let slot: &Option<Stack> = &inventory.slots[item_in_hand.slot];
                 if slot.is_none() {
                     hand.clear();
-                    info!(?hand, "Emptied hand");
+                    info!("Emptied hand");
                 }
             }
         }

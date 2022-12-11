@@ -41,7 +41,7 @@ pub fn spawn_stack(
     position: Vec3,
 ) {
     let path = format!("textures/icons/{}.png", product_to_texture(&stack.resource));
-    info!("Loading texture at {:?}", path);
+    debug!("Loading texture at {:?}", path);
     commands.spawn((
         stack,
         Collider::cuboid(3., 3.),
@@ -63,44 +63,62 @@ pub fn drop_into_entity_inventory(
     stack: Stack,
     children: &Query<&Children>,
 ) -> bool {
+    let span = info_span!("Drop into entity inventory", entity = ?collider_entity, stack = ?stack);
+    let _enter = span.enter();
     if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
         if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
             inventory.add_stack(stack);
+            info!("Dropped into inventory");
             return true;
         } else {
+            debug!("No space in inventory");
             return false;
         }
     } else {
-        info!("No inventory component found on entity, searching children.");
+        debug!("No inventory component found on entity, searching children.");
         for child in children.iter_descendants(collider_entity) {
             if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
                 if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
+                    info!("Dropped into child inventory");
                     inventory.add_stack(stack);
                     return true;
                 }
             }
         }
+        debug!("No inventory found on children.");
         return false;
     }
 }
 
 pub fn take_stack_from_entity_inventory(
     inventories_query: &mut Query<&mut Inventory, (Without<Fuel>, Without<Source>)>,
-    collider_entity: Entity,
+    target_entity: Entity,
     children: &Query<&Children>,
     max_size: u32,
 ) -> Option<Stack> {
-    if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
-        inventory.take_stack(max_size)
+    let span = info_span!("take_stack_from_entity_inventory", target = ?target_entity);
+    let _enter = span.enter();
+    if let Ok(inventory) = inventories_query.get_mut(target_entity).as_mut() {
+        let taken = inventory.take_stack(max_size);
+        if let Some(ref stack) = taken {
+            info!(stack = ?stack, "Found stack in inventory");
+        }
+        return taken;
     } else {
-        info!("No inventory component found on entity, searching children.");
-        for child in children.iter_descendants(collider_entity) {
+        debug!("No inventory component found on entity, searching children.");
+        for child in children.iter_descendants(target_entity) {
+            debug!(child = ?child, "Checking child");
             if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
+                debug!("Found inventory on child");
                 if let Some(stack) = inventory.take_stack(max_size) {
+                    info!(stack = ?stack, "Found stack in child entity");
                     return Some(stack);
+                } else {
+                    debug!("No stack found in child entity");
                 }
             }
         }
+        debug!("No inventory found on children.");
         None
     }
 }
@@ -116,14 +134,18 @@ pub fn drop_stack_at_point(
     stack: Stack,
     drop_point: Vec3,
 ) -> bool {
+    let span = info_span!("drop_stack_at_point", stack = ?stack);
+    let _enter = span.enter();
     if let Some(collider_entity) = rapier_context.intersection_with_shape(
         drop_point.xy(),
         0.,
         &Collider::ball(2.),
-        QueryFilter::new(),
+        QueryFilter::new().exclude_sensors(),
     ) {
+        info!(collider_entity = ?collider_entity, "Found entity at drop point");
         drop_into_entity_inventory(inventories_query, collider_entity, stack, children)
     } else {
+        info!("No entity found at drop point, dropping on the ground");
         spawn_stack(commands, stack, asset_server, drop_point);
         true
     }
@@ -178,5 +200,111 @@ impl<'w, 's> Inventories<'w, 's> {
             .iter()
             .flat_map(|c| self.fuel_inventories.get(*c).map(|i| i.inventory))
             .next()
+    }
+}
+
+/// Get the inventory of a child entity.
+/// Returns a tuple of the child entity and the inventory.
+pub fn get_inventory_child<'b, I>(
+    children: &Children,
+    output_query: &'b Query<InventoryQuery<I>>,
+) -> (Entity, &'b Inventory)
+where
+    I: ReadOnlyWorldQuery,
+{
+    let output = children
+        .iter()
+        .flat_map(|c| output_query.get(*c).map(|i| (*c, i.inventory)))
+        .next()
+        .unwrap();
+    output
+}
+
+/// Get the inventory of a child entity.
+/// Returns a tuple of the child entity and the inventory.
+pub fn get_inventory_child_mut<'b, I>(
+    children: &Children,
+    output_query: &'b mut Query<InventoryQuery<I>>,
+) -> (Entity, Mut<'b, Inventory>)
+where
+    I: ReadOnlyWorldQuery,
+{
+    let child_id = children.iter().find(|c| output_query.get(**c).is_ok());
+    if let Some(child_id) = child_id {
+        let output = output_query.get_mut(*child_id).unwrap();
+        (*child_id, output.inventory)
+    } else {
+        panic!("no child with inventory found");
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[derive(Resource)]
+    struct Target(Entity);
+
+    #[derive(Resource)]
+    struct Result(Option<Stack>);
+
+    fn test_system(
+        mut commands: Commands,
+        mut inventories_query: Query<&mut Inventory, (Without<Fuel>, Without<Source>)>,
+        target_entity: Res<Target>,
+        children: Query<&Children>,
+    ) {
+        let result =
+            take_stack_from_entity_inventory(&mut inventories_query, target_entity.0, &children, 1);
+        commands.insert_resource(Result(result));
+    }
+
+    #[test]
+    fn take_stack_from_entity_inventory_no_child() {
+        let mut app = App::new();
+
+        let mut inventory = Inventory::new(1);
+        inventory.add_item(Product::Intermediate("Coal".into()), 1);
+
+        let target_entity_id = app.world.spawn(inventory).id();
+
+        app.insert_resource(Target(target_entity_id));
+
+        app.add_system(test_system);
+        app.update();
+
+        let result = app.world.get_resource::<Result>().unwrap();
+
+        assert_eq!(
+            result.0,
+            Some(Stack::new(Product::Intermediate("Coal".into()), 1))
+        );
+    }
+
+    #[test]
+    fn take_stack_from_entity_inventory_child_output() {
+        let mut app = App::new();
+
+        let mut inventory = Inventory::new(1);
+        inventory.add_item(Product::Intermediate("Coal".into()), 1);
+
+        let target_entity_id = app
+            .world
+            .spawn_empty()
+            .with_children(|p| {
+                p.spawn((Output, Inventory::new(1)));
+            })
+            .id();
+
+        app.insert_resource(Target(target_entity_id));
+
+        app.add_system(test_system);
+        app.update();
+
+        let result = app.world.get_resource::<Result>().unwrap();
+        assert_eq!(
+            result.0,
+            Some(Stack::new(Product::Intermediate("Coal".into()), 1))
+        );
     }
 }

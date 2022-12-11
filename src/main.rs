@@ -7,7 +7,7 @@ use bevy_egui::{EguiContext, EguiPlugin};
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
-use inserter::inserter_tick;
+use inserter::{burner_inserter_tick, inserter_tick};
 use isometric_sprite::IsometricSpritePlugin;
 use iyes_loopless::prelude::*;
 
@@ -110,6 +110,7 @@ fn main() {
                 // .with_system(working_texture)
                 .with_system(miner_tick)
                 .with_system(inserter_tick)
+                .with_system(burner_inserter_tick)
                 .with_system(hovering_ui)
                 .with_system(placeable::placeable)
                 .with_system(placeable::placeable_rotation)

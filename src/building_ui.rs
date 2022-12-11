@@ -1,4 +1,4 @@
-use bevy::{ecs::query::ReadOnlyWorldQuery, prelude::*, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContext;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     loading::Icons,
     placeable::Building,
     types::{CraftingQueue, Player},
-    util::{FuelInventoryQuery, InventoryQuery, OutputInventoryQuery, SourceInventoryQuery},
+    util::{get_inventory_child, FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery},
     SelectedBuilding,
 };
 
@@ -124,23 +124,6 @@ pub fn building_ui(
     }
 }
 
-/// Get the inventory of a child entity.
-/// Returns a tuple of the child entity and the inventory.
-fn get_inventory_child<'b, I>(
-    children: &Children,
-    output_query: &'b Query<InventoryQuery<I>>,
-) -> (Entity, &'b Inventory)
-where
-    I: ReadOnlyWorldQuery,
-{
-    let output = children
-        .iter()
-        .flat_map(|c| output_query.get(*c).map(|i| (*c, i.inventory)))
-        .next()
-        .unwrap();
-    output
-}
-
 fn burner_widget(
     ui: &mut egui::Ui,
     icons: &HashMap<String, egui::TextureId>,
@@ -216,17 +199,15 @@ mod test {
     fn get_inventory_child_only_own() {
         let mut app = App::new();
 
-        let mut a_child: Option<Entity> = None;
+        let building_a_id = app.world.spawn((Burner::new(), Building)).id();
 
-        let building_a_id = app
-            .world
-            .spawn((Burner::new(), Building))
-            .with_children(|a| {
-                let mut inventory = Inventory::new(1);
-                inventory.add_item(Product::Intermediate("Wood".into()), 1);
-                a_child = Some(a.spawn((Fuel, inventory)).id());
-            })
-            .id();
+        let mut inventory = Inventory::new(1);
+        inventory.add_item(Product::Intermediate("Wood".into()), 1);
+        let a_child = app.world.spawn((Fuel, inventory)).id();
+
+        app.world
+            .entity_mut(building_a_id)
+            .push_children(&[a_child]);
 
         let _building_b_id = app
             .world
@@ -246,6 +227,6 @@ mod test {
 
         let result = app.world.resource::<Result>();
 
-        assert_eq!(result.0, a_child.unwrap());
+        assert_eq!(result.0, a_child);
     }
 }
