@@ -261,6 +261,7 @@ fn spawn_chunk(
                             position: tile_pos,
                             tilemap_id: TilemapId(chunk_entity),
                             texture_index: TileTextureIndex(*texture_id),
+
                             ..default()
                         })
                         .id();
@@ -287,7 +288,7 @@ fn spawn_chunk(
 
             let texture_handle = asset_server.load("textures/terrain.png");
 
-            info!(position = ?chunk_position, "Adding chunk to world");
+            debug!(position = ?chunk_position, "Adding chunk to world");
             commands.entity(chunk_entity).insert((
                 Name::new(format!("Chunk {},{}", chunk_position.x, chunk_position.y)),
                 TilemapBundle {
@@ -365,7 +366,7 @@ pub fn cursor_pos_in_world(
     ndc_to_world.project_point3(ndc.extend(0.0))
 }
 
-#[derive(Default, Resource)]
+#[derive(Debug, Default, Resource)]
 pub struct CursorPos(pub Vec3);
 
 fn update_cursor_pos(

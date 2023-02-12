@@ -8,11 +8,13 @@ use bevy::{
 };
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
+use tracing::instrument;
 
 use crate::{
     inventory::{Fuel, Inventory, Output, Source, Stack},
     placeable::Building,
     terrain::{COAL, IRON, STONE, TREE},
+    transport_belt::TransportBelt,
     types::Product,
 };
 
@@ -28,16 +30,17 @@ pub fn texture_id_to_product(index: TileTextureIndex) -> Product {
 
 pub fn product_to_texture(product: &Product) -> String {
     match product {
-        Product::Intermediate(name) => name.to_lowercase().replace(" ", "_"),
+        // Product::Intermediate(name) => name.to_lowercase().replace(" ", "_"),
         _ => "no_icon".to_string(),
     }
 }
 
 /// Spawn a stack of items at the given position
+#[instrument(skip(commands, asset_server))]
 pub fn spawn_stack(
     commands: &mut Commands,
     stack: Stack,
-    asset_server: &Res<AssetServer>,
+    asset_server: &AssetServer,
     position: Vec3,
 ) {
     let path = format!("textures/icons/{}.png", product_to_texture(&stack.resource));
@@ -58,14 +61,13 @@ pub fn spawn_stack(
     ));
 }
 
+#[instrument(skip(inventories_query, children))]
 pub fn drop_into_entity_inventory(
     inventories_query: &mut Query<&mut Inventory, Without<Output>>,
     collider_entity: Entity,
     stack: Stack,
     children: &Query<&Children>,
 ) -> bool {
-    let span = info_span!("Drop into entity inventory", entity = ?collider_entity, stack = ?stack);
-    let _enter = span.enter();
     if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
         if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
             inventory.add_stack(stack);
@@ -91,14 +93,13 @@ pub fn drop_into_entity_inventory(
     }
 }
 
+#[instrument(skip(inventories_query, children))]
 pub fn take_stack_from_entity_inventory(
     inventories_query: &mut Query<&mut Inventory, (Without<Fuel>, Without<Source>)>,
     target_entity: Entity,
     children: &Query<&Children>,
     max_size: u32,
 ) -> Option<Stack> {
-    let span = info_span!("take_stack_from_entity_inventory", target = ?target_entity);
-    let _enter = span.enter();
     if let Ok(inventory) = inventories_query.get_mut(target_entity).as_mut() {
         let taken = inventory.take_stack(max_size);
         if let Some(ref stack) = taken {
@@ -124,27 +125,61 @@ pub fn take_stack_from_entity_inventory(
     }
 }
 
+#[instrument(skip(belts_query))]
+pub fn take_stack_from_entity_belt(
+    belts_query: &mut Query<&mut TransportBelt>,
+    target_entity: Entity,
+    max_size: u32,
+) -> Option<Stack> {
+    if let Ok(mut belt) = belts_query.get_mut(target_entity) {
+        belt.take().map(|product| Stack {
+            resource: product,
+            amount: 1,
+        })
+    } else {
+        None
+    }
+}
+
 /// Drop a stack in a suitable inventory or drop it on the floor. Returns false when neither could
 /// be done
+#[instrument(skip(
+    commands,
+    rapier_context,
+    asset_server,
+    inventories_query,
+    belts_query,
+    children
+))]
 pub fn drop_stack_at_point(
     commands: &mut Commands,
-    rapier_context: &Res<RapierContext>,
-    asset_server: &Res<AssetServer>,
+    rapier_context: &RapierContext,
+    asset_server: &AssetServer,
     inventories_query: &mut Query<&mut Inventory, Without<Output>>,
+    belts_query: &mut Query<&mut TransportBelt>,
     children: &Query<&Children>,
     stack: Stack,
     drop_point: Vec3,
 ) -> bool {
-    let span = info_span!("drop_stack_at_point", stack = ?stack);
-    let _enter = span.enter();
     if let Some(collider_entity) = rapier_context.intersection_with_shape(
         drop_point.xy(),
         0.,
-        &Collider::ball(2.),
+        &Collider::ball(0.2),
         QueryFilter::new().exclude_sensors(),
     ) {
         info!(collider_entity = ?collider_entity, "Found entity at drop point");
-        drop_into_entity_inventory(inventories_query, collider_entity, stack, children)
+        if let Ok(mut belt) = belts_query.get_mut(collider_entity) {
+            info!("Found belt at drop point");
+            if belt.add(1, stack.resource.clone()) {
+                info!("Added to belt");
+                return true;
+            } else {
+                info!("Belt full");
+                return false;
+            }
+        } else {
+            drop_into_entity_inventory(inventories_query, collider_entity, stack, children)
+        }
     } else {
         info!("No entity found at drop point, dropping on the ground");
         spawn_stack(commands, stack, asset_server, drop_point);

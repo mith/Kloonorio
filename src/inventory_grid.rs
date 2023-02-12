@@ -3,8 +3,8 @@ use bevy::utils::HashMap;
 use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
 
 use crate::{
+    discrete_rotation::DiscreteRotation,
     inventory::{Inventory, Stack},
-    types::Rotation,
 };
 
 pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
@@ -145,7 +145,7 @@ impl InventoryIndex {
 #[derive(Component, Default, Debug, Clone, PartialEq)]
 pub struct Hand {
     pub item: Option<InventoryIndex>,
-    pub rotation: Option<Rotation>,
+    pub rotation: Option<DiscreteRotation>,
 }
 
 impl Hand {
@@ -167,6 +167,11 @@ impl Hand {
 
     pub fn clear(&mut self) {
         self.item = None;
+        self.rotation = None;
+    }
+
+    pub fn reset_rotation(&mut self) {
+        self.rotation = None;
     }
 }
 

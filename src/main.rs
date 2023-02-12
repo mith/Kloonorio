@@ -4,17 +4,20 @@ use bevy::{
 };
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_egui::{EguiContext, EguiPlugin};
-use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_inspector_egui::{RegisterInspectable, WorldInspectorPlugin};
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
 use inserter::{burner_inserter_tick, inserter_tick};
 use isometric_sprite::IsometricSpritePlugin;
 use iyes_loopless::prelude::*;
+use tracing::instrument;
+use transport_belt::{TransportBelt, TransportBeltPlugin};
 
 mod building_ui;
 mod burner;
 mod character_ui;
+mod discrete_rotation;
 mod drag_and_drop;
 mod inserter;
 mod intermediate_loader;
@@ -29,6 +32,7 @@ mod recipe_loader;
 mod smelter;
 mod structure_loader;
 mod terrain;
+mod transport_belt;
 mod types;
 mod util;
 
@@ -79,11 +83,13 @@ fn main() {
         //     ..default()
         // })
         .add_plugin(WorldInspectorPlugin::new())
+        .register_type::<Product>()
+        .register_inspectable::<TransportBelt>()
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, 0.0),
             ..default()
         })
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(16.0))
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(TerrainPlugin)
         .add_plugin(IsometricSpritePlugin)
@@ -92,6 +98,7 @@ fn main() {
         .add_plugin(RecipeLoaderPlugin)
         .add_plugin(StructureLoaderPlugin)
         .add_plugin(IntermediateLoaderPlugin)
+        .add_plugin(TransportBeltPlugin)
         .add_plugin(LoadingPlugin)
         .add_enter_system(AppState::Running, spawn_player)
         .add_event::<SlotEvent>()
@@ -126,6 +133,7 @@ fn main() {
 #[component(storage = "SparseSet")]
 pub struct SelectedBuilding(Entity);
 
+#[instrument(skip(commands, rapier_context, building_query, player_query))]
 fn pick_building(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
@@ -199,6 +207,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     inventory.add_item(Product::Structure("Burner inserter".into()), 100);
     inventory.add_item(Product::Intermediate("Coal".into()), 200);
     inventory.add_item(Product::Intermediate("Iron ore".into()), 200);
+    inventory.add_item(Product::Structure("Transport belt".into()), 200);
     commands
         .spawn((
             Name::new("Player"),

@@ -7,6 +7,8 @@ use bevy::{
 };
 use serde::Deserialize;
 
+use crate::discrete_rotation::DiscreteRotation;
+
 #[derive(Debug, Clone, Deserialize, Reflect)]
 pub struct RotationAtlasIndexes(pub Vec<(f32, usize)>);
 
@@ -25,7 +27,7 @@ pub struct IsometricSprite {
     /// of the sprite's image in the atlas
     pub custom_size: Option<Vec2>,
     pub anchor: Anchor,
-    pub rotation_index: RotationAtlasIndexes,
+    pub sides: u32,
 }
 
 impl Default for IsometricSprite {
@@ -36,7 +38,7 @@ impl Default for IsometricSprite {
             flip_y: false,
             custom_size: None,
             anchor: Anchor::default(),
-            rotation_index: RotationAtlasIndexes(vec![(0., 0)]),
+            sides: 1,
         }
     }
 }
@@ -60,13 +62,20 @@ pub fn extract_isometric_sprites(
             &ComputedVisibility,
             &IsometricSprite,
             &GlobalTransform,
+            &DiscreteRotation,
             &Handle<TextureAtlas>,
         )>,
     >,
 ) {
     // extracted_sprites.sprites.clear();
-    for (entity, visibility, isometric_sprite, transform, texture_atlas_handle) in
-        isometric_sprite_query.iter()
+    for (
+        entity,
+        visibility,
+        isometric_sprite,
+        transform,
+        discrete_rotation,
+        texture_atlas_handle,
+    ) in isometric_sprite_query.iter()
     {
         if !visibility.is_visible() {
             continue;
@@ -77,30 +86,9 @@ pub fn extract_isometric_sprites(
         unrotated_transform =
             unrotated_transform.mul_transform(compute_transform.with_rotation(Quat::default()));
 
-        let rotation = compute_transform.rotation;
         if let Some(texture_atlas) = texture_atlases.get(texture_atlas_handle) {
-            let z_rotation = {
-                let z_rotation = rotation.to_scaled_axis().z;
-                if z_rotation < 0. {
-                    z_rotation + PI * 2.
-                } else {
-                    z_rotation
-                }
-            };
-            let index = isometric_sprite
-                .rotation_index
-                .0
-                .iter()
-                .rev()
-                // shift the rotation so that z_rotation is always > 0
-                .find(|(angle, _)| z_rotation + PI * 0.25 > *angle);
+            let index = discrete_rotation.get();
 
-            if index.is_none() {
-                error!("no index found for rotation {}", z_rotation);
-                continue;
-            }
-
-            let index = index.unwrap().1;
             let rect = Some(texture_atlas.textures[index]);
             extracted_sprites.sprites.push(ExtractedSprite {
                 entity,

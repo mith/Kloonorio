@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, fmt::Display};
 
 use bevy::{prelude::*, reflect::TypeUuid};
+use bevy_inspector_egui::Inspectable;
 use serde::Deserialize;
 
 use crate::{
@@ -30,10 +31,10 @@ pub struct GameState {
 #[derive(Component)]
 pub struct Player;
 
-#[derive(Component, Debug, Clone, PartialEq)]
-pub struct Rotation(pub f32);
+#[derive(Component)]
+pub struct StaticDimensions(pub IVec2);
 
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid, Reflect, Inspectable)]
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
 pub enum Product {
     Intermediate(String),

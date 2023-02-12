@@ -4,10 +4,11 @@ use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 use crate::{
     burner::Burner,
     inventory::{Fuel, Inventory, Output, Source, Stack},
+    transport_belt::TransportBelt,
     types::{Powered, Product, Working},
     util::{
-        drop_stack_at_point, get_inventory_child_mut, take_stack_from_entity_inventory,
-        FuelInventoryQuery,
+        drop_stack_at_point, get_inventory_child_mut, take_stack_from_entity_belt,
+        take_stack_from_entity_inventory, FuelInventoryQuery,
     },
 };
 
@@ -48,6 +49,7 @@ pub fn inserter_tick(
         Query<&mut Inventory, (Without<Fuel>, Without<Source>)>,
         Query<&mut Inventory, Without<Output>>,
     )>,
+    mut belts_query: Query<&mut TransportBelt>,
     asset_server: Res<AssetServer>,
     name_query: Query<&Name>,
 ) {
@@ -69,6 +71,7 @@ pub fn inserter_tick(
                         &rapier_context,
                         &asset_server,
                         &mut inventories_set.p1(),
+                        &mut belts_query,
                         &children,
                         holding.clone(),
                         drop_point_transform.translation(),
@@ -92,13 +95,20 @@ pub fn inserter_tick(
                     QueryFilter::new().exclude_sensors(),
                 ) {
                     let collider_name = name_query.get(collider_entity).unwrap();
-                    info!(collider = ?collider_name, "Found collider");
+                    debug!(collider = ?collider_name, "Found collider");
                     inserter.holding = take_stack_from_entity_inventory(
                         &mut inventories_set.p0(),
                         collider_entity,
                         &children,
                         inserter.capacity,
-                    );
+                    )
+                    .or_else(|| {
+                        take_stack_from_entity_belt(
+                            &mut belts_query,
+                            collider_entity,
+                            inserter.capacity,
+                        )
+                    });
                     if inserter.holding.is_some() {
                         info!(stack = ?inserter.holding, "Picked up stack");
                         commands.entity(inserter_entity).insert(Working);

@@ -31,6 +31,7 @@ pub fn drop_system(
                         source_inventory.slots.get_mut(item_in_hand.slot).unwrap();
                     let target_slot: &mut Slot = target_inventory.slots.get_mut(drop.slot).unwrap();
                     transfer_between_slots(source_slot, target_slot);
+                    hand.reset_rotation();
                 } else {
                     error!("Could not get inventories");
                 }

@@ -1,4 +1,5 @@
 use bevy::{prelude::*, utils::HashSet};
+use tracing::instrument;
 
 use crate::types::Product;
 
@@ -10,7 +11,8 @@ pub struct Output;
 
 #[derive(Component)]
 pub struct Fuel;
-const MAX_STACK_SIZE: u32 = 1000;
+
+pub const MAX_STACK_SIZE: u32 = 1000;
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Stack {
@@ -264,9 +266,8 @@ pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
     }
 }
 
+#[instrument]
 pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, target_slot: usize) {
-    let span = info_span!("drop_within_inventory", source_slot, target_slot);
-    let _enter = span.enter();
     if let Some(mut source_stack) = inventory.slots.get(source_slot).cloned().flatten() {
         if let Some(mut target_stack) = inventory.slots.get(target_slot).cloned().flatten() {
             transfer_between_stacks(&mut source_stack, &mut target_stack);
@@ -290,6 +291,7 @@ pub fn drop_within_inventory(inventory: &mut Inventory, source_slot: usize, targ
     }
 }
 
+#[instrument]
 pub fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stack) {
     if source_stack == target_stack {
         return;

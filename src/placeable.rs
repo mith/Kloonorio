@@ -5,7 +5,9 @@ use bevy_rapier2d::prelude::*;
 use crate::inserter::{Dropoff, Pickup};
 use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
 use crate::terrain::TILE_SIZE;
-use crate::types::Rotation;
+use crate::transport_belt::TransportBelt;
+
+use crate::discrete_rotation::DiscreteRotation;
 use crate::{
     burner::Burner,
     inserter::Inserter,
@@ -25,9 +27,6 @@ pub struct Ghost;
 
 #[derive(Component)]
 pub struct Building;
-
-#[derive(Component)]
-pub struct Contains(Vec<Entity>);
 
 pub fn placeable(
     mut commands: Commands,
@@ -57,10 +56,10 @@ pub fn placeable(
                     create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
 
                 let translation = cursor_to_structure_position(&cursor_pos, structure);
-                let rotation = hand.rotation.as_ref().unwrap_or(&Rotation(0.)).clone();
 
-                let transform = Transform::from_translation(translation.extend(1.0))
-                    .with_rotation(Quat::from_rotation_z(rotation.0));
+                let rotation = *hand.rotation.get_or_insert_with(|| {
+                    DiscreteRotation::new(structure.sides.try_into().unwrap())
+                });
 
                 if rapier_context
                     .intersection_with_shape(
@@ -73,7 +72,8 @@ pub fn placeable(
                 {
                     spawn_ghost(
                         &mut commands,
-                        transform,
+                        translation,
+                        rotation,
                         texture_atlas_handle,
                         Color::rgba(1.0, 0.3, 0.3, 0.5),
                         structure,
@@ -84,7 +84,8 @@ pub fn placeable(
                         place_structure(
                             &mut commands,
                             texture_atlas_handle.clone(),
-                            transform,
+                            translation,
+                            rotation,
                             structure,
                         );
                         if !inventory.has_items(&[(Product::Structure(structure.name.clone()), 1)])
@@ -95,7 +96,8 @@ pub fn placeable(
                 } else {
                     spawn_ghost(
                         &mut commands,
-                        transform,
+                        translation,
+                        rotation,
                         texture_atlas_handle,
                         Color::rgba(1.0, 1.0, 1.0, 0.5),
                         structure,
@@ -109,28 +111,12 @@ pub fn placeable(
 pub fn placeable_rotation(
     keys: Res<Input<KeyCode>>,
     mut placeable_query: Query<(Entity, &mut Hand), Without<HoveringUI>>,
-    inventory_query: Query<&Inventory>,
-    structures: Res<Structures>,
 ) {
     if keys.just_pressed(KeyCode::R) {
-        if let Ok((hand_entity, mut hand)) = placeable_query.get_single_mut() {
-            let inventory = inventory_query.get(hand_entity).unwrap();
-            if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
-                if let Product::Structure(structure_name) = &stack.resource {
-                    let structure = structures.get(structure_name).unwrap();
-
-                    let new_rotation = structure
-                        .rotation_atlas
-                        .0
-                        .iter()
-                        .find(|(rot, _)| hand.rotation.as_ref().unwrap_or(&Rotation(0.)).0 < *rot)
-                        .unwrap_or_else(|| structure.rotation_atlas.0.get(0).unwrap())
-                        .0;
-
-                    hand.rotation = Some(Rotation(new_rotation));
-
-                    info!("Rotated to {:?}", hand.rotation);
-                }
+        if let Ok((_hand_entity, mut hand)) = placeable_query.get_single_mut() {
+            if let Some(rotation) = hand.rotation.as_mut() {
+                rotation.rotate();
+                info!("Rotated to {:?}", hand.rotation);
             }
         }
     }
@@ -159,7 +145,7 @@ pub fn create_structure_texture_atlas(
     let texture_atlas = TextureAtlas::from_grid(
         texture_handle,
         structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
-        structure.rotation_atlas.0.len(),
+        structure.sides as usize,
         1,
         None,
         None,
@@ -171,16 +157,19 @@ pub fn create_structure_texture_atlas(
 pub fn place_structure(
     commands: &mut Commands,
     texture_atlas_handle: Handle<TextureAtlas>,
-    transform: Transform,
+    translation: Vec2,
+    rotation: DiscreteRotation,
     structure: &Structure,
 ) {
     let structure_entity = commands
         .spawn((
+            rotation,
             IsometricSpriteBundle {
                 texture_atlas: texture_atlas_handle,
-                transform,
+                transform: Transform::from_translation(translation.extend(1.))
+                    .with_rotation(Quat::from_rotation_z(-rotation.to_radians())),
                 sprite: IsometricSprite {
-                    rotation_index: structure.rotation_atlas.clone(),
+                    sides: structure.sides,
                     custom_size: Some(structure.size.as_vec2()),
                     ..default()
                 },
@@ -200,19 +189,22 @@ fn structure_collider(structure: &Structure) -> Collider {
 
 pub fn spawn_ghost(
     commands: &mut Commands,
-    transform: Transform,
+    translation: Vec2,
+    rotation: DiscreteRotation,
     texture_atlas_handle: Handle<TextureAtlas>,
     color: Color,
     structure: &Structure,
 ) {
     commands.spawn((
         Name::new("Ghost".to_string()),
+        rotation,
         IsometricSpriteBundle {
-            transform,
+            transform: Transform::from_translation(translation.extend(1.))
+                .with_rotation(Quat::from_rotation_z(-rotation.to_radians())),
             texture_atlas: texture_atlas_handle,
             sprite: IsometricSprite {
                 color,
-                rotation_index: structure.rotation_atlas.clone(),
+                sides: structure.sides,
                 custom_size: Some(structure.size.as_vec2()),
                 ..default()
             },
@@ -273,7 +265,18 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
             }
             StructureComponent::Miner(speed) => {
                 debug!("Spawning miner");
-                commands.entity(structure_entity).insert(Miner::new(*speed));
+                commands
+                    .entity(structure_entity)
+                    .insert(Miner::new(*speed))
+                    .with_children(|p| {
+                        let collider = Collider::ball(0.125);
+                        p.spawn((
+                            TransformBundle::from(Transform::from_xyz(-0.5, -1.5, 0.)),
+                            Dropoff,
+                            Sensor,
+                            collider.clone(),
+                        ));
+                    });
             }
             StructureComponent::Inserter(speed, capacity) => {
                 debug!("Spawning inserter");
@@ -283,18 +286,35 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                     .with_children(|p| {
                         let collider = Collider::ball(0.125);
                         p.spawn((
-                            TransformBundle::from(Transform::from_xyz(1., 0., 0.)),
+                            TransformBundle::from(Transform::from_xyz(-1., 0., 0.)),
                             Pickup,
                             Sensor,
                             collider.clone(),
                         ));
                         p.spawn((
-                            TransformBundle::from(Transform::from_xyz(-1., 0., 0.)),
+                            TransformBundle::from(Transform::from_xyz(1., 0., 0.)),
                             Dropoff,
                             Sensor,
                             collider,
                         ));
                     });
+            }
+            StructureComponent::TransportBelt => {
+                debug!("Spawning transport belt");
+                let collider = Collider::ball(0.125);
+                let dropoff = commands
+                    .spawn((
+                        TransformBundle::from(Transform::from_xyz(0., 1., 0.)),
+                        Dropoff,
+                        Sensor,
+                        collider,
+                    ))
+                    .id();
+
+                commands
+                    .entity(structure_entity)
+                    .insert(TransportBelt::new(dropoff))
+                    .add_child(dropoff);
             }
         }
     }
@@ -328,7 +348,7 @@ mod test {
                 .rotation
                 .as_ref()
                 .unwrap()
-                .0,
+                .to_radians(),
             PI * 0.5
         );
     }
@@ -339,9 +359,9 @@ mod test {
         let structure = Structure {
             name: "test".into(),
             size: IVec2::new(1, 1),
+            sides: 1,
             collider: Vec2::new(1., 1.),
             components: vec![],
-            rotation_atlas: default(),
         };
 
         let result = cursor_to_structure_position(&cursor_pos, &structure);

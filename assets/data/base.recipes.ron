@@ -34,5 +34,12 @@
 		products: [(Structure("Burner inserter"), 1)],
 		crafting_time: 0.5,
 		name: "Burner inserter",
-	)
+	),
+	Recipe(
+		materials: [(Intermediate("Iron gear wheel"), 1), (Intermediate("Iron plate"), 1)],
+		products: [(Structure("Transport belt"), 1)],
+		crafting_time: 0.5,
+		name: "Transport belt",
+	),
+
 ]
