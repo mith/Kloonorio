@@ -1,5 +1,5 @@
 use bevy::{prelude::*, utils::HashMap};
-use bevy_egui::EguiContext;
+use bevy_egui::EguiContexts;
 
 use crate::{
     burner::Burner,
@@ -14,7 +14,7 @@ use crate::{
 
 pub fn building_ui(
     mut commands: Commands,
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     player_query: Query<
         (Entity, &SelectedBuilding, &Inventory, &Hand),
         (
@@ -222,7 +222,7 @@ mod test {
         // Add target entity
         app.insert_resource(Target(building_a_id));
 
-        app.add_system(test_system);
+        app.add_systems(Update, test_system);
         app.update();
 
         let result = app.world.resource::<Result>();

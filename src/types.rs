@@ -1,15 +1,15 @@
 use std::{collections::VecDeque, fmt::Display};
 
-use bevy::{prelude::*, reflect::TypeUuid};
-use bevy_inspector_egui::Inspectable;
+use bevy::{asset::LoadedFolder, prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
 
 use crate::{
-    intermediate_loader::IntermediateAsset, structure_loader::StructuresAsset, RecipeAsset,
+    intermediate_loader::IntermediateAsset, structure_loader::StructuresAsset, RecipesAsset,
 };
 
-#[derive(Clone, PartialEq, Eq, Component, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Component, Debug, Hash, States, Default)]
 pub enum AppState {
+    #[default]
     Loading,
     Running,
 }
@@ -18,12 +18,12 @@ pub enum AppState {
 pub struct GameState {
     pub map_loaded: bool,
     pub spawned: bool,
-    pub recipes_handle: Handle<RecipeAsset>,
+    pub recipes_handle: Handle<RecipesAsset>,
     pub recipes_loaded: bool,
     pub structures_handle: Handle<StructuresAsset>,
     pub structures_loaded: bool,
     pub icons_loaded: bool,
-    pub icons_handle: Vec<HandleUntyped>,
+    pub icons_handle: Handle<LoadedFolder>,
     pub resources_loaded: bool,
     pub resources_handle: Handle<IntermediateAsset>,
 }
@@ -34,7 +34,7 @@ pub struct Player;
 #[derive(Component)]
 pub struct StaticDimensions(pub IVec2);
 
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid, Reflect, Inspectable)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid, Reflect)]
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
 pub enum Product {
     Intermediate(String),
@@ -75,5 +75,5 @@ pub struct Recipe {
     pub name: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, SystemLabel)]
-pub struct UiPhase;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, SystemSet)]
+pub struct UiSet;

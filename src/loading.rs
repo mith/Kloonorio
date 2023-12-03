@@ -1,12 +1,15 @@
 use std::ops::{Deref, DerefMut};
 
-use bevy::{asset::LoadState, prelude::*, utils::HashMap};
-use bevy_egui::EguiContext;
-use iyes_loopless::prelude::*;
+use bevy::{
+    asset::{LoadState, LoadedFolder, RecursiveDependencyLoadState},
+    prelude::*,
+    utils::HashMap,
+};
+use bevy_egui::EguiContexts;
 
 use crate::{
     intermediate_loader::{Intermediate, IntermediateAsset},
-    recipe_loader::RecipeAsset,
+    recipe_loader::RecipesAsset,
     structure_loader::{Structure, StructuresAsset},
     types::{AppState, GameState, Recipe},
 };
@@ -82,7 +85,7 @@ impl DerefMut for Resources {
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
     gamestate.recipes_handle = asset_server.load("data/base.recipes.ron");
     gamestate.structures_handle = asset_server.load("data/base.structures.ron");
-    gamestate.icons_handle = asset_server.load_folder("textures/icons").unwrap();
+    gamestate.icons_handle = asset_server.load_folder("textures/icons");
     gamestate.resources_handle = asset_server.load("data/base.resources.ron");
 }
 
@@ -105,18 +108,19 @@ fn load_resources(
 fn load_icons(
     asset_server: Res<AssetServer>,
     mut gamestate: ResMut<GameState>,
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_context: EguiContexts,
     mut icons: ResMut<Icons>,
+    loaded_folder_assets: Res<Assets<LoadedFolder>>,
 ) {
     if !gamestate.icons_loaded
-        && asset_server.get_group_load_state(gamestate.icons_handle.iter().map(|h| h.id))
-            == LoadState::Loaded
+        && asset_server.get_recursive_dependency_load_state(&gamestate.icons_handle)
+            == Some(RecursiveDependencyLoadState::Loaded)
     {
-        for icon in &gamestate.icons_handle {
-            let image = asset_server.get_handle(icon.id);
-            let texture_id = egui_context.add_image(image);
+        let loaded_folder = loaded_folder_assets.get(&gamestate.icons_handle).unwrap();
+        for icon in &loaded_folder.handles {
+            let texture_id = egui_context.add_image(icon.clone().typed::<Image>());
             if let Some(name) = asset_server
-                .get_handle_path(icon)
+                .get_path(icon.id())
                 .map(|ap| ap.path().file_stem().unwrap().to_string_lossy().to_string())
             {
                 icons.insert(name, texture_id);
@@ -148,7 +152,7 @@ fn load_structures(
 
 fn load_recipes(
     mut gamestate: ResMut<GameState>,
-    recipes_assets: Res<Assets<RecipeAsset>>,
+    recipes_assets: Res<Assets<RecipesAsset>>,
     mut recipes: ResMut<Recipes>,
 ) {
     let recipe_assets = recipes_assets.get(&gamestate.recipes_handle);
@@ -156,7 +160,7 @@ fn load_recipes(
         return;
     }
 
-    if let Some(RecipeAsset(loaded_recipes)) = recipe_assets {
+    if let Some(RecipesAsset(loaded_recipes)) = recipe_assets {
         recipes.extend(
             loaded_recipes
                 .iter()
@@ -166,13 +170,13 @@ fn load_recipes(
     }
 }
 
-fn check_loading(gamestate: Res<GameState>, mut commands: Commands) {
+fn check_loading(gamestate: Res<GameState>, mut next_state: ResMut<NextState<AppState>>) {
     if gamestate.recipes_loaded
         && gamestate.structures_loaded
         && gamestate.icons_loaded
         && gamestate.resources_loaded
     {
-        commands.insert_resource(NextState(AppState::Running));
+        next_state.set(AppState::Running);
     }
 }
 
@@ -184,16 +188,17 @@ impl Plugin for LoadingPlugin {
             .insert_resource(Recipes::default())
             .insert_resource(Icons::default())
             .insert_resource(Resources::default())
-            .add_enter_system(AppState::Loading, start_loading)
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(AppState::Loading)
-                    .with_system(load_recipes)
-                    .with_system(load_structures)
-                    .with_system(load_icons)
-                    .with_system(load_resources)
-                    .with_system(check_loading)
-                    .into(),
+            .add_systems(OnEnter(AppState::Loading), start_loading)
+            .add_systems(
+                Update,
+                (
+                    load_recipes,
+                    load_structures,
+                    load_icons,
+                    load_resources,
+                    check_loading,
+                )
+                    .run_if(in_state(AppState::Loading)),
             );
     }
 }

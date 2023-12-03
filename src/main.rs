@@ -3,16 +3,15 @@ use bevy::{
     prelude::*,
 };
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
-use bevy_egui::{EguiContext, EguiPlugin};
-use bevy_inspector_egui::{RegisterInspectable, WorldInspectorPlugin};
+use bevy_egui::{EguiContexts, EguiPlugin};
+use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier2d::prelude::*;
 use egui::Align2;
 
 use inserter::{burner_inserter_tick, inserter_tick};
 use isometric_sprite::IsometricSpritePlugin;
-use iyes_loopless::prelude::*;
 use tracing::instrument;
-use transport_belt::{TransportBelt, TransportBeltPlugin};
+use transport_belt::TransportBeltPlugin;
 
 mod building_ui;
 mod burner;
@@ -48,11 +47,11 @@ use crate::{
     miner::miner_tick,
     placeable::Building,
     player_movement::PlayerMovementPlugin,
-    recipe_loader::{RecipeAsset, RecipeLoaderPlugin},
+    recipe_loader::{RecipeLoaderPlugin, RecipesAsset},
     smelter::smelter_tick,
     structure_loader::StructureLoaderPlugin,
-    terrain::{CursorPos, HoveredTile, TerrainPlugin, COAL, IRON, STONE, TREE},
-    types::{AppState, CraftingQueue, GameState, Player, Powered, Product, UiPhase, Working},
+    terrain::{CursorWorldPos, HoveredTile, TerrainPlugin, COAL, IRON, STONE, TREE},
+    types::{AppState, CraftingQueue, GameState, Player, Powered, Product, UiSet, Working},
 };
 
 fn main() {
@@ -66,66 +65,68 @@ fn main() {
             min_zoom: 0.001,
             max_zoom: 1.,
         })
-        .add_loopless_state(AppState::Loading)
+        .add_state::<AppState>()
         // .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(
             DefaultPlugins
-                .set(AssetPlugin {
-                    watch_for_changes: true,
-                    ..default()
-                })
+                .set(AssetPlugin { ..default() })
                 .set(ImagePlugin::default_nearest()),
         )
-        .add_plugin(EguiPlugin)
+        .add_plugins(EguiPlugin)
         // .insert_resource(WorldInspectorParams {
         //     name_filter: Some("Interesting".into()),
         //     ..default()
         // })
-        .add_plugin(WorldInspectorPlugin::new())
+        .add_plugins(DefaultInspectorConfigPlugin)
         .register_type::<Product>()
-        .register_inspectable::<TransportBelt>()
         .insert_resource(RapierConfiguration {
-            gravity: Vec2::new(0.0, 0.0),
+            gravity: Vec2::new(0.0, 8.0),
             ..default()
         })
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(16.0))
-        .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(TerrainPlugin)
-        .add_plugin(IsometricSpritePlugin)
-        .add_plugin(CharacterUiPlugin)
-        .add_plugin(PlayerMovementPlugin)
-        .add_plugin(RecipeLoaderPlugin)
-        .add_plugin(StructureLoaderPlugin)
-        .add_plugin(IntermediateLoaderPlugin)
-        .add_plugin(TransportBeltPlugin)
-        .add_plugin(LoadingPlugin)
-        .add_enter_system(AppState::Running, spawn_player)
+        .add_plugins((
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0),
+            RapierDebugRenderPlugin::default(),
+            TerrainPlugin,
+            IsometricSpritePlugin,
+            CharacterUiPlugin,
+            PlayerMovementPlugin,
+            RecipeLoaderPlugin,
+            StructureLoaderPlugin,
+            IntermediateLoaderPlugin,
+            TransportBeltPlugin,
+            LoadingPlugin,
+        ))
+        .add_systems(OnEnter(AppState::Running), spawn_player)
         .add_event::<SlotEvent>()
-        .add_system_set(
-            ConditionSet::new()
-                .run_in_state(AppState::Running)
-                .with_system(camera_zoom)
-                .with_system(interact)
-                .with_system(interact_completion)
-                .with_system(interact_cancel)
-                .with_system(interaction_ui)
-                .with_system(craft_ticker)
-                .with_system(pick_building)
-                .with_system(building_ui)
-                .with_system(smelter_tick)
-                .with_system(burner_tick)
-                .with_system(burner_load)
-                // .with_system(working_texture)
-                .with_system(miner_tick)
-                .with_system(inserter_tick)
-                .with_system(burner_inserter_tick)
-                .with_system(hovering_ui)
-                .with_system(placeable::placeable)
-                .with_system(placeable::placeable_rotation)
-                .into(),
+        .add_systems(
+            Update,
+            (
+                camera_zoom,
+                interact,
+                interact_completion,
+                interact_cancel,
+                interaction_ui,
+                craft_ticker,
+                pick_building,
+                building_ui,
+                smelter_tick,
+                burner_tick,
+                burner_load,
+                working_texture,
+                miner_tick,
+                inserter_tick,
+                burner_inserter_tick,
+                hovering_ui,
+                placeable::placeable,
+                placeable::placeable_rotation,
+            )
+                .run_if(in_state(AppState::Running)),
         )
-        .add_system(drop_system.run_in_state(AppState::Running).after(UiPhase))
+        .add_systems(
+            Update,
+            drop_system.after(UiSet).run_if(in_state(AppState::Running)),
+        )
         .run();
 }
 
@@ -140,7 +141,7 @@ fn pick_building(
     mouse_input: Res<Input<MouseButton>>,
     building_query: Query<&Building>,
     player_query: Query<Entity, With<Player>>,
-    cursor_pos: Res<CursorPos>,
+    cursor_pos: Res<CursorWorldPos>,
 ) {
     if !mouse_input.just_pressed(MouseButton::Left) {
         return;
@@ -164,7 +165,7 @@ pub struct HoveringUI;
 
 fn hovering_ui(
     mut commands: Commands,
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_context: EguiContexts,
     hovering_player_query: Query<Entity, (With<Player>, With<HoveringUI>)>,
     non_hovering_player_query: Query<Entity, (With<Player>, Without<HoveringUI>)>,
 ) {
@@ -253,7 +254,7 @@ fn camera_zoom(
     camera_settings: Res<CameraSettings>,
 ) {
     for mut projection in &mut query {
-        for event in mouse_wheel_events.iter() {
+        for event in mouse_wheel_events.read() {
             projection.scale -= projection.scale * event.y * camera_settings.zoom_speed;
             projection.scale = projection
                 .scale
@@ -279,7 +280,7 @@ struct PlayerSettings {
 
 fn interact(
     mut commands: Commands,
-    cursor_pos: Res<CursorPos>,
+    cursor_pos: Res<CursorWorldPos>,
     tile_query: Query<&TileTextureIndex>,
     mouse_button_input: Res<Input<MouseButton>>,
     player_query: Query<(Entity, &Transform, &HoveredTile), (With<Player>, Without<MineCountdown>)>,
@@ -343,7 +344,7 @@ fn interact_completion(
     }
 }
 
-fn interaction_ui(mut egui_context: ResMut<EguiContext>, interact_query: Query<&MineCountdown>) {
+fn interaction_ui(mut egui_context: EguiContexts, interact_query: Query<&MineCountdown>) {
     if let Ok(interact) = interact_query.get_single() {
         egui::Window::new("Interaction")
             .anchor(Align2::CENTER_BOTTOM, (0., -10.))

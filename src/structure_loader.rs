@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedAsset},
+    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext, LoadedAsset},
     prelude::*,
     reflect::TypeUuid,
     utils::{BoxedFuture, HashSet},
@@ -36,31 +36,41 @@ pub struct Structure {
     pub components: Vec<StructureComponent>,
 }
 
-#[derive(Clone, Debug, TypeUuid)]
+#[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "97b2a898-da7d-4a72-a192-05e18d309950"]
 pub struct StructuresAsset(pub Vec<Structure>);
 
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum StructuresAssetLoaderError {
+    /// An [IO](std::io) Error.
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [Ron](ron) Error.
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+
 impl AssetLoader for StructuresAssetLoader {
+    type Asset = StructuresAsset;
+    type Settings = ();
+    type Error = StructuresAssetLoaderError;
+
     fn load<'a>(
         &'a self,
-        bytes: &'a [u8],
+        reader: &'a mut Reader,
+        _settings: &'a Self::Settings,
         load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<(), bevy::asset::Error>> {
+    ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         Box::pin(async move {
             let path = load_context.path().display().to_string();
             let _span = info_span!("Loading structures asset", path = path);
             let _enter = _span.enter();
-            match ron::de::from_bytes(bytes) {
-                Ok(structures) => {
-                    load_context.set_default_asset(LoadedAsset::new(StructuresAsset(structures)));
-                    debug!("Finished loading");
-                    Ok(())
-                }
-                Err(err) => {
-                    error!(error = err.to_string());
-                    Err(bevy::asset::Error::new(err))
-                }
-            }
+            let mut buf = Vec::new();
+            reader.read_to_end(&mut buf).await?;
+            let intermediate_asset = ron::de::from_bytes(&buf)?;
+            debug!("Finished loading");
+            Ok(StructuresAsset(intermediate_asset))
         })
     }
 
@@ -73,7 +83,7 @@ pub struct StructureLoaderPlugin;
 
 impl Plugin for StructureLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_asset::<StructuresAsset>()
+        app.init_asset::<StructuresAsset>()
             .init_asset_loader::<StructuresAssetLoader>();
     }
 }

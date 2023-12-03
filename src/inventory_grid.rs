@@ -11,16 +11,20 @@ pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
 
 fn item_in_hand(ui: &mut egui::Ui) -> Option<InventoryIndex> {
     let hand_id = egui::Id::new("hand");
-    ui.memory()
-        .data
-        .get_temp::<Hand>(hand_id)
-        .and_then(|h| h.item)
+    ui.memory(|memory| {
+        memory
+            .data
+            .get_temp::<Hand>(hand_id)
+            .and_then(|h| h.item.clone())
+    })
 }
 
 fn set_hand(ui: &mut egui::Ui, hand: &Hand) {
     let hand_id = egui::Id::new("hand");
-    ui.memory().data.remove::<Hand>(hand_id);
-    ui.memory().data.insert_temp::<Hand>(hand_id, hand.clone());
+    ui.memory_mut(|memory| {
+        memory.data.remove::<Hand>(hand_id);
+        memory.data.insert_temp::<Hand>(hand_id, hand.clone());
+    });
 }
 
 fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)) -> Response {
@@ -36,11 +40,11 @@ fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)
             Sense::click_and_drag().union(Sense::hover()),
         );
         if response.hovered() {
-            ui.output().cursor_icon = CursorIcon::Grab;
+            ui.output_mut(|output| output.cursor_icon = CursorIcon::Grab);
         }
         response
     } else {
-        ui.output().cursor_icon = CursorIcon::Grabbing;
+        ui.output_mut(|output| output.cursor_icon = CursorIcon::Grabbing);
 
         // Paint the body to a new layer:
         let layer_id = egui::LayerId::new(Order::Tooltip, id);
@@ -71,8 +75,10 @@ fn drop_target<R>(
     ui.painter().add(epaint::RectShape {
         rounding: style.rounding,
         fill: bg_fill,
-        stroke: Stroke::none(),
+        stroke: Stroke::NONE,
         rect,
+        fill_texture_id: egui::TextureId::Managed(0),
+        uv: egui::Rect::ZERO,
     });
 
     let mut content_ui = ui.child_ui(rect, *ui.layout());
@@ -88,9 +94,9 @@ pub fn resource_stack(
     let response = resource_icon(ui, stack, icons);
 
     let font_id = egui::FontId::proportional(16.);
-    let layout = ui
-        .fonts()
-        .layout_no_wrap(stack.amount.to_string(), font_id, egui::Color32::WHITE);
+    let layout = ui.fonts(|fonts| {
+        fonts.layout_no_wrap(stack.amount.to_string(), font_id, egui::Color32::WHITE)
+    });
     let rect = response.rect;
     let pos = Pos2::new(
         rect.right() - layout.size().x - 1.,
@@ -114,9 +120,9 @@ pub fn resource_icon(
     let icon_name = &stack.resource.to_string().to_lowercase().replace(" ", "_");
     let response = {
         if let Some(egui_img) = icons.get(icon_name) {
-            ui.image(*egui_img, [32., 32.])
+            ui.image((*egui_img, egui::Vec2::new(32., 32.)))
         } else if let Some(no_icon_img) = icons.get("no_icon") {
-            ui.image(*no_icon_img, [32., 32.])
+            ui.image((*no_icon_img, egui::Vec2::new(32., 32.)))
         } else {
             ui.label("NO ICON")
         }
@@ -175,7 +181,7 @@ impl Hand {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Event)]
 pub enum SlotEvent {
     Clicked(InventoryIndex),
 }
@@ -211,16 +217,22 @@ pub fn inventory_grid(
                                 let response = drag_source(ui, item_id, |ui| {
                                     resource_stack(ui, stack, icons);
                                 });
-                                if response.hovered() {
-                                    response.on_hover_text_at_pointer(stack.resource.to_string());
+                                if response.clone().hovered() {
+                                    response
+                                        .clone()
+                                        .on_hover_text_at_pointer(stack.resource.to_string());
+                                }
+                                if response.clicked() {
+                                    info!(inventory = ?entity, slot = slot_index, "Clicked item");
+                                    slot_events.send(SlotEvent::clicked(entity, slot_index));
                                 }
                             }
                         })
                         .response;
                         if response.clicked() {
-                            info!(inventory = ?entity, slot = slot_index, "Clicked slot");
+                            info!(inventory = ?entity, slot = slot_index, "Clicked empty slot");
                             slot_events.send(SlotEvent::clicked(entity, slot_index));
-                        }
+                        };
                     }
                 }
                 ui.end_row();

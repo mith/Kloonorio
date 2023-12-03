@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use iyes_loopless::prelude::IntoConditionalSystem;
 
 use crate::types::{AppState, Player};
 
@@ -37,6 +36,9 @@ fn keyboard_input_system(
 pub struct PlayerMovementPlugin;
 impl Plugin for PlayerMovementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(keyboard_input_system.run_in_state(AppState::Running));
+        app.add_systems(
+            Update,
+            keyboard_input_system.run_if(in_state(AppState::Running)),
+        );
     }
 }

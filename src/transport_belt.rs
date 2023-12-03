@@ -1,9 +1,7 @@
 use std::collections::VecDeque;
 
 use bevy::{math::Vec3Swizzles, prelude::*};
-use bevy_inspector_egui::Inspectable;
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
-use iyes_loopless::prelude::IntoConditionalSystem;
 
 use crate::{
     discrete_rotation::DiscreteRotation,
@@ -17,7 +15,7 @@ use crate::{
 // adjacent belts by pre- or appending the slots from newly constructed belts instead of
 // creating separate entities
 
-#[derive(Component, Inspectable)]
+#[derive(Component, Reflect)]
 pub struct TransportBelt {
     slots: VecDeque<Option<Product>>,
     dropoff: Entity,
@@ -162,7 +160,7 @@ pub fn transport_belt_tick(
     }
 }
 
-#[derive(Component, Inspectable)]
+#[derive(Component, Reflect)]
 pub struct BeltItem;
 
 pub fn create_transport_belt_sprites(
@@ -208,8 +206,8 @@ pub fn create_transport_belt_sprites(
 
 pub struct TransportBeltPlugin;
 
-#[derive(SystemLabel)]
-struct BeltItemRenderPhase;
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+struct BeltItemRenderSet;
 
 impl Plugin for TransportBeltPlugin {
     fn build(&self, app: &mut App) {
@@ -217,15 +215,17 @@ impl Plugin for TransportBeltPlugin {
             1.,
             TimerMode::Repeating,
         )));
-        app.add_system(
+        app.add_systems(
+            Update,
             transport_belt_tick
-                .run_in_state(AppState::Running)
-                .before(BeltItemRenderPhase),
+                .run_if(in_state(AppState::Running))
+                .before(BeltItemRenderSet),
         );
-        app.add_system(
+        app.add_systems(
+            Update,
             create_transport_belt_sprites
-                .run_in_state(AppState::Running)
-                .label(BeltItemRenderPhase),
+                .run_if(in_state(AppState::Running))
+                .in_set(BeltItemRenderSet),
         );
     }
 }
@@ -243,10 +243,10 @@ mod test {
     fn transport_belt_rotate_right() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
-            .add_plugin(AssetPlugin::default())
-            .add_asset::<Mesh>()
-            .add_asset::<Scene>();
-        app.add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
+            .add_plugins(AssetPlugin::default())
+            .init_asset::<Mesh>()
+            .init_asset::<Scene>();
+        app.add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
         let dropoff_point = app.world.spawn(TransformBundle::default()).id();
 
         let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
@@ -264,7 +264,7 @@ mod test {
             ))
             .id();
 
-        app.add_system(transport_belt_tick);
+        app.add_systems(Update, transport_belt_tick);
 
         app.update();
 
@@ -289,10 +289,10 @@ mod test {
         let mut app = App::new();
 
         app.add_plugins(MinimalPlugins)
-            .add_plugin(AssetPlugin::default())
-            .add_asset::<Mesh>()
-            .add_asset::<Scene>();
-        app.add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
+            .add_plugins(AssetPlugin::default())
+            .init_asset::<Mesh>()
+            .init_asset::<Scene>();
+        app.add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
         let dropoff_point = app.world.spawn(TransformBundle::default()).id();
         let mut belt = TransportBelt::new(dropoff_point);
         belt.add(0, Product::Intermediate("Coal".into()));
@@ -307,7 +307,7 @@ mod test {
             ))
             .id();
 
-        app.add_system(transport_belt_tick);
+        app.add_systems(Update, transport_belt_tick);
 
         let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
         app.insert_resource(timer);
@@ -328,10 +328,10 @@ mod test {
     fn transport_belt_shift() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
-            .add_plugin(AssetPlugin::default())
-            .add_asset::<Mesh>()
-            .add_asset::<Scene>();
-        app.add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
+            .add_plugins(AssetPlugin::default())
+            .init_asset::<Mesh>()
+            .init_asset::<Scene>();
+        app.add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
 
         let dropoff_point = app.world.spawn(TransformBundle::default()).id();
         let mut belt = TransportBelt::new(dropoff_point);
@@ -347,7 +347,7 @@ mod test {
             ))
             .id();
 
-        app.add_system(transport_belt_tick);
+        app.add_systems(Update, transport_belt_tick);
 
         let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
         app.insert_resource(timer);
@@ -368,10 +368,10 @@ mod test {
     fn transport_belt_transfer_to_next_belt() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
-            .add_plugin(AssetPlugin::default())
-            .add_asset::<Mesh>()
-            .add_asset::<Scene>()
-            .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
+            .add_plugins(AssetPlugin::default())
+            .init_asset::<Mesh>()
+            .init_asset::<Scene>()
+            .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
 
         let dropoff_point = app
             .world
@@ -405,7 +405,7 @@ mod test {
             ))
             .id();
 
-        app.add_system(transport_belt_tick);
+        app.add_systems(Update, transport_belt_tick);
 
         let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
         app.insert_resource(timer);

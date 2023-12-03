@@ -11,7 +11,7 @@ pub fn drop_system(
     mut slot_events: EventReader<SlotEvent>,
     mut inventories_query: Query<&mut Inventory>,
 ) {
-    for event @ SlotEvent::Clicked(drop) in slot_events.iter() {
+    for event @ SlotEvent::Clicked(drop) in slot_events.read() {
         let span = info_span!("Handling drop event", ?event);
         let _enter = span.enter();
         for mut hand in hand_query.iter_mut() {
@@ -169,7 +169,7 @@ mod test {
             .resource_mut::<Events<SlotEvent>>()
             .send(SlotEvent::clicked(player_id, 0));
 
-        app.add_system(drop_system);
+        app.add_systems(Update, drop_system);
 
         app.update();
 
@@ -198,7 +198,7 @@ mod test {
             .resource_mut::<Events<SlotEvent>>()
             .send(SlotEvent::clicked(player_id, 1));
 
-        app.add_system(drop_system);
+        app.add_systems(Update, drop_system);
 
         app.update();
 
@@ -224,7 +224,7 @@ mod test {
             .resource_mut::<Events<SlotEvent>>()
             .send(SlotEvent::clicked(player_id, 0));
 
-        app.add_system(drop_system);
+        app.add_systems(Update, drop_system);
 
         app.update();
 
@@ -251,7 +251,7 @@ mod test {
             .resource_mut::<Events<SlotEvent>>()
             .send(SlotEvent::clicked(player_id, 1));
 
-        app.add_system(drop_system);
+        app.add_systems(Update, drop_system);
 
         app.update();
 

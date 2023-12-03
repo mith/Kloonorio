@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::{
     prelude::*,
-    render::{Extract, RenderApp, RenderStage},
+    render::{Extract, RenderApp, RenderSet},
     sprite::{Anchor, ExtractedSprite, ExtractedSprites, SpriteSystem},
 };
 use serde::Deserialize;
@@ -49,8 +49,12 @@ pub struct IsometricSpriteBundle {
     pub transform: Transform,
     pub global_transform: GlobalTransform,
     pub texture_atlas: Handle<TextureAtlas>,
+    /// User indication of whether an entity is visible
     pub visibility: Visibility,
-    pub computed_visibility: ComputedVisibility,
+    /// Inherited visibility of an entity.
+    pub inherited_visibility: InheritedVisibility,
+    /// Algorithmically-computed indication of whether an entity is visible and should be extracted for rendering
+    pub view_visibility: ViewVisibility,
 }
 
 pub fn extract_isometric_sprites(
@@ -59,10 +63,10 @@ pub fn extract_isometric_sprites(
     isometric_sprite_query: Extract<
         Query<(
             Entity,
-            &ComputedVisibility,
             &IsometricSprite,
             &GlobalTransform,
             &DiscreteRotation,
+            &ViewVisibility,
             &Handle<TextureAtlas>,
         )>,
     >,
@@ -70,14 +74,14 @@ pub fn extract_isometric_sprites(
     // extracted_sprites.sprites.clear();
     for (
         entity,
-        visibility,
         isometric_sprite,
         transform,
         discrete_rotation,
+        view_visibility,
         texture_atlas_handle,
     ) in isometric_sprite_query.iter()
     {
-        if !visibility.is_visible() {
+        if !view_visibility.get() {
             continue;
         }
         // PERF: we don't check in this function that the `Image` asset is ready, since it should be in most cases and hashing the handle is expensive
@@ -90,18 +94,21 @@ pub fn extract_isometric_sprites(
             let index = discrete_rotation.get();
 
             let rect = Some(texture_atlas.textures[index]);
-            extracted_sprites.sprites.push(ExtractedSprite {
+            extracted_sprites.sprites.insert(
                 entity,
-                color: isometric_sprite.color,
-                transform: unrotated_transform,
-                rect,
-                // Pass the custom size
-                custom_size: isometric_sprite.custom_size,
-                flip_x: isometric_sprite.flip_x,
-                flip_y: isometric_sprite.flip_y,
-                image_handle_id: texture_atlas.texture.id(),
-                anchor: isometric_sprite.anchor.as_vec(),
-            });
+                ExtractedSprite {
+                    color: isometric_sprite.color,
+                    transform: unrotated_transform,
+                    rect,
+                    // Pass the custom size
+                    custom_size: isometric_sprite.custom_size,
+                    flip_x: isometric_sprite.flip_x,
+                    flip_y: isometric_sprite.flip_y,
+                    image_handle_id: texture_atlas.texture.id(),
+                    anchor: isometric_sprite.anchor.as_vec(),
+                    original_entity: None,
+                },
+            );
         }
     }
 }
@@ -113,8 +120,8 @@ impl Plugin for IsometricSpritePlugin {
         app.register_type::<IsometricSprite>();
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system_to_stage(
-                RenderStage::Extract,
+            render_app.add_systems(
+                ExtractSchedule,
                 extract_isometric_sprites.after(SpriteSystem::ExtractSprites),
             );
         }

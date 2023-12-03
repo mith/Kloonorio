@@ -1,5 +1,3 @@
-use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
-
 use rand::seq::SliceRandom;
 
 use rand::SeedableRng;
@@ -25,32 +23,33 @@ use rand_xoshiro::Xoshiro256StarStar;
 use crate::types::AppState;
 use crate::types::Player;
 
-#[derive(SystemLabel)]
-pub struct TerrainStage;
+#[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct TerrainSet;
 
 pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(TilemapPlugin)
+        app.add_plugins(TilemapPlugin)
             .insert_resource(ChunkManager::default())
             .insert_resource(TerrainSettings {
                 seed: 1234567,
                 chunk_spawn_radius: 5,
             })
-            .insert_resource(CursorPos(Vec3::new(-100., -100., 0.)))
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(AppState::Running)
-                    .label(TerrainStage)
-                    .with_system(spawn_chunks_around_camera)
-                    .with_system(spawn_chunk)
-                    // .with_system(despawn_outofrange_chunks)
-                    // .with_system(debug_ui)
-                    .with_system(update_cursor_pos)
-                    // .with_system(hover_info_ui)
-                    .with_system(hovered_tile)
-                    // .with_system(highlight_tile_labels)
-                    .into(),
+            .insert_resource(CursorWorldPos(Vec3::new(-100., -100., 0.)))
+            .add_systems(
+                Update,
+                (
+                    spawn_chunks_around_camera,
+                    spawn_chunk,
+                    // despawn_outofrange_chunks,
+                    // debug_ui,
+                    update_cursor_pos,
+                    // hover_info_ui,
+                    hovered_tile,
+                    // highlight_tile_labels,
+                )
+                    .in_set(TerrainSet)
+                    .run_if(in_state(AppState::Running)),
             );
     }
 }
@@ -349,44 +348,23 @@ pub fn global_pos_to_chunk_pos(camera_pos: &Vec2) -> IVec2 {
     camera_pos / chunk_size
 }
 
-pub fn cursor_pos_in_world(
-    windows: &Windows,
-    cursor_pos: Vec2,
-    cam_t: &Transform,
-    cam: &Camera,
-) -> Vec3 {
-    let window = windows.primary();
-
-    let window_size = Vec2::new(window.width(), window.height());
-
-    // Convert screen position [0..resolution] to ndc [-1..1]
-    // (ndc = normalized device coordinates)
-    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix().inverse();
-    let ndc = (cursor_pos / window_size) * 2.0 - Vec2::ONE;
-    ndc_to_world.project_point3(ndc.extend(0.0))
-}
-
 #[derive(Debug, Default, Resource)]
-pub struct CursorPos(pub Vec3);
+pub struct CursorWorldPos(pub Vec3);
 
 fn update_cursor_pos(
-    windows: Res<Windows>,
+    window: Query<&Window>,
     camera_query: Query<(&GlobalTransform, &Camera)>,
-    mut cursor_moved_events: EventReader<CursorMoved>,
-    mut cursor_pos: ResMut<CursorPos>,
-    player_query: Query<&Transform, With<Player>>,
+    mut cursor_pos: ResMut<CursorWorldPos>,
 ) {
-    if let Some(cursor_moved) = cursor_moved_events.iter().last() {
-        for (_cam_t, cam) in camera_query.iter() {
-            let player_transform = player_query.single();
-            *cursor_pos = CursorPos(cursor_pos_in_world(
-                &windows,
-                cursor_moved.position,
-                player_transform,
-                cam,
-            ));
-        }
-    }
+    let Some(cursor_position) = window.single().cursor_position() else {
+        return;
+    };
+    let (camera_transform, camera) = camera_query.single();
+    let Some(point) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
+        return;
+    };
+
+    *cursor_pos = CursorWorldPos(point.extend(0.));
 }
 
 #[derive(Component)]
@@ -401,7 +379,7 @@ pub struct HoveredTile {
 
 pub fn hovered_tile(
     mut commands: Commands,
-    cursor_pos: Res<CursorPos>,
+    cursor_pos: Res<CursorWorldPos>,
     hovered_tile_query: Query<Entity, With<HoveredTile>>,
     chunks_query: Query<
         (

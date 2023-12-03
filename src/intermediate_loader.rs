@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedAsset},
+    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     reflect::TypeUuid,
     utils::BoxedFuture,
@@ -15,31 +15,40 @@ pub struct Intermediate {
     pub name: String,
 }
 
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "09483f6e-220b-486c-aaf2-857b4c9cab23"]
 pub struct IntermediateAsset(pub Vec<Intermediate>);
 
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum IntermediateAssetLoaderError {
+    /// An [IO](std::io) Error.
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [Ron](ron) Error.
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+
 impl AssetLoader for IntermediateAssetLoader {
+    type Asset = IntermediateAsset;
+    type Settings = ();
+    type Error = IntermediateAssetLoaderError;
     fn load<'a>(
         &'a self,
-        bytes: &'a [u8],
+        reader: &'a mut Reader,
+        _settings: &'a Self::Settings,
         load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<(), bevy::asset::Error>> {
+    ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         Box::pin(async move {
             let path = load_context.path().display().to_string();
             let _span = info_span!("Loading resource asset", path = path);
             let _enter = _span.enter();
-            match ron::de::from_bytes(bytes) {
-                Ok(resources) => {
-                    load_context.set_default_asset(LoadedAsset::new(IntermediateAsset(resources)));
-                    debug!("Finished loading");
-                    Ok(())
-                }
-                Err(err) => {
-                    error!(error = err.to_string());
-                    Err(bevy::asset::Error::new(err))
-                }
-            }
+            let mut buf = Vec::new();
+            reader.read_to_end(&mut buf).await?;
+            let intermediate_asset = ron::de::from_bytes(&buf)?;
+            debug!("Finished loading");
+            Ok(IntermediateAsset(intermediate_asset))
         })
     }
 
@@ -52,7 +61,7 @@ pub struct IntermediateLoaderPlugin;
 
 impl Plugin for IntermediateLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_asset::<IntermediateAsset>()
+        app.init_asset::<IntermediateAsset>()
             .init_asset_loader::<IntermediateAssetLoader>();
     }
 }

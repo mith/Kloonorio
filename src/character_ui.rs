@@ -1,5 +1,5 @@
 use bevy::{prelude::*, utils::HashMap};
-use bevy_egui::EguiContext;
+use bevy_egui::EguiContexts;
 
 use egui::{epaint, Response, Sense, Stroke};
 
@@ -7,8 +7,8 @@ use crate::{
     inventory::Inventory,
     inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
     loading::{Icons, Recipes},
-    terrain::TerrainStage,
-    types::{ActiveCraft, CraftingQueue, Player, Recipe, UiPhase},
+    terrain::TerrainSet,
+    types::{ActiveCraft, CraftingQueue, Player, Recipe, UiSet},
 };
 
 pub fn recipe_icon(
@@ -19,9 +19,9 @@ pub fn recipe_icon(
     let icon_name = &recipe.name.to_lowercase().replace(" ", "_");
     let response = {
         if let Some(egui_img) = icons.get(icon_name) {
-            ui.image(*egui_img, [32., 32.])
+            ui.add(egui::Image::new((*egui_img, egui::Vec2::new(32., 32.))))
         } else if let Some(no_icon_img) = icons.get("no_icon") {
-            ui.image(*no_icon_img, [32., 32.])
+            ui.add(egui::Image::new((*no_icon_img, egui::Vec2::new(32., 32.))))
         } else {
             ui.label("NO ICON")
         }
@@ -59,8 +59,10 @@ pub fn craft_ui(
                             ui.painter().add(epaint::RectShape {
                                 rounding: style.rounding,
                                 fill: bg_fill,
-                                stroke: Stroke::none(),
+                                stroke: Stroke::NONE,
                                 rect,
+                                fill_texture_id: egui::TextureId::Managed(0),
+                                uv: egui::Rect::ZERO,
                             });
                             ui.child_ui(rect, *ui.layout())
                                 .add_enabled_ui(resources_available, |ui| {
@@ -81,10 +83,12 @@ pub fn craft_ui(
                     } else {
                         let (_id, rect) = ui.allocate_space(egui::Vec2::new(32., 32.));
                         ui.painter().add(epaint::RectShape {
-                            rounding: egui::Rounding::none(),
+                            rounding: egui::Rounding::ZERO,
                             fill: egui::Color32::from_gray(40),
-                            stroke: Stroke::none(),
+                            stroke: Stroke::NONE,
                             rect,
+                            fill_texture_id: egui::TextureId::Managed(0),
+                            uv: egui::Rect::ZERO,
                         });
                     }
                 }
@@ -94,7 +98,7 @@ pub fn craft_ui(
 }
 
 fn character_ui(
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_context: EguiContexts,
     mut inventory_query: Query<(Entity, &mut Inventory, &Hand, &mut CraftingQueue), With<Player>>,
     blueprints: Res<Recipes>,
     icons: Res<Icons>,
@@ -115,18 +119,18 @@ fn character_ui(
         });
 }
 
-#[derive(SystemLabel)]
-pub struct CharacterUiPhase;
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CharacterUiSet;
 
 pub struct CharacterUiPlugin;
 impl Plugin for CharacterUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(
-            SystemSet::new()
-                .label(UiPhase)
-                .label(CharacterUiPhase)
-                .after(TerrainStage)
-                .with_system(character_ui),
+        app.add_systems(
+            Update,
+            character_ui
+                .in_set(UiSet)
+                .in_set(CharacterUiSet)
+                .after(TerrainSet),
         );
     }
 }

@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedAsset},
+    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     reflect::TypeUuid,
     utils::BoxedFuture,
@@ -9,33 +9,42 @@ use serde::Deserialize;
 use crate::types::Recipe;
 
 #[derive(Default)]
-pub struct RecipeAssetLoader;
+pub struct RecipesAssetLoader;
 
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "6b92cebe-2ec6-4e22-b85d-499873f9c22c"]
-pub struct RecipeAsset(pub Vec<Recipe>);
+pub struct RecipesAsset(pub Vec<Recipe>);
 
-impl AssetLoader for RecipeAssetLoader {
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum RecipeAssetLoaderError {
+    /// An [IO](std::io) Error.
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [Ron](ron) Error.
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+
+impl AssetLoader for RecipesAssetLoader {
+    type Asset = RecipesAsset;
+    type Error = RecipeAssetLoaderError;
+    type Settings = ();
     fn load<'a>(
         &'a self,
-        bytes: &'a [u8],
+        reader: &'a mut Reader,
+        settings: &'a Self::Settings,
         load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<(), bevy::asset::Error>> {
+    ) -> BoxedFuture<'a, Result<RecipesAsset, Self::Error>> {
         Box::pin(async move {
             let path = load_context.path().display().to_string();
             let _span = info_span!("Loading recipes asset", path = path);
             let _enter = _span.enter();
-            match ron::de::from_bytes(bytes) {
-                Ok(recipes) => {
-                    load_context.set_default_asset(LoadedAsset::new(RecipeAsset(recipes)));
-                    debug!("Finished loading");
-                    Ok(())
-                }
-                Err(err) => {
-                    error!(error = err.to_string());
-                    Err(bevy::asset::Error::new(err))
-                }
-            }
+            let mut buf = Vec::new();
+            reader.read_to_end(&mut buf).await?;
+            let recipes_asset = ron::de::from_bytes(&buf)?;
+            debug!("Finished loading");
+            Ok(RecipesAsset(recipes_asset))
         })
     }
 
@@ -48,7 +57,7 @@ pub struct RecipeLoaderPlugin;
 
 impl Plugin for RecipeLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_asset::<RecipeAsset>()
-            .init_asset_loader::<RecipeAssetLoader>();
+        app.init_asset::<RecipesAsset>()
+            .init_asset_loader::<RecipesAssetLoader>();
     }
 }

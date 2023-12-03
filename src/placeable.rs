@@ -17,7 +17,7 @@ use crate::{
     miner::Miner,
     smelter::Smelter,
     structure_loader::{Structure, StructureComponent},
-    terrain::CursorPos,
+    terrain::CursorWorldPos,
     types::{CraftingQueue, Product},
     HoveringUI,
 };
@@ -31,7 +31,7 @@ pub struct Building;
 pub fn placeable(
     mut commands: Commands,
     mut placeable_query: Query<(Entity, &mut Hand), Without<HoveringUI>>,
-    cursor_pos: Res<CursorPos>,
+    cursor_pos: Res<CursorWorldPos>,
     mouse_input: Res<Input<MouseButton>>,
     ghosts: Query<Entity, With<Ghost>>,
     asset_server: Res<AssetServer>,
@@ -122,7 +122,7 @@ pub fn placeable_rotation(
     }
 }
 
-fn cursor_to_structure_position(cursor_pos: &CursorPos, structure: &Structure) -> Vec2 {
+fn cursor_to_structure_position(cursor_pos: &CursorWorldPos, structure: &Structure) -> Vec2 {
     let min_corner: Vec2 = cursor_pos.0.xy() - (structure.size.as_vec2() / 2.0);
     let grid_fitted_min_corner = min_corner.ceil();
     let structure_rect = Rect::from_corners(
@@ -338,7 +338,7 @@ mod test {
         input.press(KeyCode::R);
         app.world.insert_resource(input);
 
-        app.add_system(placeable_rotation);
+        app.add_systems(Update, placeable_rotation);
         app.update();
 
         assert_eq!(
@@ -355,7 +355,7 @@ mod test {
 
     #[test]
     fn cursor_to_structure_position_zero() {
-        let cursor_pos = CursorPos(Vec3::ZERO);
+        let cursor_pos = CursorWorldPos(Vec3::ZERO);
         let structure = Structure {
             name: "test".into(),
             size: IVec2::new(1, 1),

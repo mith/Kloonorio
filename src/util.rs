@@ -306,7 +306,7 @@ mod test {
 
         app.insert_resource(Target(target_entity_id));
 
-        app.add_system(test_system);
+        app.add_systems(Update, test_system);
         app.update();
 
         let result = app.world.get_resource::<Result>().unwrap();
@@ -334,7 +334,7 @@ mod test {
 
         app.insert_resource(Target(target_entity_id));
 
-        app.add_system(test_system);
+        app.add_systems(Update, test_system);
         app.update();
 
         let result = app.world.get_resource::<Result>().unwrap();
