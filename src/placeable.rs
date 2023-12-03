@@ -7,19 +7,19 @@ use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
 use crate::terrain::TILE_SIZE;
 use crate::transport_belt::TransportBelt;
 
-use crate::discrete_rotation::DiscreteRotation;
+use crate::ui::HoveringUI;
 use crate::{
     burner::Burner,
+    discrete_rotation::DiscreteRotation,
     inserter::Inserter,
     inventory::{Fuel, Inventory, Output, Source},
-    inventory_grid::Hand,
     loading::Structures,
     miner::Miner,
     smelter::Smelter,
     structure_loader::{Structure, StructureComponent},
     terrain::CursorWorldPos,
     types::{CraftingQueue, Product},
-    HoveringUI,
+    ui::inventory_grid::Hand,
 };
 
 #[derive(Component)]

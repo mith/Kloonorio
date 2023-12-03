@@ -4,12 +4,13 @@ use bevy_egui::EguiContexts;
 use crate::{
     burner::Burner,
     inventory::{Fuel, Inventory, Output, Source},
-    inventory_grid::{inventory_grid, Hand, SlotEvent},
     loading::Icons,
+    picker::SelectedBuilding,
     placeable::Building,
-    types::{CraftingQueue, Player},
+    player::Player,
+    types::CraftingQueue,
+    ui::inventory_grid::{inventory_grid, Hand, SlotEvent},
     util::{get_inventory_child, FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery},
-    SelectedBuilding,
 };
 
 pub fn building_ui(

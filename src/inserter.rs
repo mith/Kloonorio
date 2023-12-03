@@ -15,7 +15,6 @@ use crate::{
 #[derive(Component)]
 pub struct Inserter {
     holding: Option<Stack>,
-    speed: f32,
     capacity: u32,
     timer: Timer,
 }
@@ -24,7 +23,6 @@ impl Inserter {
     pub fn new(speed: f32, capacity: u32) -> Self {
         Inserter {
             holding: None,
-            speed,
             capacity,
             timer: Timer::from_seconds(speed, TimerMode::Repeating),
         }

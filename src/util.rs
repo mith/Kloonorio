@@ -1,6 +1,6 @@
 use bevy::{
     ecs::{
-        query::{QueryEntityError, ReadOnlyWorldQuery, WorldQuery},
+        query::{ReadOnlyWorldQuery, WorldQuery},
         system::SystemParam,
     },
     math::Vec3Swizzles,
@@ -224,19 +224,6 @@ pub struct Inventories<'w, 's> {
     pub fuel_inventories: Query<'w, 's, FuelInventoryQuery>,
     pub source_inventories: Query<'w, 's, SourceInventoryQuery>,
     pub output_inventories: Query<'w, 's, OutputInventoryQuery>,
-}
-
-impl<'w, 's> Inventories<'w, 's> {
-    pub fn get_inventory(&mut self, entity: Entity) -> Result<Mut<Inventory>, QueryEntityError> {
-        self.inventories.get_mut(entity)
-    }
-
-    pub fn get_fuel_inventory(&self, children: &Children) -> Option<&Inventory> {
-        children
-            .iter()
-            .flat_map(|c| self.fuel_inventories.get(*c).map(|i| i.inventory))
-            .next()
-    }
 }
 
 /// Get the inventory of a child entity.

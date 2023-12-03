@@ -5,10 +5,11 @@ use egui::{epaint, Response, Sense, Stroke};
 
 use crate::{
     inventory::Inventory,
-    inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
     loading::{Icons, Recipes},
+    player::Player,
     terrain::TerrainSet,
-    types::{ActiveCraft, CraftingQueue, Player, Recipe, UiSet},
+    types::{ActiveCraft, CraftingQueue, Recipe, UiSet},
+    ui::inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
 };
 
 pub fn recipe_icon(

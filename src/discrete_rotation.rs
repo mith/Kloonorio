@@ -12,12 +12,6 @@ pub enum CompassDirection {
     NorthWest,
 }
 
-impl CompassDirection {
-    pub fn to_radians(&self) -> f32 {
-        (*self as u32) as f32 * std::f32::consts::PI / 4.0
-    }
-}
-
 pub enum SideCount {
     One = 1,
     Two = 2,
@@ -88,13 +82,6 @@ impl DiscreteRotation {
                 _ => unreachable!(),
             },
             _ => unreachable!(),
-        }
-    }
-
-    pub fn opposite(&self) -> Self {
-        Self {
-            current: (self.current + self.max / 2) % self.max,
-            max: self.max,
         }
     }
 

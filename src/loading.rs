@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use bevy::{
-    asset::{LoadState, LoadedFolder, RecursiveDependencyLoadState},
+    asset::{LoadedFolder, RecursiveDependencyLoadState},
     prelude::*,
     utils::HashMap,
 };

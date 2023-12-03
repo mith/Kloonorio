@@ -37,9 +37,10 @@ impl AssetLoader for IntermediateAssetLoader {
     fn load<'a>(
         &'a self,
         reader: &'a mut Reader,
-        _settings: &'a Self::Settings,
+        settings: &'a Self::Settings,
         load_context: &'a mut LoadContext,
     ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
+        let _ = settings;
         Box::pin(async move {
             let path = load_context.path().display().to_string();
             let _span = info_span!("Loading resource asset", path = path);

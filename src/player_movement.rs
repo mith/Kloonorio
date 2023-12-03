@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::types::{AppState, Player};
+use crate::{player::Player, types::AppState};
 
 fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,

@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::{
     prelude::*,
-    render::{Extract, RenderApp, RenderSet},
+    render::{Extract, RenderApp},
     sprite::{Anchor, ExtractedSprite, ExtractedSprites, SpriteSystem},
 };
 use serde::Deserialize;

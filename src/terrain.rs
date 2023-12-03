@@ -20,8 +20,7 @@ use fast_poisson::Poisson2D;
 use noise::{NoiseFn, OpenSimplex, ScalePoint, Seedable, SuperSimplex, Turbulence};
 use rand_xoshiro::Xoshiro256StarStar;
 
-use crate::types::AppState;
-use crate::types::Player;
+use crate::{player::Player, types::AppState};
 
 #[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct TerrainSet;
@@ -88,7 +87,6 @@ pub struct ChunkManager {
     spawned_chunks: HashSet<IVec2>,
     loading_chunks: HashSet<IVec2>,
     pub entities: HashMap<IVec2, Entity>,
-    terrain_root: Option<Entity>,
 }
 
 #[derive(Debug)]

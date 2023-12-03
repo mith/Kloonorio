@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext, LoadedAsset},
+    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     reflect::TypeUuid,
     utils::{BoxedFuture, HashSet},
@@ -59,9 +59,10 @@ impl AssetLoader for StructuresAssetLoader {
     fn load<'a>(
         &'a self,
         reader: &'a mut Reader,
-        _settings: &'a Self::Settings,
+        settings: &'a Self::Settings,
         load_context: &'a mut LoadContext,
     ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
+        let _ = settings;
         Box::pin(async move {
             let path = load_context.path().display().to_string();
             let _span = info_span!("Loading structures asset", path = path);

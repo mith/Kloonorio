@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     inventory::{drop_within_inventory, transfer_between_slots, Inventory, Slot, Stack},
-    inventory_grid::{Hand, InventoryIndex, SlotEvent},
-    types::Player,
+    player::Player,
+    ui::inventory_grid::{Hand, InventoryIndex, SlotEvent},
 };
 
 pub fn drop_system(
@@ -59,7 +59,7 @@ pub fn drop_system(
 
 #[cfg(test)]
 mod test {
-    use crate::{inventory::Stack, inventory_grid::InventoryIndex, types::Product};
+    use crate::{inventory::Stack, types::Product, ui::inventory_grid::InventoryIndex};
 
     use super::*;
     use bevy::utils::HashMap;

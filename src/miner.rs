@@ -1,11 +1,11 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
-use bevy_rapier2d::prelude::{Collider, RapierContext};
+use bevy_rapier2d::prelude::RapierContext;
 
 use crate::{
     inserter::Dropoff,
+    interact::is_minable,
     inventory::{Inventory, Output, Stack},
-    is_minable,
     terrain::Terrain,
     transport_belt::TransportBelt,
     types::{Powered, Working},

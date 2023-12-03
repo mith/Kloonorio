@@ -4,7 +4,8 @@ use bevy::{asset::LoadedFolder, prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
 
 use crate::{
-    intermediate_loader::IntermediateAsset, structure_loader::StructuresAsset, RecipesAsset,
+    intermediate_loader::IntermediateAsset, recipe_loader::RecipesAsset,
+    structure_loader::StructuresAsset,
 };
 
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash, States, Default)]
@@ -27,9 +28,6 @@ pub struct GameState {
     pub resources_loaded: bool,
     pub resources_handle: Handle<IntermediateAsset>,
 }
-
-#[derive(Component)]
-pub struct Player;
 
 #[derive(Component)]
 pub struct StaticDimensions(pub IVec2);

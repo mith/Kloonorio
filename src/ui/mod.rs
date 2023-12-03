@@ -1,0 +1,59 @@
+pub mod building_ui;
+pub mod character_ui;
+pub mod drag_and_drop;
+pub mod inventory_grid;
+
+use bevy::{
+    app::{App, Plugin, Update},
+    ecs::{
+        component::Component,
+        entity::Entity,
+        query::{With, Without},
+        schedule::{common_conditions::in_state, IntoSystemConfigs},
+        system::{Commands, Query},
+    },
+};
+use bevy_egui::EguiContexts;
+
+use self::{
+    character_ui::CharacterUiPlugin, drag_and_drop::drop_system, inventory_grid::SlotEvent,
+};
+use crate::{
+    player::Player,
+    types::{AppState, UiSet},
+};
+
+pub struct UiPlugin;
+
+impl Plugin for UiPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins((CharacterUiPlugin,))
+            .add_systems(Update, (hovering_ui, building_ui::building_ui))
+            .add_event::<SlotEvent>()
+            .add_systems(
+                Update,
+                drop_system.after(UiSet).run_if(in_state(AppState::Running)),
+            );
+    }
+}
+
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct HoveringUI;
+
+fn hovering_ui(
+    mut commands: Commands,
+    mut egui_context: EguiContexts,
+    hovering_player_query: Query<Entity, (With<Player>, With<HoveringUI>)>,
+    non_hovering_player_query: Query<Entity, (With<Player>, Without<HoveringUI>)>,
+) {
+    if egui_context.ctx_mut().is_pointer_over_area() {
+        for entity in non_hovering_player_query.iter() {
+            commands.entity(entity).insert(HoveringUI);
+        }
+    } else {
+        for entity in hovering_player_query.iter() {
+            commands.entity(entity).remove::<HoveringUI>();
+        }
+    }
+}

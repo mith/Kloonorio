@@ -36,6 +36,7 @@ impl AssetLoader for RecipesAssetLoader {
         settings: &'a Self::Settings,
         load_context: &'a mut LoadContext,
     ) -> BoxedFuture<'a, Result<RecipesAsset, Self::Error>> {
+        let _ = settings;
         Box::pin(async move {
             let path = load_context.path().display().to_string();
             let _span = info_span!("Loading recipes asset", path = path);
