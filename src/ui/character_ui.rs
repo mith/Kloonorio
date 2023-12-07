@@ -71,6 +71,12 @@ pub fn craft_ui(
                                 });
                             response
                         });
+                        if response.inner.clone().hovered() {
+                            response.inner.clone().on_hover_ui_at_pointer(|ui| {
+                                ui.label(recipe.name.clone());
+                                ui.label(format!("Crafting time: {}s", recipe.crafting_time));
+                            });
+                        }
                         if response.inner.clicked() {
                             inventory.remove_items(&recipe.materials);
                             build_queue.0.push_back(ActiveCraft {
