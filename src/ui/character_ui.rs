@@ -49,32 +49,29 @@ pub fn craft_ui(
                 for _ in 0..10 {
                     if let Some(recipe) = recipe_it.next() {
                         let resources_available = inventory.has_items(&recipe.ingredients);
-                        let response = ui.add_enabled_ui(resources_available, |ui| {
-                            let (rect, response) = ui.allocate_exact_size(
-                                egui::Vec2::new(32., 32.),
-                                Sense::hover().union(Sense::click()),
-                            );
-                            let (style, bg_fill) = if response.hovered() {
-                                (ui.visuals().widgets.active, HIGHLIGHT_COLOR)
-                            } else {
-                                (ui.visuals().widgets.inactive, egui::Color32::from_gray(40))
-                            };
-                            ui.painter().add(epaint::RectShape {
-                                rounding: style.rounding,
-                                fill: bg_fill,
-                                stroke: Stroke::NONE,
-                                rect,
-                                fill_texture_id: egui::TextureId::Managed(0),
-                                uv: egui::Rect::ZERO,
-                            });
-                            ui.child_ui(rect, *ui.layout())
-                                .add_enabled_ui(resources_available, |ui| {
-                                    recipe_icon(ui, recipe, icons)
-                                });
-                            response
+                        let (rect, response) = ui.allocate_exact_size(
+                            egui::Vec2::new(32., 32.),
+                            Sense::hover().union(Sense::click()),
+                        );
+                        let (style, bg_fill) = if response.hovered() {
+                            (ui.visuals().widgets.active, HIGHLIGHT_COLOR)
+                        } else {
+                            (ui.visuals().widgets.inactive, egui::Color32::from_gray(40))
+                        };
+                        ui.painter().add(epaint::RectShape {
+                            rounding: style.rounding,
+                            fill: bg_fill,
+                            stroke: Stroke::NONE,
+                            rect,
+                            fill_texture_id: egui::TextureId::Managed(0),
+                            uv: egui::Rect::ZERO,
                         });
-                        if response.inner.clone().hovered() {
-                            response.inner.clone().on_hover_ui_at_pointer(|ui| {
+                        ui.child_ui(rect, *ui.layout())
+                            .add_enabled_ui(resources_available, |ui| {
+                                recipe_icon(ui, recipe, icons)
+                            });
+                        if response.clone().hovered() {
+                            response.clone().on_hover_ui_at_pointer(|ui| {
                                 egui::Grid::new("recipe_info")
                                     .spacing([3., 3.])
                                     .with_row_color(|row, _style| {
@@ -112,7 +109,7 @@ pub fn craft_ui(
                                     });
                             });
                         }
-                        if response.inner.clicked() {
+                        if response.clicked() {
                             inventory.remove_items(&recipe.ingredients);
                             build_queue.0.push_back(ActiveCraft {
                                 blueprint: recipe.clone(),
