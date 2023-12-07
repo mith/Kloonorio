@@ -72,6 +72,3 @@ pub struct Recipe {
     pub crafting_time: f32,
     pub name: String,
 }
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, SystemSet)]
-pub struct UiSet;

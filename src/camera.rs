@@ -8,9 +8,9 @@ use bevy::{
     render::camera::OrthographicProjection,
 };
 
-pub struct CameraPlugin;
+pub struct PanZoomCameraPlugin;
 
-impl Plugin for CameraPlugin {
+impl Plugin for PanZoomCameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, camera_zoom)
             .insert_resource(CameraSettings {

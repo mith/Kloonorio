@@ -8,9 +8,11 @@ use crate::{
     loading::{Icons, Recipes},
     player::Player,
     terrain::TerrainSet,
-    types::{ActiveCraft, CraftingQueue, Recipe, UiSet},
+    types::{ActiveCraft, CraftingQueue, Recipe},
     ui::inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
 };
+
+use super::UiSet;
 
 pub fn recipe_icon(
     ui: &mut egui::Ui,

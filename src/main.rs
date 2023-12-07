@@ -2,6 +2,7 @@ use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*, render::camera::C
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier2d::prelude::*;
+use camera::PanZoomCameraPlugin;
 use craft::CraftPlugin;
 
 use inserter::{burner_inserter_tick, inserter_tick};
@@ -91,7 +92,7 @@ fn main() {
             CraftPlugin,
             PlayerPlugin,
         ))
-        .add_plugins(CameraPlugin)
+        .add_plugins(PanZoomCameraPlugin)
         .add_systems(
             Update,
             (
