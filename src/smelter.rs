@@ -31,7 +31,7 @@ pub fn smelter_tick(
             crafting_queue.0.push_back(ActiveCraft {
                 timer: Timer::from_seconds(1., TimerMode::Repeating),
                 blueprint: Recipe {
-                    materials: vec![(Product::Intermediate("Iron ore".into()), 1u32)],
+                    ingredients: vec![(Product::Intermediate("Iron ore".into()), 1u32)],
                     products: vec![(Product::Intermediate("Iron plate".into()), 1u32)],
                     crafting_time: 0.5,
                     name: "Iron Plate".into(),

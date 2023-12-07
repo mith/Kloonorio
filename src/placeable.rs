@@ -4,6 +4,7 @@ use bevy_rapier2d::prelude::*;
 
 use crate::inserter::{Dropoff, Pickup};
 use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
+use crate::picker::Pickable;
 use crate::terrain::TILE_SIZE;
 use crate::transport_belt::TransportBelt;
 
@@ -178,6 +179,7 @@ pub fn place_structure(
             structure_collider(structure),
             Building,
             Name::new(structure.name.to_string()),
+            Pickable,
         ))
         .id();
     spawn_components(commands, structure, structure_entity);

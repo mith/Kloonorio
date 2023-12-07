@@ -1,10 +1,10 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
-use egui::{epaint, Response, Sense, Stroke};
+use egui::{epaint, style, Color32, Response, RichText, Sense, Stroke};
 
 use crate::{
-    inventory::Inventory,
+    inventory::{Inventory, Stack},
     loading::{Icons, Recipes},
     player::Player,
     terrain::TerrainSet,
@@ -12,7 +12,7 @@ use crate::{
     ui::inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
 };
 
-use super::UiSet;
+use super::{inventory_grid::resource_icon, UiSet};
 
 pub fn recipe_icon(
     ui: &mut egui::Ui,
@@ -48,7 +48,7 @@ pub fn craft_ui(
             for _ in 0..10 {
                 for _ in 0..10 {
                     if let Some(recipe) = recipe_it.next() {
-                        let resources_available = inventory.has_items(&recipe.materials);
+                        let resources_available = inventory.has_items(&recipe.ingredients);
                         let response = ui.add_enabled_ui(resources_available, |ui| {
                             let (rect, response) = ui.allocate_exact_size(
                                 egui::Vec2::new(32., 32.),
@@ -75,12 +75,45 @@ pub fn craft_ui(
                         });
                         if response.inner.clone().hovered() {
                             response.inner.clone().on_hover_ui_at_pointer(|ui| {
-                                ui.label(recipe.name.clone());
-                                ui.label(format!("Crafting time: {}s", recipe.crafting_time));
+                                egui::Grid::new("recipe_info")
+                                    .spacing([3., 3.])
+                                    .with_row_color(|row, _style| {
+                                        if row == 0 {
+                                            Some(Color32::from_gray(200))
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .show(ui, |ui| {
+                                        ui.label(
+                                            RichText::new(recipe.name.clone())
+                                                .heading()
+                                                .color(Color32::BLACK),
+                                        );
+                                        ui.end_row();
+                                        ui.label("Ingredients:");
+                                        ui.end_row();
+                                        for (ingredient, amount) in &recipe.ingredients {
+                                            ui.horizontal(|ui| {
+                                                resource_icon(
+                                                    ui,
+                                                    &Stack::new(ingredient.clone(), *amount),
+                                                    icons,
+                                                );
+                                                ui.label(format!("{} x {}", amount, ingredient));
+                                            });
+                                            ui.end_row();
+                                        }
+                                        ui.end_row();
+                                        ui.label(format!(
+                                            "Crafting time: {}s",
+                                            recipe.crafting_time
+                                        ));
+                                    });
                             });
                         }
                         if response.inner.clicked() {
-                            inventory.remove_items(&recipe.materials);
+                            inventory.remove_items(&recipe.ingredients);
                             build_queue.0.push_back(ActiveCraft {
                                 blueprint: recipe.clone(),
                                 timer: Timer::from_seconds(
