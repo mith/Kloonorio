@@ -1,4 +1,4 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{input, prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
 use egui::{epaint, Color32, Pos2, Response, RichText, Sense, Stroke};
@@ -179,25 +179,46 @@ pub fn recipe_tooltip(
         .response
 }
 
+#[derive(Resource, Default)]
+struct CharacterUiOpen(bool);
+
+fn toggle_character_ui(
+    mut character_ui_open: ResMut<CharacterUiOpen>,
+    input: Res<Input<input::keyboard::KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::Period) {
+        character_ui_open.0 = !character_ui_open.0;
+    }
+}
+
 fn character_ui(
     mut egui_context: EguiContexts,
     mut inventory_query: Query<(Entity, &mut Inventory, &Hand, &mut CraftingQueue), With<Player>>,
     blueprints: Res<Recipes>,
     icons: Res<Icons>,
     mut slot_events: EventWriter<SlotEvent>,
+    character_ui_open: Res<CharacterUiOpen>,
 ) {
+    if !character_ui_open.0 {
+        return;
+    }
+
     egui::Window::new("Character")
         .resizable(false)
+        .collapsible(false)
+        .title_bar(false)
         .show(egui_context.ctx_mut(), |ui| {
-            for (player_entity, ref mut inventory, hand, ref mut crafting_queue) in
-                &mut inventory_query
-            {
-                ui.horizontal_top(|ui| {
+            let (player_entity, ref mut inventory, hand, ref mut crafting_queue) =
+                inventory_query.single_mut();
+            egui::Grid::new("character_ui_grid")
+                .spacing([10., 10.])
+                .show(ui, |ui| {
+                    ui.heading("Character");
+                    ui.heading("Crafting");
+                    ui.end_row();
                     inventory_grid(player_entity, inventory, ui, &icons, hand, &mut slot_events);
-                    ui.separator();
                     craft_ui(ui, &blueprints, inventory, crafting_queue, &icons);
                 });
-            }
         });
 }
 
@@ -207,9 +228,10 @@ pub struct CharacterUiSet;
 pub struct CharacterUiPlugin;
 impl Plugin for CharacterUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<CharacterUiOpen>().add_systems(
             Update,
-            character_ui
+            (toggle_character_ui, character_ui)
+                .chain()
                 .in_set(UiSet)
                 .in_set(CharacterUiSet)
                 .after(TerrainSet),
