@@ -60,7 +60,7 @@ pub struct Working;
 pub struct CraftingQueue(pub VecDeque<ActiveCraft>);
 
 pub struct ActiveCraft {
-    pub blueprint: Recipe,
+    pub recipe: Recipe,
     pub timer: Timer,
 }
 

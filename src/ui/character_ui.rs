@@ -116,7 +116,7 @@ pub fn craft_ui(
                         if response.clicked() {
                             inventory.remove_items(&recipe.ingredients);
                             build_queue.0.push_back(ActiveCraft {
-                                blueprint: recipe.clone(),
+                                recipe: recipe.clone(),
                                 timer: Timer::from_seconds(
                                     recipe.crafting_time,
                                     TimerMode::Repeating,
@@ -143,7 +143,7 @@ pub fn craft_ui(
         });
 }
 
-fn recipe_tooltip(
+pub fn recipe_tooltip(
     ui: &mut egui::Ui,
     recipe: &Recipe,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,

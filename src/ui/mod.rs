@@ -1,5 +1,6 @@
 pub mod building_ui;
 pub mod character_ui;
+mod crafting_queue_ui;
 pub mod drag_and_drop;
 pub mod inventory_grid;
 
@@ -28,7 +29,14 @@ pub struct UiSet;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((CharacterUiPlugin,))
-            .add_systems(Update, (hovering_ui, building_ui::building_ui))
+            .add_systems(
+                Update,
+                (
+                    hovering_ui,
+                    building_ui::building_ui,
+                    crafting_queue_ui::crafting_queue_ui,
+                ),
+            )
             .add_event::<SlotEvent>()
             .add_systems(
                 Update,

@@ -29,7 +29,7 @@ fn craft_ticker(
     for (mut inventory, mut build_queue) in &mut player_query {
         if let Some(active_build) = build_queue.0.front_mut() {
             if active_build.timer.tick(time.delta()).just_finished() {
-                inventory.add_items(&active_build.blueprint.products);
+                inventory.add_items(&active_build.recipe.products);
                 build_queue.0.pop_front();
             }
         }

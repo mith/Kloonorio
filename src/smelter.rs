@@ -30,7 +30,7 @@ pub fn smelter_tick(
             source.remove_items(&[(Product::Intermediate("Iron ore".into()), 1)]);
             crafting_queue.0.push_back(ActiveCraft {
                 timer: Timer::from_seconds(1., TimerMode::Repeating),
-                blueprint: Recipe {
+                recipe: Recipe {
                     ingredients: vec![(Product::Intermediate("Iron ore".into()), 1u32)],
                     products: vec![(Product::Intermediate("Iron plate".into()), 1u32)],
                     crafting_time: 0.5,
@@ -42,7 +42,7 @@ pub fn smelter_tick(
 
         if let Some(active_build) = crafting_queue.0.front_mut() {
             if active_build.timer.tick(time.delta()).just_finished() {
-                output.add_items(&active_build.blueprint.products);
+                output.add_items(&active_build.recipe.products);
                 crafting_queue.0.pop_front();
                 commands.entity(entity).remove::<Working>();
             }
