@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::utils::HashMap;
-use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
+use egui::{
+    epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, RichText, Sense, Stroke,
+};
 
 use crate::{
     discrete_rotation::DiscreteRotation,
@@ -86,7 +88,7 @@ fn drop_target<R>(
     InnerResponse::new(ret, response)
 }
 
-pub fn resource_stack(
+pub fn item_slot(
     ui: &mut egui::Ui,
     stack: &Stack,
     icons: &HashMap<String, egui::TextureId>,
@@ -215,17 +217,17 @@ pub fn inventory_grid(
                         let response = drop_target(ui, item_id, |ui| {
                             if let Some(stack) = slot {
                                 let response = drag_source(ui, item_id, |ui| {
-                                    resource_stack(ui, stack, icons);
+                                    item_slot(ui, stack, icons);
                                 });
-                                if response.clone().hovered() {
-                                    response
-                                        .clone()
-                                        .on_hover_text_at_pointer(stack.resource.to_string());
-                                }
+
                                 if response.clicked() {
                                     info!(inventory = ?entity, slot = slot_index, "Clicked item");
                                     slot_events.send(SlotEvent::clicked(entity, slot_index));
                                 }
+
+                                response.on_hover_ui_at_pointer(|ui| {
+                                    item_tooltip(ui, stack);
+                                });
                             }
                         })
                         .response;
@@ -238,4 +240,25 @@ pub fn inventory_grid(
                 ui.end_row();
             }
         });
+}
+
+fn item_tooltip(ui: &mut egui::Ui, stack: &Stack) -> Response {
+    egui::Grid::new("item_info")
+        .spacing([3., 3.])
+        .with_row_color(|row, _style| {
+            if row == 0 {
+                Some(Color32::from_gray(200))
+            } else {
+                None
+            }
+        })
+        .show(ui, |ui| {
+            ui.label(
+                RichText::new(stack.resource.to_string())
+                    .heading()
+                    .color(Color32::BLACK),
+            );
+            ui.end_row();
+        })
+        .response
 }

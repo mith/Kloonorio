@@ -151,26 +151,24 @@ impl Inventory {
 
     pub fn has_items(&self, items: &[(Product, u32)]) -> bool {
         for (resource, amount) in items {
-            let mut amount = *amount;
-            for slot in self.slots.iter() {
-                if amount == 0 {
-                    break;
-                }
-                if let Some(stack) = slot {
-                    if stack.resource == *resource {
-                        if stack.amount >= amount {
-                            amount = 0;
-                        } else {
-                            amount -= stack.amount;
-                        }
-                    }
-                }
-            }
-            if amount > 0 {
+            let amount_in_inventory = self.num_items(resource);
+            if *amount >= amount_in_inventory {
                 return false;
             }
         }
         true
+    }
+
+    pub fn num_items(&self, resource: &Product) -> u32 {
+        let mut amount = 0;
+        for slot in self.slots.iter() {
+            if let Some(stack) = slot {
+                if stack.resource == *resource {
+                    amount += stack.amount;
+                }
+            }
+        }
+        amount
     }
 
     /// Removes all items atomically, returning true on success
@@ -251,6 +249,7 @@ impl Inventory {
         return_stack
     }
 }
+
 pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
     if let Some(ref mut source_stack) = source_slot {
         if let Some(ref mut target_stack) = target_slot {

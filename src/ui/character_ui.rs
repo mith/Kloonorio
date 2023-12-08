@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
-use egui::{epaint, style, Color32, Response, RichText, Sense, Stroke};
+use egui::{epaint, Color32, Pos2, Response, RichText, Sense, Stroke};
 
 use crate::{
     inventory::{Inventory, Stack},
@@ -13,6 +13,35 @@ use crate::{
 };
 
 use super::{inventory_grid::resource_icon, UiSet};
+
+pub fn recipe_slot(
+    ui: &mut egui::Ui,
+    recipe: &Recipe,
+    craftable_amount: u32,
+    icons: &HashMap<String, egui::TextureId>,
+) -> Response {
+    let response = recipe_icon(ui, recipe, icons);
+
+    if craftable_amount > 0 {
+        let font_id = egui::FontId::proportional(16.);
+        let layout = ui.fonts(|fonts| {
+            fonts.layout_no_wrap(craftable_amount.to_string(), font_id, egui::Color32::WHITE)
+        });
+        let rect = response.rect;
+        let pos = Pos2::new(
+            rect.right() - layout.size().x - 1.,
+            rect.bottom() - layout.size().y - 1.,
+        );
+        ui.painter().add(epaint::TextShape {
+            pos,
+            galley: layout,
+            underline: Stroke::new(1., egui::Color32::BLACK),
+            override_text_color: None,
+            angle: 0.,
+        });
+    }
+    response
+}
 
 pub fn recipe_icon(
     ui: &mut egui::Ui,
@@ -48,7 +77,20 @@ pub fn craft_ui(
             for _ in 0..10 {
                 for _ in 0..10 {
                     if let Some(recipe) = recipe_it.next() {
-                        let resources_available = inventory.has_items(&recipe.ingredients);
+                        let craftable_amount = recipe
+                            .ingredients
+                            .iter()
+                            .map(|(resource, amount)| {
+                                let amount_in_inventory = inventory.num_items(resource);
+                                if amount_in_inventory > 0 {
+                                    amount_in_inventory / amount
+                                } else {
+                                    0
+                                }
+                            })
+                            .min()
+                            .unwrap_or(0);
+                        let resources_available = craftable_amount > 0;
                         let (rect, response) = ui.allocate_exact_size(
                             egui::Vec2::new(32., 32.),
                             Sense::hover().union(Sense::click()),
@@ -68,7 +110,7 @@ pub fn craft_ui(
                         });
                         ui.child_ui(rect, *ui.layout())
                             .add_enabled_ui(resources_available, |ui| {
-                                recipe_icon(ui, recipe, icons)
+                                recipe_slot(ui, recipe, craftable_amount, icons);
                             });
 
                         if response.clicked() {
@@ -81,45 +123,9 @@ pub fn craft_ui(
                                 ),
                             });
                         }
-                        if response.hovered() {
-                            response.on_hover_ui_at_pointer(|ui| {
-                                egui::Grid::new("recipe_info")
-                                    .spacing([3., 3.])
-                                    .with_row_color(|row, _style| {
-                                        if row == 0 {
-                                            Some(Color32::from_gray(200))
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .show(ui, |ui| {
-                                        ui.label(
-                                            RichText::new(recipe.name.clone())
-                                                .heading()
-                                                .color(Color32::BLACK),
-                                        );
-                                        ui.end_row();
-                                        ui.label("Ingredients:");
-                                        ui.end_row();
-                                        for (ingredient, amount) in &recipe.ingredients {
-                                            ui.horizontal(|ui| {
-                                                resource_icon(
-                                                    ui,
-                                                    &Stack::new(ingredient.clone(), *amount),
-                                                    icons,
-                                                );
-                                                ui.label(format!("{} x {}", amount, ingredient));
-                                            });
-                                            ui.end_row();
-                                        }
-                                        ui.end_row();
-                                        ui.label(format!(
-                                            "Crafting time: {}s",
-                                            recipe.crafting_time
-                                        ));
-                                    });
-                            });
-                        }
+                        response.on_hover_ui_at_pointer(|ui| {
+                            recipe_tooltip(ui, recipe, icons);
+                        });
                     } else {
                         let (_id, rect) = ui.allocate_space(egui::Vec2::new(32., 32.));
                         ui.painter().add(epaint::RectShape {
@@ -135,6 +141,42 @@ pub fn craft_ui(
                 ui.end_row();
             }
         });
+}
+
+fn recipe_tooltip(
+    ui: &mut egui::Ui,
+    recipe: &Recipe,
+    icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
+) -> Response {
+    egui::Grid::new("recipe_info")
+        .spacing([3., 3.])
+        .with_row_color(|row, _style| {
+            if row == 0 {
+                Some(Color32::from_gray(200))
+            } else {
+                None
+            }
+        })
+        .show(ui, |ui| {
+            ui.label(
+                RichText::new(recipe.name.clone() + " (Recipe)")
+                    .heading()
+                    .color(Color32::BLACK),
+            );
+            ui.end_row();
+            ui.label("Ingredients:");
+            ui.end_row();
+            for (ingredient, amount) in &recipe.ingredients {
+                ui.horizontal(|ui| {
+                    resource_icon(ui, &Stack::new(ingredient.clone(), *amount), icons);
+                    ui.label(format!("{} x {}", amount, ingredient));
+                });
+                ui.end_row();
+            }
+            ui.end_row();
+            ui.label(format!("Crafting time: {}s", recipe.crafting_time));
+        })
+        .response
 }
 
 fn character_ui(
