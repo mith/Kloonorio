@@ -70,8 +70,19 @@ pub fn craft_ui(
                             .add_enabled_ui(resources_available, |ui| {
                                 recipe_icon(ui, recipe, icons)
                             });
-                        if response.clone().hovered() {
-                            response.clone().on_hover_ui_at_pointer(|ui| {
+
+                        if response.clicked() {
+                            inventory.remove_items(&recipe.ingredients);
+                            build_queue.0.push_back(ActiveCraft {
+                                blueprint: recipe.clone(),
+                                timer: Timer::from_seconds(
+                                    recipe.crafting_time,
+                                    TimerMode::Repeating,
+                                ),
+                            });
+                        }
+                        if response.hovered() {
+                            response.on_hover_ui_at_pointer(|ui| {
                                 egui::Grid::new("recipe_info")
                                     .spacing([3., 3.])
                                     .with_row_color(|row, _style| {
@@ -107,16 +118,6 @@ pub fn craft_ui(
                                             recipe.crafting_time
                                         ));
                                     });
-                            });
-                        }
-                        if response.clicked() {
-                            inventory.remove_items(&recipe.ingredients);
-                            build_queue.0.push_back(ActiveCraft {
-                                blueprint: recipe.clone(),
-                                timer: Timer::from_seconds(
-                                    recipe.crafting_time,
-                                    TimerMode::Repeating,
-                                ),
                             });
                         }
                     } else {
