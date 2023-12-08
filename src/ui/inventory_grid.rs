@@ -35,12 +35,7 @@ fn drag_source(ui: &mut egui::Ui, id: egui::Id, body: impl FnOnce(&mut egui::Ui)
     if !is_being_dragged {
         let response = ui.scope(body).response;
 
-        // Check for drags:
-        let response = ui.interact(
-            response.rect,
-            id,
-            Sense::click_and_drag().union(Sense::hover()),
-        );
+        let response = ui.interact(response.rect, id, Sense::hover());
         if response.hovered() {
             ui.output_mut(|output| output.cursor_icon = CursorIcon::Grab);
         }
@@ -66,8 +61,7 @@ fn drop_target<R>(
     body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
     let being_dragged = item_in_hand(ui).map_or(false, |h| h.item_id() == id);
-    let (rect, response) =
-        ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::click_and_drag());
+    let (rect, response) = ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::click());
     let (style, bg_fill) = if being_dragged || response.hovered() {
         (ui.visuals().widgets.active, HIGHLIGHT_COLOR)
     } else {
@@ -220,11 +214,6 @@ pub fn inventory_grid(
                                     item_slot(ui, stack, icons);
                                 });
 
-                                if response.clicked() {
-                                    info!(inventory = ?entity, slot = slot_index, "Clicked item");
-                                    slot_events.send(SlotEvent::clicked(entity, slot_index));
-                                }
-
                                 response.on_hover_ui_at_pointer(|ui| {
                                     item_tooltip(ui, stack);
                                 });
@@ -232,7 +221,6 @@ pub fn inventory_grid(
                         })
                         .response;
                         if response.clicked() {
-                            info!(inventory = ?entity, slot = slot_index, "Clicked empty slot");
                             slot_events.send(SlotEvent::clicked(entity, slot_index));
                         };
                     }
