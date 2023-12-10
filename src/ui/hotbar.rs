@@ -12,7 +12,10 @@ use bevy::{
     utils::HashMap,
 };
 use bevy_egui::EguiContexts;
-use egui::{epaint::Shadow, Align2, Color32, Frame, Response, Sense};
+use egui::{
+    epaint::{self, Shadow},
+    Align2, Color32, Frame, Pos2, Response, Sense, Stroke,
+};
 
 use crate::{
     inventory::Inventory,
@@ -71,8 +74,19 @@ pub fn hotbar_ui(
                             .max_col_width(32.)
                             .spacing([3., 3.])
                             .show(ui, |ui| {
-                                for hotbar_item in hotbar.0.iter_mut() {
-                                    let response = hotbar_item_ui(ui, hotbar_item, &icons);
+                                for (index, hotbar_item) in hotbar.0.iter_mut().enumerate() {
+                                    // check if the slot contains an item and if the item is in the inventory
+                                    let in_inventory = hotbar_item.item.is_some()
+                                        && inventory
+                                            .find_item(hotbar_item.item.as_ref().unwrap().as_str())
+                                            .is_some();
+                                    let response = hotbar_item_ui(
+                                        ui,
+                                        hotbar_item,
+                                        &icons,
+                                        index as u8,
+                                        in_inventory,
+                                    );
                                     if response.middle_clicked() {
                                         hotbar_item.clear();
                                     }
@@ -108,7 +122,13 @@ pub fn hotbar_ui(
         });
 }
 
-fn hotbar_item_ui(ui: &mut egui::Ui, item: &mut HotbarItem, icons: &Icons) -> Response {
+fn hotbar_item_ui(
+    ui: &mut egui::Ui,
+    item: &mut HotbarItem,
+    icons: &Icons,
+    index: u8,
+    in_inventory: bool,
+) -> Response {
     let (rect, response) = ui.allocate_exact_size(egui::Vec2::new(32., 32.), Sense::click());
     if ui.is_rect_visible(rect) {
         ui.painter_at(rect)
@@ -116,9 +136,41 @@ fn hotbar_item_ui(ui: &mut egui::Ui, item: &mut HotbarItem, icons: &Icons) -> Re
         if let Some(item) = &item.item {
             ui.child_ui(rect, *ui.layout())
                 .add_sized(rect.size(), |ui: &mut egui::Ui| {
+                    ui.set_enabled(in_inventory);
                     item_icon(ui, item.as_str(), icons)
                 });
         }
+        let font_id = egui::FontId::proportional(16.);
+
+        // Map of hotbar index to pretty-printed key binding
+        let bindings_map = HashMap::from([
+            (0, "1"),
+            (1, "2"),
+            (2, "3"),
+            (3, "4"),
+            (4, "5"),
+            (5, "6"),
+            (6, "7"),
+            (7, "8"),
+            (8, "9"),
+            (9, "0"),
+        ]);
+
+        let layout = ui.fonts(|fonts| {
+            fonts.layout_no_wrap(bindings_map[&index].into(), font_id, egui::Color32::WHITE)
+        });
+        let rect = response.rect;
+        let pos = Pos2::new(
+            rect.right() - layout.size().x - 1.,
+            rect.bottom() - layout.size().y + 2.,
+        );
+        ui.painter().add(epaint::TextShape {
+            pos,
+            galley: layout,
+            underline: Stroke::new(1., egui::Color32::BLACK),
+            override_text_color: None,
+            angle: 0.,
+        });
     }
     response
 }
