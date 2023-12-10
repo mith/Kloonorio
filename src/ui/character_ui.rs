@@ -1,18 +1,18 @@
 use bevy::{input, prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
-use egui::{epaint, Color32, Pos2, Response, RichText, Sense, Stroke};
+use egui::{epaint, Pos2, Response, Sense, Stroke};
 
 use crate::{
-    inventory::{Inventory, Stack},
-    loading::{Icons, Recipes},
+    inventory::Inventory,
+    loading::{Icons, Recipes, Resources, Structures},
     player::Player,
     terrain::TerrainSet,
     types::{ActiveCraft, CraftingQueue, Recipe},
     ui::inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
 };
 
-use super::{inventory_grid::resource_icon, UiSet};
+use super::{icon::recipe_icon, tooltip::recipe_tooltip, UiSet};
 
 pub fn recipe_slot(
     ui: &mut egui::Ui,
@@ -43,30 +43,14 @@ pub fn recipe_slot(
     response
 }
 
-pub fn recipe_icon(
-    ui: &mut egui::Ui,
-    recipe: &Recipe,
-    icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
-) -> Response {
-    let icon_name = &recipe.name.to_lowercase().replace(" ", "_");
-    let response = {
-        if let Some(egui_img) = icons.get(icon_name) {
-            ui.add(egui::Image::new((*egui_img, egui::Vec2::new(32., 32.))))
-        } else if let Some(no_icon_img) = icons.get("no_icon") {
-            ui.add(egui::Image::new((*no_icon_img, egui::Vec2::new(32., 32.))))
-        } else {
-            ui.label("NO ICON")
-        }
-    };
-    response
-}
-
 pub fn craft_ui(
     ui: &mut egui::Ui,
     recipes: &HashMap<String, Recipe>,
     inventory: &mut Inventory,
     build_queue: &mut CraftingQueue,
     icons: &HashMap<String, egui::TextureId>,
+    structures: &Structures,
+    resources: &Resources,
 ) {
     let mut recipe_it = recipes.values();
     egui::Grid::new("crafting")
@@ -124,7 +108,7 @@ pub fn craft_ui(
                             });
                         }
                         response.on_hover_ui_at_pointer(|ui| {
-                            recipe_tooltip(ui, recipe, icons);
+                            recipe_tooltip(ui, recipe, icons, structures, resources);
                         });
                     } else {
                         let (_id, rect) = ui.allocate_space(egui::Vec2::new(32., 32.));
@@ -141,42 +125,6 @@ pub fn craft_ui(
                 ui.end_row();
             }
         });
-}
-
-pub fn recipe_tooltip(
-    ui: &mut egui::Ui,
-    recipe: &Recipe,
-    icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
-) -> Response {
-    egui::Grid::new("recipe_info")
-        .spacing([3., 3.])
-        .with_row_color(|row, _style| {
-            if row == 0 {
-                Some(Color32::from_gray(200))
-            } else {
-                None
-            }
-        })
-        .show(ui, |ui| {
-            ui.label(
-                RichText::new(recipe.name.clone() + " (Recipe)")
-                    .heading()
-                    .color(Color32::BLACK),
-            );
-            ui.end_row();
-            ui.label("Ingredients:");
-            ui.end_row();
-            for (ingredient, amount) in &recipe.ingredients {
-                ui.horizontal(|ui| {
-                    resource_icon(ui, &Stack::new(ingredient.clone(), *amount), icons);
-                    ui.label(format!("{} x {}", amount, ingredient));
-                });
-                ui.end_row();
-            }
-            ui.end_row();
-            ui.label(format!("Crafting time: {}s", recipe.crafting_time));
-        })
-        .response
 }
 
 #[derive(Resource, Default)]
@@ -198,6 +146,8 @@ fn character_ui(
     icons: Res<Icons>,
     mut slot_events: EventWriter<SlotEvent>,
     character_ui_open: Res<CharacterUiOpen>,
+    structures: Res<Structures>,
+    resources: Res<Resources>,
 ) {
     if !character_ui_open.0 {
         return;
@@ -216,8 +166,25 @@ fn character_ui(
                     ui.heading("Character");
                     ui.heading("Crafting");
                     ui.end_row();
-                    inventory_grid(player_entity, inventory, ui, &icons, hand, &mut slot_events);
-                    craft_ui(ui, &blueprints, inventory, crafting_queue, &icons);
+                    inventory_grid(
+                        player_entity,
+                        inventory,
+                        ui,
+                        &icons,
+                        hand,
+                        &mut slot_events,
+                        &structures,
+                        &resources,
+                    );
+                    craft_ui(
+                        ui,
+                        &blueprints,
+                        inventory,
+                        crafting_queue,
+                        &icons,
+                        &structures,
+                        &resources,
+                    );
                 });
         });
 }

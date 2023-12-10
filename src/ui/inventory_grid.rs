@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use bevy::utils::HashMap;
-use egui::{
-    epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, RichText, Sense, Stroke,
-};
+use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Sense, Stroke};
 
 use crate::{
     discrete_rotation::DiscreteRotation,
     inventory::{Inventory, Stack},
+    loading::{Resources, Structures},
 };
+
+use super::{icon::resource_icon, tooltip::item_tooltip};
 
 pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
 
@@ -108,24 +109,6 @@ pub fn item_slot(
     response
 }
 
-pub fn resource_icon(
-    ui: &mut egui::Ui,
-    stack: &Stack,
-    icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
-) -> Response {
-    let icon_name = &stack.resource.to_string().to_lowercase().replace(" ", "_");
-    let response = {
-        if let Some(egui_img) = icons.get(icon_name) {
-            ui.image((*egui_img, egui::Vec2::new(32., 32.)))
-        } else if let Some(no_icon_img) = icons.get("no_icon") {
-            ui.image((*no_icon_img, egui::Vec2::new(32., 32.)))
-        } else {
-            ui.label("NO ICON")
-        }
-    };
-    response
-}
-
 pub type SlotIndex = usize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -195,6 +178,8 @@ pub fn inventory_grid(
     icons: &HashMap<String, egui::TextureId>,
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
+    structures: &Structures,
+    resources: &Resources,
 ) {
     let grid_height = (inventory.slots.len() as f32 / 10.).ceil() as usize;
     egui::Grid::new(entity)
@@ -215,7 +200,12 @@ pub fn inventory_grid(
                                 });
 
                                 response.on_hover_ui_at_pointer(|ui| {
-                                    item_tooltip(ui, stack);
+                                    item_tooltip(
+                                        ui,
+                                        &stack.resource.to_string(),
+                                        &structures,
+                                        &resources,
+                                    );
                                 });
                             }
                         })
@@ -228,25 +218,4 @@ pub fn inventory_grid(
                 ui.end_row();
             }
         });
-}
-
-fn item_tooltip(ui: &mut egui::Ui, stack: &Stack) -> Response {
-    egui::Grid::new("item_info")
-        .spacing([3., 3.])
-        .with_row_color(|row, _style| {
-            if row == 0 {
-                Some(Color32::from_gray(200))
-            } else {
-                None
-            }
-        })
-        .show(ui, |ui| {
-            ui.label(
-                RichText::new(stack.resource.to_string())
-                    .heading()
-                    .color(Color32::BLACK),
-            );
-            ui.end_row();
-        })
-        .response
 }

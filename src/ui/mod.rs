@@ -2,7 +2,10 @@ pub mod building_ui;
 pub mod character_ui;
 mod crafting_queue_ui;
 pub mod drag_and_drop;
+pub mod hotbar;
+mod icon;
 pub mod inventory_grid;
+mod tooltip;
 
 use bevy::{
     app::{App, Plugin, Update},
@@ -17,7 +20,8 @@ use bevy::{
 use bevy_egui::EguiContexts;
 
 use self::{
-    character_ui::CharacterUiPlugin, drag_and_drop::drop_system, inventory_grid::SlotEvent,
+    character_ui::CharacterUiPlugin, drag_and_drop::drop_system, hotbar::HotbarPlugin,
+    inventory_grid::SlotEvent,
 };
 use crate::{player::Player, types::AppState};
 
@@ -28,7 +32,7 @@ pub struct UiSet;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((CharacterUiPlugin,))
+        app.add_plugins((CharacterUiPlugin, HotbarPlugin))
             .add_systems(
                 Update,
                 (

@@ -5,14 +5,20 @@ use bevy::ecs::{
 use bevy_egui::EguiContexts;
 use egui::{Align2, Color32, PointerButton, Response, Sense};
 
-use crate::{loading::Icons, player::Player, types::CraftingQueue};
+use crate::{
+    loading::{Icons, Resources, Structures},
+    player::Player,
+    types::CraftingQueue,
+};
 
-use super::character_ui::{recipe_icon, recipe_tooltip};
+use super::{icon::recipe_icon, tooltip::recipe_tooltip};
 
 pub fn crafting_queue_ui(
     mut egui_context: EguiContexts,
     mut crafting_queue_query: Query<&mut CraftingQueue, With<Player>>,
     icons: Res<Icons>,
+    structures: Res<Structures>,
+    resources: Res<Resources>,
 ) {
     let mut to_cancel: Vec<usize> = vec![];
     egui::Area::new("Crafting queue")
@@ -29,7 +35,7 @@ pub fn crafting_queue_ui(
                         }
                         if response.hovered() {
                             response.on_hover_ui_at_pointer(|ui| {
-                                recipe_tooltip(ui, &build.recipe, &icons);
+                                recipe_tooltip(ui, &build.recipe, &icons, &structures, &resources);
                             });
                         }
                     }

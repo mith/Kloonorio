@@ -19,7 +19,7 @@ use bevy::{
 use crate::{
     inventory::Inventory,
     types::{AppState, CraftingQueue, Product},
-    ui::inventory_grid::Hand,
+    ui::{hotbar::Hotbar, inventory_grid::Hand},
 };
 
 pub struct PlayerPlugin;
@@ -57,6 +57,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             Hand::default(),
             inventory,
             CraftingQueue::default(),
+            Hotbar::new(5),
         ))
         .with_children(|parent| {
             parent.spawn((

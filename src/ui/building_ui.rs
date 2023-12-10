@@ -4,7 +4,7 @@ use bevy_egui::EguiContexts;
 use crate::{
     burner::Burner,
     inventory::{Fuel, Inventory, Output, Source},
-    loading::Icons,
+    loading::{Icons, Resources, Structures},
     picker::SelectedBuilding,
     placeable::Building,
     player::Player,
@@ -35,6 +35,8 @@ pub fn building_ui(
     mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
     icons: Res<Icons>,
     mut slot_events: EventWriter<SlotEvent>,
+    structures: Res<Structures>,
+    resources: Res<Resources>,
 ) {
     if let Ok((player_entity, SelectedBuilding(selected_building), player_inventory, hand)) =
         player_query.get_single()
@@ -63,6 +65,8 @@ pub fn building_ui(
                                     &icons,
                                     hand,
                                     &mut slot_events,
+                                    &structures,
+                                    &resources,
                                 );
                             });
                         });
@@ -81,6 +85,8 @@ pub fn building_ui(
                                         &icons,
                                         hand,
                                         &mut slot_events,
+                                        &structures,
+                                        &resources,
                                     );
                                 }
                                 if let Ok((crafting_queue, children)) =
@@ -97,6 +103,8 @@ pub fn building_ui(
                                         output,
                                         hand,
                                         &mut slot_events,
+                                        &structures,
+                                        &resources,
                                     );
                                 }
 
@@ -112,6 +120,8 @@ pub fn building_ui(
                                         fuel,
                                         hand,
                                         &mut slot_events,
+                                        &structures,
+                                        &resources,
                                     );
                                 }
                             });
@@ -132,10 +142,21 @@ fn burner_widget(
     fuel: (Entity, &Inventory),
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
+    structures: &Structures,
+    resources: &Resources,
 ) {
     ui.horizontal(|ui| {
         ui.label("Fuel:");
-        inventory_grid(fuel.0, fuel.1, ui, icons, hand, slot_events);
+        inventory_grid(
+            fuel.0,
+            fuel.1,
+            ui,
+            icons,
+            hand,
+            slot_events,
+            structures,
+            resources,
+        );
         if let Some(timer) = &burner.fuel_timer {
             ui.add(egui::ProgressBar::new(1. - timer.percent()).desired_width(100.));
         } else {
@@ -152,9 +173,20 @@ fn crafting_machine_widget(
     output: (Entity, &Inventory),
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
+    structures: &Structures,
+    resources: &Resources,
 ) {
     ui.horizontal_centered(|ui| {
-        inventory_grid(source.0, source.1, ui, icons, hand, slot_events);
+        inventory_grid(
+            source.0,
+            source.1,
+            ui,
+            icons,
+            hand,
+            slot_events,
+            structures,
+            resources,
+        );
         if let Some(active_craft) = crafting_queue.0.front() {
             ui.add(
                 egui::ProgressBar::new(active_craft.timer.percent())
@@ -168,7 +200,16 @@ fn crafting_machine_widget(
                     .show_percentage(),
             );
         }
-        inventory_grid(output.0, output.1, ui, icons, hand, slot_events);
+        inventory_grid(
+            output.0,
+            output.1,
+            ui,
+            icons,
+            hand,
+            slot_events,
+            structures,
+            resources,
+        );
     });
 }
 

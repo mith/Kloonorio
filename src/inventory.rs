@@ -248,6 +248,20 @@ impl Inventory {
         }
         return_stack
     }
+
+    pub fn find_item(&self, item: &str) -> Option<usize> {
+        self.slots.iter().enumerate().find_map(|(index, slot)| {
+            if let Some(stack) = slot {
+                if stack.resource.to_string() == item {
+                    Some(index)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+    }
 }
 
 pub fn transfer_between_slots(source_slot: &mut Slot, target_slot: &mut Slot) {
