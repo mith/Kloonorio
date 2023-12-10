@@ -53,7 +53,7 @@ impl Hotbar {
     }
 }
 
-pub fn hotbar_ui(
+fn hotbar_ui(
     mut egui_context: EguiContexts,
     mut hotbar_query: Query<(Entity, &mut Hotbar, &Inventory, &mut Hand), With<Player>>,
     icons: Res<Icons>,
@@ -175,7 +175,7 @@ fn hotbar_item_ui(
     response
 }
 
-pub fn hotbar_keyboard(
+fn hotbar_keyboard(
     mut hotbar_query: Query<(Entity, &Hotbar, &mut Hand, &Inventory), With<Player>>,
     keyboard_input: Res<Input<KeyCode>>,
 ) {
