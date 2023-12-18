@@ -57,6 +57,17 @@ pub fn drop_system(
     }
 }
 
+pub fn clear_hand(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut hand_query: Query<&mut Hand, With<Player>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Apostrophe) {
+        for mut hand in hand_query.iter_mut() {
+            hand.clear();
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{inventory::Stack, types::Product, ui::inventory_grid::InventoryIndex};

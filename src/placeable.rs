@@ -1,7 +1,9 @@
+use bevy::ecs::system::EntityCommands;
 use bevy::prelude::*;
 use bevy::{math::Vec3Swizzles, utils::HashSet};
 use bevy_rapier2d::prelude::*;
 
+use crate::assembler::Assembler;
 use crate::inserter::{Dropoff, Pickup};
 use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
 use crate::picker::Pickable;
@@ -9,6 +11,7 @@ use crate::terrain::TILE_SIZE;
 use crate::transport_belt::TransportBelt;
 
 use crate::ui::HoveringUI;
+use crate::ysort::YSort;
 use crate::{
     burner::Burner,
     discrete_rotation::DiscreteRotation,
@@ -71,7 +74,7 @@ pub fn placeable(
                     )
                     .is_some()
                 {
-                    spawn_ghost(
+                    spawn_structure_ghost(
                         &mut commands,
                         translation,
                         rotation,
@@ -95,7 +98,7 @@ pub fn placeable(
                         }
                     }
                 } else {
-                    spawn_ghost(
+                    spawn_structure_ghost(
                         &mut commands,
                         translation,
                         rotation,
@@ -143,16 +146,36 @@ pub fn create_structure_texture_atlas(
         "textures/{}.png",
         &structure.name.to_lowercase().replace(" ", "_")
     ));
+    let rows = {
+        if structure.animated {
+            120
+        } else {
+            1
+        }
+    };
+    let tile_size = structure_texture_size(structure);
     let texture_atlas = TextureAtlas::from_grid(
         texture_handle,
-        structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y),
+        tile_size,
         structure.sides as usize,
-        1,
+        rows,
         None,
         None,
     );
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     texture_atlas_handle
+}
+
+fn structure_texture_size(structure: &Structure) -> Vec2 {
+    let tile_size = if structure.animated {
+        // For animated structures, add 2 tiles to each dimension for the border
+        (structure.size.as_vec2() + Vec2::new(2., 2.)) * Vec2::new(TILE_SIZE.x, TILE_SIZE.y)
+    } else {
+        // For non-animated structures, just multiply the structure size by the tile size
+        structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y)
+    };
+
+    tile_size
 }
 
 pub fn place_structure(
@@ -162,34 +185,33 @@ pub fn place_structure(
     rotation: DiscreteRotation,
     structure: &Structure,
 ) {
-    let structure_entity = commands
-        .spawn((
-            rotation,
-            IsometricSpriteBundle {
-                texture_atlas: texture_atlas_handle,
-                transform: Transform::from_translation(translation.extend(1.))
-                    .with_rotation(Quat::from_rotation_z(-rotation.to_radians())),
-                sprite: IsometricSprite {
-                    sides: structure.sides,
-                    custom_size: Some(structure.size.as_vec2()),
-                    ..default()
-                },
-                ..default()
-            },
-            structure_collider(structure),
-            Building,
-            Name::new(structure.name.to_string()),
-            Pickable,
-        ))
-        .id();
-    spawn_components(commands, structure, structure_entity);
+    let mut structure_entity = spawn_structure_base(
+        commands,
+        structure.name.to_string(),
+        rotation,
+        translation,
+        structure,
+        texture_atlas_handle,
+        Color::WHITE,
+    );
+    structure_entity.insert((Building, Pickable, structure_collider(structure)));
+
+    spawn_structure_components(&mut structure_entity, structure);
+}
+
+fn structure_sprite_size(structure: &Structure) -> Vec2 {
+    if structure.animated {
+        structure.size.as_vec2() + 2.
+    } else {
+        structure.size.as_vec2()
+    }
 }
 
 fn structure_collider(structure: &Structure) -> Collider {
     Collider::cuboid(structure.collider.x * 0.5, structure.collider.y * 0.5)
 }
 
-pub fn spawn_ghost(
+pub fn spawn_structure_ghost(
     commands: &mut Commands,
     translation: Vec2,
     rotation: DiscreteRotation,
@@ -197,65 +219,85 @@ pub fn spawn_ghost(
     color: Color,
     structure: &Structure,
 ) {
-    commands.spawn((
-        Name::new("Ghost".to_string()),
+    spawn_structure_base(
+        commands,
+        structure.name.to_string() + " (ghost)",
         rotation,
+        translation,
+        structure,
+        texture_atlas_handle,
+        color,
+    )
+    .insert(Ghost);
+}
+
+fn spawn_structure_base<'w, 's, 'a, 't>(
+    commands: &'a mut Commands<'w, 's>,
+    name: String,
+    rotation: DiscreteRotation,
+    translation: Vec2,
+    structure: &'t Structure,
+    texture_atlas_handle: Handle<TextureAtlas>,
+    color: Color,
+) -> EntityCommands<'w, 's, 'a> {
+    let structure_entity = commands.spawn((
+        Name::new(name),
+        rotation,
+        YSort { base_layer: 1. },
         IsometricSpriteBundle {
+            texture_atlas: texture_atlas_handle,
             transform: Transform::from_translation(translation.extend(1.))
                 .with_rotation(Quat::from_rotation_z(-rotation.to_radians())),
-            texture_atlas: texture_atlas_handle,
+
             sprite: IsometricSprite {
                 color,
                 sides: structure.sides,
-                custom_size: Some(structure.size.as_vec2()),
+                custom_size: Some(structure_sprite_size(structure)),
                 ..default()
             },
             ..default()
         },
-        Ghost,
     ));
+
+    structure_entity
 }
 
-pub fn spawn_components(commands: &mut Commands, structure: &Structure, structure_entity: Entity) {
+pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structure: &Structure) {
     let span = info_span!("spawn_components", structure = ?structure.name);
     let _enter = span.enter();
     for component in &structure.components {
         match component {
             StructureComponent::Smelter => {
                 debug!("Spawning smelter");
-                commands.entity(structure_entity).insert(Smelter);
+                entity_commands.insert(Smelter);
             }
             StructureComponent::Burner => {
                 debug!("Spawning burner");
-                commands.entity(structure_entity).insert(Burner::new());
+                entity_commands.insert(Burner::new());
             }
             StructureComponent::CraftingQueue => {
                 debug!("Spawning crafting queue");
-                commands
-                    .entity(structure_entity)
-                    .insert(CraftingQueue::default());
+                entity_commands.insert(CraftingQueue::default());
             }
             StructureComponent::Inventory(slots) => {
                 debug!("Spawning inventory");
-                commands
-                    .entity(structure_entity)
-                    .insert(Inventory::new(*slots));
+                entity_commands.insert(Inventory::new(*slots));
             }
             StructureComponent::Source(slots, filter) => {
                 debug!("Spawning source");
-                commands.entity(structure_entity).with_children(|p| {
+                entity_commands.with_children(|p| {
                     p.spawn((Source, Inventory::new_with_filter(*slots, filter.clone())));
                 });
             }
             StructureComponent::Output(slots) => {
                 debug!("Spawning output");
-                commands.entity(structure_entity).with_children(|p| {
+                entity_commands.with_children(|p| {
                     p.spawn((Output, Inventory::new(*slots)));
                 });
             }
             StructureComponent::Fuel(slots) => {
                 debug!("Spawning fuel");
-                commands.entity(structure_entity).with_children(|p| {
+                entity_commands.with_children(|p| {
                     p.spawn((
                         Fuel,
                         Inventory::new_with_filter(
@@ -267,8 +309,7 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
             }
             StructureComponent::Miner(speed) => {
                 debug!("Spawning miner");
-                commands
-                    .entity(structure_entity)
+                entity_commands
                     .insert(Miner::new(*speed))
                     .with_children(|p| {
                         let collider = Collider::ball(0.125);
@@ -282,8 +323,7 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
             }
             StructureComponent::Inserter(speed, capacity) => {
                 debug!("Spawning inserter");
-                commands
-                    .entity(structure_entity)
+                entity_commands
                     .insert(Inserter::new(*speed, *capacity))
                     .with_children(|p| {
                         let collider = Collider::ball(0.125);
@@ -304,7 +344,8 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
             StructureComponent::TransportBelt => {
                 debug!("Spawning transport belt");
                 let collider = Collider::ball(0.125);
-                let dropoff = commands
+                let dropoff = entity_commands
+                    .commands()
                     .spawn((
                         TransformBundle::from(Transform::from_xyz(0., 1., 0.)),
                         Dropoff,
@@ -313,10 +354,13 @@ pub fn spawn_components(commands: &mut Commands, structure: &Structure, structur
                     ))
                     .id();
 
-                commands
-                    .entity(structure_entity)
+                entity_commands
                     .insert(TransportBelt::new(dropoff))
                     .add_child(dropoff);
+            }
+            StructureComponent::Assembler => {
+                debug!("Spawning assembler");
+                entity_commands.insert(Assembler::default());
             }
         }
     }
@@ -364,10 +408,91 @@ mod test {
             sides: 1,
             collider: Vec2::new(1., 1.),
             components: vec![],
+            animated: false,
         };
 
         let result = cursor_to_structure_position(&cursor_pos, &structure);
 
         assert_eq!(result, Vec2::ZERO);
+    }
+
+    #[test]
+    fn structure_texture_size_1x1() {
+        let structure = Structure {
+            name: "test".into(),
+            size: IVec2::new(1, 1),
+            sides: 1,
+            collider: Vec2::new(1., 1.),
+            components: vec![],
+            animated: true,
+        };
+
+        let result = structure_texture_size(&structure);
+
+        assert_eq!(result, Vec2::new(48., 48.));
+    }
+
+    #[test]
+    fn structure_texture_size_2x3() {
+        let structure = Structure {
+            name: "test".into(),
+            size: IVec2::new(2, 3),
+            sides: 1,
+            collider: Vec2::new(1., 1.),
+            components: vec![],
+            animated: true,
+        };
+
+        let result = structure_texture_size(&structure);
+
+        assert_eq!(result, Vec2::new(64., 80.));
+    }
+
+    #[test]
+    fn structure_texture_size_3x3() {
+        let structure = Structure {
+            name: "test".into(),
+            size: IVec2::new(3, 3),
+            sides: 1,
+            collider: Vec2::new(1., 1.),
+            components: vec![],
+            animated: true,
+        };
+
+        let result = structure_texture_size(&structure);
+
+        assert_eq!(result, Vec2::new(80., 80.));
+    }
+
+    #[test]
+    fn structure_sprite_size_1x1() {
+        let structure = Structure {
+            name: "test".into(),
+            size: IVec2::new(1, 1),
+            sides: 1,
+            collider: Vec2::new(1., 1.),
+            components: vec![],
+            animated: true,
+        };
+
+        let result = structure_sprite_size(&structure);
+
+        assert_eq!(result, Vec2::new(3., 3.));
+    }
+
+    #[test]
+    fn structure_sprite_size_3x3() {
+        let structure = Structure {
+            name: "test".into(),
+            size: IVec2::new(3, 3),
+            sides: 1,
+            collider: Vec2::new(1., 1.),
+            components: vec![],
+            animated: true,
+        };
+
+        let result = structure_sprite_size(&structure);
+
+        assert_eq!(result, Vec2::new(5., 5.));
     }
 }

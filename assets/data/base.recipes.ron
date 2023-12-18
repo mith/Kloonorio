@@ -41,5 +41,11 @@
 		crafting_time: 0.5,
 		name: "Transport belt",
 	),
+	Recipe(
+		ingredients: [(Intermediate("Iron plate"), 10), (Intermediate("Iron gear wheel"), 5)],
+		products: [(Structure("Burner assembling machine"), 1)],
+		crafting_time: 0.5,
+		name: "Burner assembling machine",
+	)
 
 ]

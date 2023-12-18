@@ -1,3 +1,4 @@
+use assembler::AssemblerPlugin;
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
@@ -12,7 +13,9 @@ use picker::PickerPlugin;
 use player::PlayerPlugin;
 use transport_belt::TransportBeltPlugin;
 use ui::UiPlugin;
+use ysort::YSortPlugin;
 
+mod assembler;
 mod burner;
 mod camera;
 mod craft;
@@ -36,6 +39,7 @@ mod transport_belt;
 mod types;
 mod ui;
 mod util;
+mod ysort;
 
 use crate::{
     burner::{burner_load, burner_tick},
@@ -77,7 +81,7 @@ fn main() {
         })
         .add_plugins((
             RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0),
-            RapierDebugRenderPlugin::default(),
+            YSortPlugin,
             TerrainPlugin,
             IsometricSpritePlugin,
             PlayerMovementPlugin,
@@ -92,7 +96,7 @@ fn main() {
             CraftPlugin,
             PlayerPlugin,
         ))
-        .add_plugins(PanZoomCameraPlugin)
+        .add_plugins((PanZoomCameraPlugin, AssemblerPlugin))
         .add_systems(
             Update,
             (

@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use bevy::{
     asset::{LoadedFolder, RecursiveDependencyLoadState},
+    ecs::system::SystemParam,
     prelude::*,
     utils::HashMap,
 };
@@ -80,6 +81,14 @@ impl DerefMut for Resources {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
+}
+
+#[derive(SystemParam)]
+pub struct Definitions<'w> {
+    pub structures: Res<'w, Structures>,
+    pub recipes: Res<'w, Recipes>,
+    pub icons: Res<'w, Icons>,
+    pub resources: Res<'w, Resources>,
 }
 
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {

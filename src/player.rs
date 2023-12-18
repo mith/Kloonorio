@@ -20,6 +20,7 @@ use crate::{
     inventory::Inventory,
     types::{AppState, CraftingQueue, Product},
     ui::{hotbar::Hotbar, inventory_grid::Hand},
+    ysort::YSort,
 };
 
 pub struct PlayerPlugin;
@@ -41,9 +42,11 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     inventory.add_item(Product::Intermediate("Coal".into()), 200);
     inventory.add_item(Product::Intermediate("Iron ore".into()), 200);
     inventory.add_item(Product::Structure("Transport belt".into()), 200);
+    inventory.add_item(Product::Structure("Burner assembling machine".into()), 100);
     commands
         .spawn((
             Name::new("Player"),
+            YSort { base_layer: 1.0 },
             SpriteBundle {
                 texture: asset_server.load("textures/character.png"),
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),

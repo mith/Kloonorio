@@ -2,9 +2,10 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
 use crate::{
+    assembler::{Assembler, ChangeAssemblerRecipeEvent},
     burner::Burner,
     inventory::{Fuel, Inventory, Output, Source},
-    loading::{Icons, Resources, Structures},
+    loading::{Definitions, Recipes, Resources, Structures},
     picker::SelectedBuilding,
     placeable::Building,
     player::Player,
@@ -33,10 +34,10 @@ pub fn building_ui(
     fuel_query: Query<FuelInventoryQuery>,
     mut crafting_machine_query: Query<(&CraftingQueue, &Children), With<Building>>,
     mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
-    icons: Res<Icons>,
+    mut assembler_query: Query<&Assembler, With<Building>>,
+    mut assembler_recipe_change_events: EventWriter<ChangeAssemblerRecipeEvent>,
     mut slot_events: EventWriter<SlotEvent>,
-    structures: Res<Structures>,
-    resources: Res<Resources>,
+    definitions: Definitions,
 ) {
     if let Ok((player_entity, SelectedBuilding(selected_building), player_inventory, hand)) =
         player_query.get_single()
@@ -62,11 +63,11 @@ pub fn building_ui(
                                     player_entity,
                                     player_inventory,
                                     ui,
-                                    &icons,
+                                    &definitions.icons,
                                     hand,
                                     &mut slot_events,
-                                    &structures,
-                                    &resources,
+                                    &definitions.structures,
+                                    &definitions.resources,
                                 );
                             });
                         });
@@ -82,11 +83,20 @@ pub fn building_ui(
                                         *selected_building,
                                         &inventory,
                                         ui,
-                                        &icons,
+                                        &definitions.icons,
                                         hand,
                                         &mut slot_events,
-                                        &structures,
-                                        &resources,
+                                        &definitions.structures,
+                                        &definitions.resources,
+                                    );
+                                }
+                                if let Ok(assembler) = assembler_query.get_mut(*selected_building) {
+                                    assembling_machine_widget(
+                                        ui,
+                                        &assembler,
+                                        *selected_building,
+                                        &mut assembler_recipe_change_events,
+                                        &definitions.recipes,
                                     );
                                 }
                                 if let Ok((crafting_queue, children)) =
@@ -97,14 +107,14 @@ pub fn building_ui(
 
                                     crafting_machine_widget(
                                         ui,
-                                        &icons,
+                                        &definitions.icons,
                                         crafting_queue,
                                         source,
                                         output,
                                         hand,
                                         &mut slot_events,
-                                        &structures,
-                                        &resources,
+                                        &definitions.structures,
+                                        &definitions.resources,
                                     );
                                 }
 
@@ -115,13 +125,13 @@ pub fn building_ui(
                                     let fuel = get_inventory_child(children, &fuel_query);
                                     burner_widget(
                                         ui,
-                                        &icons,
+                                        &definitions.icons,
                                         &burner,
                                         fuel,
                                         hand,
                                         &mut slot_events,
-                                        &structures,
-                                        &resources,
+                                        &definitions.structures,
+                                        &definitions.resources,
                                     );
                                 }
                             });
@@ -210,6 +220,31 @@ fn crafting_machine_widget(
             structures,
             resources,
         );
+    });
+}
+
+fn assembling_machine_widget(
+    ui: &mut egui::Ui,
+    assembler: &Assembler,
+    assembler_entity: Entity,
+    assembler_recipe_change_events: &mut EventWriter<ChangeAssemblerRecipeEvent>,
+    recipes: &Recipes,
+) {
+    ui.horizontal_centered(|ui| {
+        ui.label("Assembler");
+        if let Some(recipe) = &assembler.recipe {
+            ui.label(recipe.name.as_str());
+        }
+        ui.menu_button("Select recipe", |ui| {
+            for recipe in recipes.values() {
+                if ui.button(recipe.name.as_str()).clicked() {
+                    assembler_recipe_change_events.send(ChangeAssemblerRecipeEvent {
+                        entity: assembler_entity,
+                        recipe: recipe.clone(),
+                    });
+                }
+            }
+        })
     });
 }
 

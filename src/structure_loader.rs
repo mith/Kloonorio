@@ -24,6 +24,7 @@ pub enum StructureComponent {
     Miner(f32),
     Inserter(f32, u32),
     TransportBelt,
+    Assembler,
 }
 
 #[derive(Clone, Debug, Deserialize, TypeUuid)]
@@ -34,6 +35,7 @@ pub struct Structure {
     pub collider: Vec2,
     pub sides: u32,
     pub components: Vec<StructureComponent>,
+    pub animated: bool,
 }
 
 #[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]

@@ -64,7 +64,7 @@ pub struct ActiveCraft {
     pub timer: Timer,
 }
 
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "1ca725c1-5a0d-484f-8d04-a5a42960e208"]
 pub struct Recipe {
     pub ingredients: Vec<(Product, u32)>,

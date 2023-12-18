@@ -4,6 +4,7 @@
 		size: (2, 2),
 		collider: (1.6, 1.9),
 		sides: 1,
+		animated: false,
 		components: [
 			Smelter,
 			Burner,
@@ -18,6 +19,7 @@
 		size: (1, 1),
 		collider: (0.8, 0.8),
 		sides: 1,
+		animated: false,
 		components: [
 			Inventory(8)
 		]
@@ -27,6 +29,7 @@
 		size: (2, 2),
 		collider: (1.8, 1.8),
 		sides: 1,
+		animated: false,
 		components: [
 			Burner,
 			Miner(2),
@@ -38,6 +41,7 @@
 		size: (1, 1),
 		collider: (0.6, 0.6),
 		sides: 4,
+		animated: false,
 		components: [
 			Burner,
 			Inserter(2, 4),
@@ -49,8 +53,24 @@
 		size: (1, 1),
 		collider: (0.8, 0.9),
 		sides: 4,
+		animated: false,
 		components: [
 			TransportBelt,
 		]
-	)
+	),
+	Structure(
+		name: "Burner assembling machine",
+		size: (3, 3),
+		collider: (2.7, 2.7),
+		sides: 1,
+		animated: true,
+		components: [
+			Assembler,
+			Burner,
+			Fuel(1),
+			CraftingQueue,
+			Source(1, []),
+			Output(1)
+		]
+	),
 ]
