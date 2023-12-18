@@ -2,15 +2,23 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
-    burner::Burner,
     inventory::{Fuel, Inventory, Output, Source, Stack},
-    transport_belt::TransportBelt,
     types::{Powered, Product, Working},
     util::{
         drop_stack_at_point, get_inventory_child_mut, take_stack_from_entity_belt,
         take_stack_from_entity_inventory, FuelInventoryQuery,
     },
 };
+
+use super::{burner::Burner, transport_belt::TransportBelt};
+
+pub struct InserterPlugin;
+
+impl Plugin for InserterPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(FixedUpdate, (inserter_tick, burner_inserter_tick));
+    }
+}
 
 #[derive(Component)]
 pub struct Inserter {
@@ -35,6 +43,11 @@ pub struct Pickup;
 #[derive(Component)]
 pub struct Dropoff;
 
+// Inserters are machines that can pick up items from the ground or from other machines
+// and place them in inventories or on transport belts.
+//
+// Inserters are pull-based, meaning they will only pick up items if there is a demand for them.
+
 pub fn inserter_tick(
     mut commands: Commands,
     mut inserter_query: Query<(Entity, &Transform, &mut Inserter, &Children), With<Powered>>,
@@ -57,26 +70,29 @@ pub fn inserter_tick(
         let span = info_span!("Inserter tick", inserter = ?inserter_entity);
         let _enter = span.enter();
 
+        let Some(drop_point) = inserter_children
+            .iter()
+            .find(|c| dropoff_query.get(**c).is_ok())
+            .and_then(|e| dropoff_query.get(*e).ok())
+        else {
+            continue;
+        };
+
         if let Some(holding) = inserter.holding.clone() {
             if inserter.timer.tick(time.delta()).just_finished() {
-                if let Some(drop_point_entity) = inserter_children
-                    .iter()
-                    .find(|c| dropoff_query.get(**c).is_ok())
-                {
-                    let drop_point_transform = dropoff_query.get(*drop_point_entity).unwrap().1;
-                    if drop_stack_at_point(
-                        &mut commands,
-                        &rapier_context,
-                        &asset_server,
-                        &mut inventories_set.p1(),
-                        &mut belts_query,
-                        &children,
-                        holding.clone(),
-                        drop_point_transform.translation(),
-                    ) {
-                        info!(dropped = ?holding, "Dropped stack");
-                        inserter.holding = None;
-                    }
+                let drop_point_transform = drop_point.1;
+                if drop_stack_at_point(
+                    &mut commands,
+                    &rapier_context,
+                    &asset_server,
+                    &mut inventories_set.p1(),
+                    &mut belts_query,
+                    &children,
+                    holding.clone(),
+                    drop_point_transform.translation(),
+                ) {
+                    info!(dropped = ?holding, "Dropped stack");
+                    inserter.holding = None;
                 }
             }
         } else {

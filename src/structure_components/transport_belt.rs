@@ -5,11 +5,12 @@ use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
     discrete_rotation::DiscreteRotation,
-    inserter::Dropoff,
     inventory::Stack,
     types::{AppState, Product},
     util::product_to_texture,
 };
+
+use super::inserter::Dropoff;
 
 // TODO: Right now there's a fixed 3 slots for simplicity, but it might be interesting to merge
 // adjacent belts by pre- or appending the slots from newly constructed belts instead of

@@ -2,30 +2,14 @@ use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     reflect::TypeUuid,
-    utils::{BoxedFuture, HashSet},
+    utils::BoxedFuture,
 };
 use serde::Deserialize;
 
-use crate::types::Product;
+use crate::structure_components::StructureComponent;
 
 #[derive(Default)]
 pub struct StructuresAssetLoader;
-
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
-#[uuid = "990c9ea7-3c00-4d6b-b9f0-c62b86bb9973"]
-pub enum StructureComponent {
-    Smelter,
-    Burner,
-    CraftingQueue,
-    Inventory(u32),
-    Source(u32, HashSet<Product>),
-    Output(u32),
-    Fuel(u32),
-    Miner(f32),
-    Inserter(f32, u32),
-    TransportBelt,
-    Assembler,
-}
 
 #[derive(Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "540f864d-3e80-4e5d-8be5-1846d7be2484"]

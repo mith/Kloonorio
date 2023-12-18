@@ -1,29 +1,26 @@
-use bevy::ecs::system::EntityCommands;
-use bevy::prelude::*;
-use bevy::{math::Vec3Swizzles, utils::HashSet};
+use bevy::{ecs::system::EntityCommands, math::Vec3Swizzles, prelude::*, utils::HashSet};
 use bevy_rapier2d::prelude::*;
 
-use crate::assembler::Assembler;
-use crate::inserter::{Dropoff, Pickup};
-use crate::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
-use crate::picker::Pickable;
-use crate::terrain::TILE_SIZE;
-use crate::transport_belt::TransportBelt;
-
-use crate::ui::HoveringUI;
-use crate::ysort::YSort;
 use crate::{
-    burner::Burner,
     discrete_rotation::DiscreteRotation,
-    inserter::Inserter,
     inventory::{Fuel, Inventory, Output, Source},
+    isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
     loading::Structures,
-    miner::Miner,
-    smelter::Smelter,
-    structure_loader::{Structure, StructureComponent},
-    terrain::CursorWorldPos,
+    picker::Pickable,
+    structure_components::{
+        assembler::Assembler,
+        burner::Burner,
+        inserter::{Dropoff, Inserter, Pickup},
+        miner::Miner,
+        smelter::Smelter,
+        transport_belt::TransportBelt,
+        StructureComponent,
+    },
+    structure_loader::Structure,
+    terrain::{CursorWorldPos, TILE_SIZE},
     types::{CraftingQueue, Product},
-    ui::inventory_grid::Hand,
+    ui::{inventory_grid::Hand, HoveringUI},
+    ysort::YSort,
 };
 
 #[derive(Component)]

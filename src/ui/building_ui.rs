@@ -2,13 +2,15 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
 use crate::{
-    assembler::{Assembler, ChangeAssemblerRecipeEvent},
-    burner::Burner,
     inventory::{Fuel, Inventory, Output, Source},
     loading::{Definitions, Recipes, Resources, Structures},
     picker::SelectedBuilding,
     placeable::Building,
     player::Player,
+    structure_components::{
+        assembler::{Assembler, ChangeAssemblerRecipeEvent},
+        burner::Burner,
+    },
     types::CraftingQueue,
     ui::inventory_grid::{inventory_grid, Hand, SlotEvent},
     util::{get_inventory_child, FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery},

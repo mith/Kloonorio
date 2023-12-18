@@ -1,57 +1,46 @@
-use assembler::AssemblerPlugin;
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier2d::prelude::*;
-use camera::PanZoomCameraPlugin;
-use craft::CraftPlugin;
 
-use inserter::{burner_inserter_tick, inserter_tick};
-use interact::{InteractPlugin, PlayerSettings};
-use isometric_sprite::IsometricSpritePlugin;
-use picker::PickerPlugin;
-use player::PlayerPlugin;
-use transport_belt::TransportBeltPlugin;
-use ui::UiPlugin;
-use ysort::YSortPlugin;
-
-mod assembler;
-mod burner;
 mod camera;
 mod craft;
 mod discrete_rotation;
-mod inserter;
 mod interact;
 mod intermediate_loader;
 mod inventory;
 mod isometric_sprite;
 mod loading;
-mod miner;
 mod picker;
 mod placeable;
 mod player;
 mod player_movement;
 mod recipe_loader;
-mod smelter;
+mod structure_components;
 mod structure_loader;
 mod terrain;
-mod transport_belt;
 mod types;
 mod ui;
 mod util;
 mod ysort;
 
 use crate::{
-    burner::{burner_load, burner_tick},
+    camera::PanZoomCameraPlugin,
+    craft::CraftPlugin,
+    interact::{InteractPlugin, PlayerSettings},
     intermediate_loader::IntermediateLoaderPlugin,
+    isometric_sprite::IsometricSpritePlugin,
     loading::LoadingPlugin,
-    miner::miner_tick,
+    picker::PickerPlugin,
+    player::PlayerPlugin,
     player_movement::PlayerMovementPlugin,
     recipe_loader::RecipeLoaderPlugin,
-    smelter::smelter_tick,
+    structure_components::assembler::AssemblerPlugin,
     structure_loader::StructureLoaderPlugin,
     terrain::TerrainPlugin,
     types::{AppState, GameState, Product},
+    ui::UiPlugin,
+    ysort::YSortPlugin,
 };
 
 fn main() {
@@ -62,18 +51,19 @@ fn main() {
         })
         .add_state::<AppState>()
         // .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_plugins(
+        .insert_resource(Time::<Fixed>::from_hz(60.))
+        .add_plugins((
+            FrameTimeDiagnosticsPlugin::default(),
             DefaultPlugins
                 .set(AssetPlugin { ..default() })
                 .set(ImagePlugin::default_nearest()),
-        )
-        .add_plugins(EguiPlugin)
+            EguiPlugin,
+            DefaultInspectorConfigPlugin,
+        ))
         // .insert_resource(WorldInspectorParams {
         //     name_filter: Some("Interesting".into()),
         //     ..default()
         // })
-        .add_plugins(DefaultInspectorConfigPlugin)
         .register_type::<Product>()
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, 8.0),
@@ -88,7 +78,6 @@ fn main() {
             RecipeLoaderPlugin,
             StructureLoaderPlugin,
             IntermediateLoaderPlugin,
-            TransportBeltPlugin,
             LoadingPlugin,
             PickerPlugin,
             UiPlugin,
@@ -99,16 +88,7 @@ fn main() {
         .add_plugins((PanZoomCameraPlugin, AssemblerPlugin))
         .add_systems(
             Update,
-            (
-                smelter_tick,
-                burner_tick,
-                burner_load,
-                miner_tick,
-                inserter_tick,
-                burner_inserter_tick,
-                placeable::placeable,
-                placeable::placeable_rotation,
-            )
+            (placeable::placeable, placeable::placeable_rotation)
                 .run_if(in_state(AppState::Running)),
         )
         .run();

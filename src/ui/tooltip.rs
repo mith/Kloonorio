@@ -4,7 +4,8 @@ use crate::{
     intermediate_loader::Intermediate,
     inventory::Stack,
     loading::{Resources, Structures},
-    structure_loader::{Structure, StructureComponent},
+    structure_components::StructureComponent,
+    structure_loader::Structure,
     types::Recipe,
 };
 

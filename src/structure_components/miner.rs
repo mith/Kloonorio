@@ -3,14 +3,14 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::RapierContext;
 
 use crate::{
-    inserter::Dropoff,
     interact::is_minable,
     inventory::{Inventory, Output, Stack},
     terrain::Terrain,
-    transport_belt::TransportBelt,
     types::{Powered, Working},
     util::{drop_stack_at_point, texture_id_to_product},
 };
+
+use super::{inserter::Dropoff, transport_belt::TransportBelt};
 
 #[derive(Component)]
 pub struct Miner {

@@ -13,8 +13,8 @@ use tracing::instrument;
 use crate::{
     inventory::{Fuel, Inventory, Output, Source, Stack},
     placeable::Building,
+    structure_components::transport_belt::TransportBelt,
     terrain::{COAL, IRON, STONE, TREE},
-    transport_belt::TransportBelt,
     types::Product,
 };
 
