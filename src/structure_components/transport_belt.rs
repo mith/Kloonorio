@@ -44,6 +44,10 @@ impl TransportBelt {
         }
     }
 
+    pub fn slots(&self) -> &VecDeque<Option<Product>> {
+        &self.slots
+    }
+
     /// Take an item from the belt from any slot.
     pub fn take(&mut self) -> Option<Product> {
         for slot in 0..self.slots.len() {

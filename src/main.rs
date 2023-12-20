@@ -2,6 +2,8 @@ use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier2d::prelude::*;
+use inventory::Stack;
+use structure_components::StructureComponentsPlugin;
 
 mod camera;
 mod craft;
@@ -35,7 +37,6 @@ use crate::{
     player::PlayerPlugin,
     player_movement::PlayerMovementPlugin,
     recipe_loader::RecipeLoaderPlugin,
-    structure_components::assembler::AssemblerPlugin,
     structure_loader::StructureLoaderPlugin,
     terrain::TerrainPlugin,
     types::{AppState, GameState, Product},
@@ -77,6 +78,7 @@ fn main() {
             PlayerMovementPlugin,
             RecipeLoaderPlugin,
             StructureLoaderPlugin,
+            StructureComponentsPlugin,
             IntermediateLoaderPlugin,
             LoadingPlugin,
             PickerPlugin,
@@ -85,7 +87,8 @@ fn main() {
             CraftPlugin,
             PlayerPlugin,
         ))
-        .add_plugins((PanZoomCameraPlugin, AssemblerPlugin))
+        .add_plugins((PanZoomCameraPlugin))
+        .register_type::<Stack>()
         .add_systems(
             Update,
             (placeable::placeable, placeable::placeable_rotation)

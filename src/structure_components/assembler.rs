@@ -1,5 +1,6 @@
 use bevy::{
     app::{App, Plugin, Update},
+    core::Name,
     ecs::{
         component::Component,
         entity::Entity,
@@ -13,7 +14,7 @@ use bevy::{
 };
 
 use crate::{
-    inventory::{Inventory, Output, Source},
+    inventory::{Inventory, ItemFilter, Output, Source},
     types::{ActiveCraft, CraftingQueue, Powered, Recipe, Working},
 };
 
@@ -50,12 +51,12 @@ fn assembler_change_recipe(
 
             let source_entity = children.iter().find(|c| source_query.get(**c).is_ok());
             let mut source = source_query.get_mut(*source_entity.unwrap()).unwrap();
-            source.allowed_products = Some(
+            source.allowed_items = ItemFilter::Only(
                 event
                     .recipe
-                    .products
+                    .ingredients
                     .iter()
-                    .map(|(p, _)| p.clone())
+                    .map(|(p, _)| Name::new(p.to_string()))
                     .collect(),
             );
         }

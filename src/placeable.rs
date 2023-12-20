@@ -3,7 +3,7 @@ use bevy_rapier2d::prelude::*;
 
 use crate::{
     discrete_rotation::DiscreteRotation,
-    inventory::{Fuel, Inventory, Output, Source},
+    inventory::{Fuel, Inventory, Output, Source, Storage},
     isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
     loading::Structures,
     picker::Pickable,
@@ -278,12 +278,20 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             }
             StructureComponent::Inventory(slots) => {
                 debug!("Spawning inventory");
-                entity_commands.insert(Inventory::new(*slots));
+                entity_commands.with_children(|p| {
+                    p.spawn((Storage, Inventory::new(*slots)));
+                });
             }
             StructureComponent::Source(slots, filter) => {
                 debug!("Spawning source");
                 entity_commands.with_children(|p| {
-                    p.spawn((Source, Inventory::new_with_filter(*slots, filter.clone())));
+                    p.spawn((
+                        Source,
+                        Inventory::new_with_filter(
+                            *slots,
+                            filter.iter().map(|s| Name::new(s.clone())).collect(),
+                        ),
+                    ));
                 });
             }
             StructureComponent::Output(slots) => {
@@ -297,10 +305,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                 entity_commands.with_children(|p| {
                     p.spawn((
                         Fuel,
-                        Inventory::new_with_filter(
-                            *slots,
-                            HashSet::from_iter([Product::Intermediate("Coal".into())]),
-                        ),
+                        Inventory::new_with_filter(*slots, HashSet::from_iter([Name::new("Coal")])),
                     ));
                 });
             }
@@ -320,23 +325,27 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             }
             StructureComponent::Inserter(speed, capacity) => {
                 debug!("Spawning inserter");
+                let pickup = entity_commands
+                    .commands()
+                    .spawn((
+                        TransformBundle::from(Transform::from_xyz(-1., 0., 0.)),
+                        Pickup,
+                        Sensor,
+                        Collider::ball(0.125),
+                    ))
+                    .id();
+                let dropoff = entity_commands
+                    .commands()
+                    .spawn((
+                        TransformBundle::from(Transform::from_xyz(1., 0., 0.)),
+                        Dropoff,
+                        Sensor,
+                        Collider::ball(0.125),
+                    ))
+                    .id();
                 entity_commands
-                    .insert(Inserter::new(*speed, *capacity))
-                    .with_children(|p| {
-                        let collider = Collider::ball(0.125);
-                        p.spawn((
-                            TransformBundle::from(Transform::from_xyz(-1., 0., 0.)),
-                            Pickup,
-                            Sensor,
-                            collider.clone(),
-                        ));
-                        p.spawn((
-                            TransformBundle::from(Transform::from_xyz(1., 0., 0.)),
-                            Dropoff,
-                            Sensor,
-                            collider,
-                        ));
-                    });
+                    .insert(Inserter::new(*speed, *capacity, dropoff, pickup))
+                    .push_children(&[dropoff, pickup]);
             }
             StructureComponent::TransportBelt => {
                 debug!("Spawning transport belt");

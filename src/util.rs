@@ -11,9 +11,9 @@ use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 use tracing::instrument;
 
 use crate::{
-    inventory::{Fuel, Inventory, Output, Source, Stack},
+    inventory::{Fuel, Inventory, Output, Source, Stack, Storage},
     placeable::Building,
-    structure_components::transport_belt::TransportBelt,
+    structure_components::{burner::Burner, transport_belt::TransportBelt},
     terrain::{COAL, IRON, STONE, TREE},
     types::Product,
 };
@@ -218,12 +218,86 @@ pub type OutputInventoryQuery = InventoryQuery<(
     Without<Building>,
 )>;
 
+pub type StorageInventoryQuery = InventoryQuery<(
+    With<Storage>,
+    Without<Fuel>,
+    Without<Source>,
+    Without<Output>,
+    Without<Building>,
+    Without<Burner>,
+)>;
+
 #[derive(SystemParam)]
 pub struct Inventories<'w, 's> {
-    pub inventories: Query<'w, 's, &'static mut Inventory>,
     pub fuel_inventories: Query<'w, 's, FuelInventoryQuery>,
     pub source_inventories: Query<'w, 's, SourceInventoryQuery>,
     pub output_inventories: Query<'w, 's, OutputInventoryQuery>,
+    pub storage_inventories: Query<'w, 's, StorageInventoryQuery>,
+    children: Query<'w, 's, &'static Children>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum InventoryType {
+    Fuel,
+    Source,
+    Output,
+    Storage,
+}
+
+impl Inventories<'_, '_> {
+    pub fn get_inventory(
+        &self,
+        entity: Entity,
+        inventory_type: InventoryType,
+    ) -> Option<&Inventory> {
+        match inventory_type {
+            InventoryType::Fuel => self.fuel_inventories.get(entity).ok().map(|i| i.inventory),
+            InventoryType::Source => self
+                .source_inventories
+                .get(entity)
+                .ok()
+                .map(|i| i.inventory),
+            InventoryType::Output => self
+                .output_inventories
+                .get(entity)
+                .ok()
+                .map(|i| i.inventory),
+            InventoryType::Storage => self
+                .storage_inventories
+                .get(entity)
+                .ok()
+                .map(|i| i.inventory),
+        }
+    }
+
+    pub fn get_inventory_mut(
+        &mut self,
+        entity: Entity,
+        inventory_type: InventoryType,
+    ) -> Option<Mut<Inventory>> {
+        match inventory_type {
+            InventoryType::Fuel => self
+                .fuel_inventories
+                .get_mut(entity)
+                .ok()
+                .map(|i| i.inventory),
+            InventoryType::Source => self
+                .source_inventories
+                .get_mut(entity)
+                .ok()
+                .map(|i| i.inventory),
+            InventoryType::Output => self
+                .output_inventories
+                .get_mut(entity)
+                .ok()
+                .map(|i| i.inventory),
+            InventoryType::Storage => self
+                .storage_inventories
+                .get_mut(entity)
+                .ok()
+                .map(|i| i.inventory),
+        }
+    }
 }
 
 /// Get the inventory of a child entity.
@@ -258,6 +332,36 @@ where
         (*child_id, output.inventory)
     } else {
         panic!("no child with inventory found");
+    }
+}
+
+pub fn try_get_inventory_child<'b, I>(
+    children: &Children,
+    output_query: &'b Query<InventoryQuery<I>>,
+) -> Option<(Entity, &'b Inventory)>
+where
+    I: ReadOnlyWorldQuery,
+{
+    let output = children
+        .iter()
+        .flat_map(|c| output_query.get(*c).map(|i| (*c, i.inventory)))
+        .next();
+    output
+}
+
+pub fn try_get_inventory_child_mut<'b, I>(
+    children: &Children,
+    output_query: &'b mut Query<InventoryQuery<I>>,
+) -> Option<(Entity, Mut<'b, Inventory>)>
+where
+    I: ReadOnlyWorldQuery,
+{
+    let child_id = children.iter().find(|c| output_query.get(**c).is_ok());
+    if let Some(child_id) = child_id {
+        let output = output_query.get_mut(*child_id).unwrap();
+        Some((*child_id, output.inventory))
+    } else {
+        None
     }
 }
 

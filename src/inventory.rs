@@ -12,9 +12,12 @@ pub struct Output;
 #[derive(Component)]
 pub struct Fuel;
 
+#[derive(Component)]
+pub struct Storage;
+
 pub const MAX_STACK_SIZE: u32 = 1000;
 
-#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Reflect)]
 pub struct Stack {
     pub resource: Product,
     pub amount: u32,
@@ -43,29 +46,35 @@ pub type Slot = Option<Stack>;
 #[derive(Component, Debug)]
 pub struct Inventory {
     pub slots: Vec<Slot>,
-    pub allowed_products: Option<HashSet<Product>>,
+    pub allowed_items: ItemFilter,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Reflect)]
+pub enum ItemFilter {
+    All,
+    Only(HashSet<Name>),
 }
 
 impl Inventory {
     pub fn new(size: u32) -> Self {
         Self {
             slots: vec![None; size as usize],
-            allowed_products: None,
+            allowed_items: ItemFilter::All,
         }
     }
 
-    pub fn new_with_filter(size: u32, allowed_products: HashSet<Product>) -> Self {
+    pub fn new_with_filter(size: u32, allowed_products: HashSet<Name>) -> Self {
         Self {
             slots: vec![None; size as usize],
-            allowed_products: Some(allowed_products),
+            allowed_items: ItemFilter::Only(allowed_products),
         }
     }
 
     /// Return true if the inventory has enough space for the items
     pub fn can_add(&self, items: &[(Product, u32)]) -> bool {
-        if let Some(allowed_products) = &self.allowed_products {
+        if let ItemFilter::Only(allowed_products) = &self.allowed_items {
             for (product, _) in items {
-                if !allowed_products.contains(product) {
+                if !allowed_products.contains(&Name::new(product.to_string())) {
                     return false;
                 }
             }
@@ -157,6 +166,38 @@ impl Inventory {
             }
         }
         true
+    }
+
+    pub fn has_any_from_filter(&self, filter: &ItemFilter) -> bool {
+        match filter {
+            ItemFilter::All => self.slots.iter().any(|s| s.is_some()),
+            ItemFilter::Only(allowed_products) => {
+                for slot in self.slots.iter() {
+                    if let Some(stack) = slot {
+                        if allowed_products.contains(&Name::new(stack.resource.to_string())) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+        }
+    }
+
+    pub fn take_any_from_filter(&mut self, filter: &ItemFilter, max_amount: u32) -> Option<Stack> {
+        match filter {
+            ItemFilter::All => self.take_stack(max_amount),
+            ItemFilter::Only(allowed_products) => {
+                for slot in self.slots.iter_mut() {
+                    if let Some(stack) = slot {
+                        if allowed_products.contains(&Name::new(stack.resource.to_string())) {
+                            return self.take_stack(max_amount);
+                        }
+                    }
+                }
+                None
+            }
+        }
     }
 
     pub fn num_items(&self, resource: &Product) -> u32 {

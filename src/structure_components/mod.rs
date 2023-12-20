@@ -12,8 +12,6 @@ use bevy::{
 };
 use serde::Deserialize;
 
-use crate::types::Product;
-
 use self::{
     assembler::AssemblerPlugin,
     burner::{burner_load, burner_tick},
@@ -42,7 +40,7 @@ pub enum StructureComponent {
     Burner,
     CraftingQueue,
     Inventory(u32),
-    Source(u32, HashSet<Product>),
+    Source(u32, HashSet<String>),
     Output(u32),
     Fuel(u32),
     Miner(f32),

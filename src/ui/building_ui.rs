@@ -1,8 +1,8 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{ecs::storage, prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
 use crate::{
-    inventory::{Fuel, Inventory, Output, Source},
+    inventory::{Fuel, Inventory, Output, Source, Storage},
     loading::{Definitions, Recipes, Resources, Structures},
     picker::SelectedBuilding,
     placeable::Building,
@@ -13,7 +13,10 @@ use crate::{
     },
     types::CraftingQueue,
     ui::inventory_grid::{inventory_grid, Hand, SlotEvent},
-    util::{get_inventory_child, FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery},
+    util::{
+        get_inventory_child, try_get_inventory_child, try_get_inventory_child_mut,
+        FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery, StorageInventoryQuery,
+    },
 };
 
 pub fn building_ui(
@@ -27,10 +30,12 @@ pub fn building_ui(
             Without<Source>,
             Without<Output>,
             Without<Fuel>,
+            Without<Storage>,
         ),
     >,
     name: Query<&Name>,
-    mut building_inventory_query: Query<&mut Inventory, With<Building>>,
+    children: Query<&Children>,
+    storage_query: Query<StorageInventoryQuery>,
     source_query: Query<SourceInventoryQuery>,
     output_query: Query<OutputInventoryQuery>,
     fuel_query: Query<FuelInventoryQuery>,
@@ -78,11 +83,13 @@ pub fn building_ui(
                         .inner_margin(5.)
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
-                                if let Ok(inventory) =
-                                    building_inventory_query.get_mut(*selected_building)
+                                if let Some((inventory_child, inventory)) = children
+                                    .get(*selected_building)
+                                    .ok()
+                                    .and_then(|c| try_get_inventory_child(c, &storage_query))
                                 {
                                     inventory_grid(
-                                        *selected_building,
+                                        inventory_child,
                                         &inventory,
                                         ui,
                                         &definitions.icons,
