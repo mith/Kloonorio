@@ -1,4 +1,9 @@
-use bevy::{math::Vec3Swizzles, prelude::*, reflect::Reflect};
+use bevy::{
+    ecs::system::lifetimeless::{SQuery, SRes},
+    math::Vec3Swizzles,
+    prelude::*,
+    reflect::Reflect,
+};
 use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 
 use crate::{
@@ -28,6 +33,7 @@ pub struct Inserter {
     timer: Timer,
     dropoff_location_entity: Entity,
     pickup_location_entity: Entity,
+    current_action: Option<InserterAction>,
 }
 
 impl Inserter {
@@ -43,6 +49,7 @@ impl Inserter {
             timer: Timer::from_seconds(speed, TimerMode::Repeating),
             dropoff_location_entity,
             pickup_location_entity,
+            current_action: None,
         }
     }
 }
@@ -64,6 +71,24 @@ enum InserterTargetType {
 enum InserterTargetItem {
     Any,
     Filter(Vec<Name>),
+}
+
+impl InserterTargetItem {
+    fn contains(&self, item: &Name) -> bool {
+        match self {
+            InserterTargetItem::Any => true,
+            InserterTargetItem::Filter(filter) => filter.contains(item),
+        }
+    }
+
+    fn to_filter(&self) -> ItemFilter {
+        match self {
+            InserterTargetItem::Any => ItemFilter::All,
+            InserterTargetItem::Filter(filter) => {
+                ItemFilter::Only(filter.iter().cloned().collect())
+            }
+        }
+    }
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, Reflect)]
@@ -124,11 +149,11 @@ fn find_inventory_pickups_for_entity<'a>(
         })
 }
 
-fn find_belt_pickups_for_entity<'a>(
+fn find_belt_pickups_for_entity<'w, 's, 'a>(
     entity: Entity,
-    belts_query: &'a Query<&'static TransportBelt>,
+    belts_query: &'a Query<'w, 's, &'a TransportBelt>,
     target_item: &'a InserterTargetItem,
-) -> impl Iterator<Item = AvailablePickup> + 'a {
+) -> impl Iterator<Item = AvailablePickup> + 's {
     belts_query
         .get(entity)
         .ok()
@@ -154,14 +179,14 @@ fn find_belt_pickups_for_entity<'a>(
         })
 }
 
-fn find_pickups<'a>(
+fn find_pickups<'w, 's, 'a, 'b>(
     inserter: &'a Inserter,
-    inventories: &'a Inventories,
-    belts_query: &'a Query<&'static TransportBelt>,
-    rapier_context: &'a Res<RapierContext>,
-    collider_query: &'a Query<(&'static Collider, &'static GlobalTransform)>,
+    inventories: &'a Inventories<'w, 's>,
+    belts_query: &'a Query<'w, 's, &'a TransportBelt>,
+    rapier_context: &'a Res<'w, RapierContext>,
+    collider_query: &'a Query<'w, 's, (&'a Collider, &'a GlobalTransform)>,
     target_item: &'a InserterTargetItem,
-) -> impl Iterator<Item = AvailablePickup> + 'a {
+) -> impl Iterator<Item = AvailablePickup> + 's {
     collider_query
         .get(inserter.pickup_location_entity)
         .ok()
@@ -189,11 +214,11 @@ fn find_pickups<'a>(
         })
 }
 
-fn find_inventory_dropoffs_for_entity<'a>(
+fn find_inventory_dropoffs_for_entity<'w, 's, 'a>(
     entity: Entity,
-    inventories: &'a Inventories,
+    inventories: &'a Inventories<'w, 's>,
     target_item: &'a InserterTargetItem,
-) -> impl Iterator<Item = DropoffRequest> + 'a {
+) -> impl Iterator<Item = DropoffRequest> + 'w + 's + 'a {
     [
         InventoryType::Fuel,
         InventoryType::Source,
@@ -232,9 +257,9 @@ fn find_inventory_dropoffs_for_entity<'a>(
     })
 }
 
-fn find_belt_dropoffs_for_entity<'a>(
+fn find_belt_dropoffs_for_entity<'w, 's, 'a>(
     entity: Entity,
-    belts_query: &'a Query<&'static TransportBelt>,
+    belts_query: &'a Query<'w, 's, &TransportBelt>,
 ) -> impl Iterator<Item = DropoffRequest> + 'a {
     belts_query
         .get(entity)
@@ -252,14 +277,14 @@ fn find_belt_dropoffs_for_entity<'a>(
         })
 }
 
-fn find_dropoffs<'a>(
+fn find_dropoffs<'w, 's, 'a, 'b>(
     inserter: &'a Inserter,
-    inventories: &'a Inventories,
-    belts_query: &'a Query<&'static TransportBelt>,
-    collider_query: &'a Query<(&'static Collider, &'static GlobalTransform)>,
-    rapier_context: &'a Res<RapierContext>,
+    inventories: &'a Inventories<'w, 's>,
+    belts_query: &'a Query<'w, 's, &'b TransportBelt>,
+    collider_query: &'a Query<'w, 's, (&'b Collider, &'b GlobalTransform)>,
+    rapier_context: &'a Res<'w, RapierContext>,
     target_item: &'a InserterTargetItem,
-) -> impl Iterator<Item = DropoffRequest> + 'a {
+) -> impl Iterator<Item = DropoffRequest> + 'w + 's + 'a + 'b {
     collider_query
         .get(inserter.dropoff_location_entity)
         .ok()
@@ -288,12 +313,12 @@ fn find_dropoffs<'a>(
         })
 }
 
-fn plan_inserter_action<'w, 's, 'a>(
+fn plan_inserter_action<'w, 's, 'a, 'b>(
     inserter: &'a Inserter,
-    inventories: &'a Inventories,
-    collider_query: &'a Query<'w, 's, (&'static Collider, &'static GlobalTransform)>,
-    belts_query: &'a Query<'w, 's, &'static TransportBelt>,
-    rapier_context: &'a Res<RapierContext>,
+    inventories: &'a Inventories<'w, 's>,
+    collider_query: &'a Query<'w, 's, (&'b Collider, &'b GlobalTransform)>,
+    belts_query: &'a Query<'w, 's, &'b TransportBelt>,
+    rapier_context: &'a Res<'w, RapierContext>,
 ) -> Option<InserterAction> {
     let target_item = inserter
         .holding
@@ -347,12 +372,130 @@ fn plan_inserter_action<'w, 's, 'a>(
     }
 }
 
+fn check_inserter_action_valid<'w, 's, 'a>(
+    inserter: &'a Inserter,
+    inventories: &'a Inventories<'w, 's>,
+    belts_query: &'a Query<'w, 's, &TransportBelt>,
+    rapier_context: &'a Res<'w, RapierContext>,
+    collider_query: &'a Query<'w, 's, (&Collider, &GlobalTransform)>,
+    action: &'a InserterAction,
+) -> bool {
+    let holding_valid = inserter
+        .holding
+        .as_ref()
+        .map(|stack| action.item.contains(&Name::new(stack.resource.to_string())))
+        .unwrap_or(true);
+
+    if !holding_valid {
+        return false;
+    }
+
+    let dropoff_valid = action.dropoff.as_ref().map_or(true, |dropoff| {
+        match dropoff {
+            InserterTargetType::Belt(entity) => belts_query
+                .get(*entity)
+                .ok()
+                .map(|belt| belt.can_add(1))
+                .unwrap_or(false),
+            InserterTargetType::Inventory(entity) => inventories
+                .get_inventory(*entity, InventoryType::Output)
+                .map_or(false, |inventory| {
+                    inventory.has_any_from_filter(&action.item.to_filter())
+                }),
+            InserterTargetType::ItemOnGround(entity) => {
+                // TODO: Check if the ground is clear
+                true
+            }
+        }
+    });
+
+    if !dropoff_valid {
+        return false;
+    }
+
+    if inserter.holding.is_some() {
+        return true;
+    }
+
+    let pickup_valid = action.pickup.as_ref().map_or(true, |pickup| {
+        match pickup {
+            InserterTargetType::Belt(entity) => belts_query
+                .get(*entity)
+                .ok()
+                .map(|belt| belt.slots()[1].is_none())
+                .unwrap_or(false),
+            InserterTargetType::Inventory(entity) => inventories
+                .get_inventory(*entity, InventoryType::Output)
+                .map_or(false, |inventory| {
+                    inventory.has_any_from_filter(&action.item.to_filter())
+                }),
+            InserterTargetType::ItemOnGround(entity) => {
+                // Check if the item is still on the ground
+                collider_query
+                    .get(*entity)
+                    .ok()
+                    .and_then(|(c, t)| {
+                        rapier_context.intersection_with_shape(
+                            t.translation().xy(),
+                            0.,
+                            c,
+                            QueryFilter::new()
+                                .exclude_sensors()
+                                .predicate(&|e| e != inserter.pickup_location_entity),
+                        )
+                    })
+                    .is_some()
+            }
+        }
+    });
+
+    return pickup_valid;
+}
+
+fn inserter_planner(
+    mut inserter_query: Query<(Entity, &Transform, &mut Inserter), With<Powered>>,
+    collider_query: Query<(&Collider, &GlobalTransform)>,
+    rapier_context: Res<RapierContext>,
+    inventories: Inventories,
+    belts_query: Query<&TransportBelt>,
+) {
+    for (inserter_entity, _inserter_transform, mut inserter) in &mut inserter_query {
+        let span = info_span!("Inserter tick", inserter = ?inserter_entity);
+        let _enter = span.enter();
+
+        {
+            let new_action_needed =
+                inserter
+                    .current_action
+                    .as_ref()
+                    .map_or(true, |current_action| {
+                        !check_inserter_action_valid(
+                            &inserter,
+                            &inventories,
+                            &belts_query,
+                            &rapier_context,
+                            &collider_query,
+                            &current_action,
+                        )
+                    });
+
+            if new_action_needed {
+                let new_action = plan_inserter_action(
+                    &inserter,
+                    &inventories,
+                    &collider_query,
+                    &belts_query,
+                    &rapier_context,
+                );
+                inserter.current_action = new_action;
+            }
+        }
+    }
+}
+
 pub fn inserter_tick(
-    mut commands: Commands,
-    mut inserter_query: Query<(Entity, &Transform, &mut Inserter, &Children), With<Powered>>,
-    pickup_query: Query<(Entity, &GlobalTransform, &Collider), With<Pickup>>,
-    dropoff_query: Query<(Entity, &GlobalTransform, &Collider), With<Dropoff>>,
-    children: Query<&Children>,
+    mut inserter_query: Query<(Entity, &Transform, &mut Inserter), With<Powered>>,
+    collider_query: Query<(&Collider, &GlobalTransform)>,
     time: Res<Time>,
     rapier_context: Res<RapierContext>,
     mut inventories_set: ParamSet<(
@@ -361,116 +504,53 @@ pub fn inserter_tick(
         Query<(Entity, &mut Inventory), Without<Output>>,        // Dropoff
         Inventories,
     )>,
-    mut belts_query: Query<&mut TransportBelt>,
-    asset_server: Res<AssetServer>,
-    name_query: Query<&Name>,
+    mut belts_set: ParamSet<(Query<&TransportBelt>, Query<&mut TransportBelt>)>,
 ) {
-    for (inserter_entity, _inserter_transform, mut inserter, inserter_children) in
-        &mut inserter_query
-    {
+    for (inserter_entity, _inserter_transform, mut inserter) in &mut inserter_query {
         let span = info_span!("Inserter tick", inserter = ?inserter_entity);
         let _enter = span.enter();
 
-        let Some(drop_point) = inserter_children
-            .iter()
-            .find(|c| dropoff_query.get(**c).is_ok())
-            .and_then(|e| dropoff_query.get(*e).ok())
-        else {
-            commands.entity(inserter_entity).remove::<Working>();
-            continue;
-        };
-
-        if let Some(holding) = inserter.holding.clone() {
+        if let Some(ref action) = inserter.current_action {
             if inserter.timer.tick(time.delta()).just_finished() {
-                let drop_point_transform = drop_point.1;
-                if drop_stack_at_point(
-                    &mut commands,
-                    &rapier_context,
-                    &asset_server,
-                    &mut inventories_set.p1(),
-                    &mut belts_query,
-                    &children,
-                    holding.clone(),
-                    drop_point_transform.translation(),
-                ) {
-                    info!(dropped = ?holding, "Dropped stack");
-                    inserter.holding = None;
-                }
-            }
-        } else {
-            let allowed_products: Vec<(Entity, ItemFilter)> = inventories_set
-                .p2()
-                .iter()
-                .map(|(e, inventory)| (e, inventory.allowed_items.clone()))
-                .collect();
-
-            let Some((_0, pickup_point_transform, pickup_collider)) = inserter_children
-                .iter()
-                .find(|c| pickup_query.get(**c).is_ok())
-                .and_then(|e| pickup_query.get(*e).ok())
-            else {
-                commands.entity(inserter_entity).remove::<Working>();
-                continue;
-            };
-
-            if let Some(collider_entity) = rapier_context.intersection_with_shape(
-                pickup_point_transform.translation().xy(),
-                0.,
-                pickup_collider,
-                QueryFilter::new().exclude_sensors(),
-            ) {
-                let collider_name = name_query.get(collider_entity).unwrap();
-                debug!(collider = ?collider_name, "Found collider");
-
-                // Check if the collider has an inventory that contains a product that is allowed
-                // by the dropoff inventory
-                let Some(collider_children) = children.get(collider_entity).ok() else {
-                    commands.entity(inserter_entity).remove::<Working>();
-                    continue;
-                };
-                let mut p3 = inventories_set.p3();
-
-                let Some((source_inventory_entity, dropoff_entity, filter)) = [
-                    try_get_inventory_child_mut(&collider_children, &mut p3.output_inventories),
-                    try_get_inventory_child_mut(&collider_children, &mut p3.storage_inventories),
-                ]
-                .iter_mut()
-                .filter_map(|x| x.as_ref())
-                .find_map(|(source_inventory_entity, inventory)| {
-                    allowed_products
-                        .iter()
-                        .find_map(|(dropoff_entity, filter)| {
-                            if inventory.has_any_from_filter(filter) {
-                                Some((*source_inventory_entity, *dropoff_entity, filter.clone()))
-                            } else {
-                                None
-                            }
-                        })
-                }) else {
-                    commands.entity(inserter_entity).remove::<Working>();
-                    continue;
-                };
-
-                inserter.holding = ({
-                    let p0 = &mut inventories_set.p0();
-                    let mut source_inventory = p0.get_mut(source_inventory_entity).unwrap();
-                    source_inventory.take_any_from_filter(&filter, inserter.capacity)
-                })
-                .or_else(|| {
-                    take_stack_from_entity_belt(
-                        &mut belts_query,
-                        collider_entity,
-                        inserter.capacity,
-                    )
-                });
                 if inserter.holding.is_some() {
-                    info!(stack = ?inserter.holding, "Picked up stack");
-                    commands.entity(inserter_entity).insert(Working);
+                    // Dropoff
+                    match action.dropoff.as_ref().unwrap() {
+                        InserterTargetType::Belt(entity) => {
+                            let stack = inserter.holding.take().unwrap();
+                            let mut belt = belts_set.p1().get_mut(*entity).unwrap();
+                            belt.add(1, stack.resource);
+                        }
+                        InserterTargetType::Inventory(entity) => {
+                            let stack = inserter.holding.take().unwrap();
+                            let mut inventory = inventories_set.p1().get_mut(*entity).unwrap();
+                            inventory.add_stack(stack);
+                        }
+                        InserterTargetType::ItemOnGround(entity) => {
+                            // TODO: Implement dropping items on the ground
+                        }
+                    }
                 } else {
-                    commands.entity(inserter_entity).remove::<Working>();
+                    // Pickup
+                    match action.pickup.as_ref().unwrap() {
+                        InserterTargetType::Belt(entity) => {
+                            let mut belt = belts_set.p1().get_mut(*entity).unwrap();
+                            let stack = belt.slot_mut(1).unwrap().take().unwrap();
+                            inserter.holding = Some(Stack {
+                                resource: stack,
+                                amount: 1,
+                            });
+                        }
+                        InserterTargetType::Inventory(entity) => {
+                            let mut inventory = inventories_set.p1().get_mut(*entity).unwrap();
+                            let stack = inventory
+                                .take_any_from_filter(&action.item.to_filter(), inserter.capacity);
+                            inserter.holding = stack;
+                        }
+                        InserterTargetType::ItemOnGround(entity) => {
+                            // TODO: Implement picking up items from the ground
+                        }
+                    }
                 }
-            } else {
-                commands.entity(inserter_entity).remove::<Working>();
             }
         }
     }

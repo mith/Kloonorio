@@ -39,6 +39,18 @@ pub enum Product {
     Structure(String),
 }
 
+impl Product {
+    pub fn name(&self) -> Name {
+        Name::new(
+            match self {
+                Product::Intermediate(name) => name,
+                Product::Structure(name) => name,
+            }
+            .to_string(),
+        )
+    }
+}
+
 impl Display for Product {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

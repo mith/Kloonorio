@@ -48,6 +48,10 @@ impl TransportBelt {
         &self.slots
     }
 
+    pub fn slot_mut(&mut self, slot: usize) -> Option<&mut Option<Product>> {
+        self.slots.get_mut(slot)
+    }
+
     /// Take an item from the belt from any slot.
     pub fn take(&mut self) -> Option<Product> {
         for slot in 0..self.slots.len() {
