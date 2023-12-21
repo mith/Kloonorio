@@ -12,6 +12,12 @@ nix run github:mith/kloonorio
 
 ## Screenshots
 
+Now with burner mining drills, burner assembling machines, transport belts, burner inserters & wooden chests!
+
+![2023-12-21T03:00:57,237958718+01:00](https://github.com/mith/Kloonorio/assets/33195/53b315ed-046e-4cac-9a91-cc970beaa0e8)
+![2023-12-21T02:57:20,462344435+01:00](https://github.com/mith/Kloonorio/assets/33195/bc8a8e86-5031-44d2-b8a9-28bf5193ee31)
+
+Some older screenshots:
 Mining some coal
 ![kloonorio_mining](https://user-images.githubusercontent.com/33195/200694885-33999402-2d03-4680-bcb4-2ff6c020789e.png)
 
