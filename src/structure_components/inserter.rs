@@ -28,10 +28,12 @@ impl Plugin for InserterPlugin {
 pub struct Inserter {
     holding: Option<Stack>,
     capacity: u32,
-    timer: Timer,
+    arm_position: f32, // -1 = Pickup, 0 = Self, 1 = Dropoff
+    target_arm_position: f32,
     dropoff_location_entity: Entity,
     pickup_location_entity: Entity,
     current_action: Option<InserterAction>,
+    speed: f32,
 }
 
 impl Inserter {
@@ -44,10 +46,12 @@ impl Inserter {
         Inserter {
             holding: None,
             capacity,
-            timer: Timer::from_seconds(speed, TimerMode::Repeating),
+            arm_position: 0.,
+            target_arm_position: 0.,
             dropoff_location_entity,
             pickup_location_entity,
             current_action: None,
+            speed,
         }
     }
 }
@@ -381,7 +385,7 @@ fn plan_inserter_action(
 
 fn check_inserter_action_valid<'w, 's, 'a>(
     inserter: &'a Inserter,
-    inventories: &'a Inventories<'w, 's>,
+    inventories: &'a Query<&Inventory>,
     belts_query: &'a Query<'w, 's, &TransportBelt>,
     rapier_context: &'a Res<'w, RapierContext>,
     collider_query: &'a Query<'w, 's, (&Collider, &GlobalTransform)>,
@@ -404,11 +408,11 @@ fn check_inserter_action_valid<'w, 's, 'a>(
                 .ok()
                 .map(|belt| belt.can_add(1))
                 .unwrap_or(false),
-            InserterTargetType::Inventory(entity) => inventories
-                .get_inventory(*entity, InventoryType::Output)
-                .map_or(false, |(_, inventory)| {
+            InserterTargetType::Inventory(entity) => {
+                inventories.get(*entity).map_or(false, |inventory| {
                     inventory.has_any_from_filter(&action.item.to_filter())
-                }),
+                })
+            }
             InserterTargetType::ItemOnGround(_entity) => {
                 // TODO: Check if the ground is clear
                 true
@@ -431,11 +435,11 @@ fn check_inserter_action_valid<'w, 's, 'a>(
                 .ok()
                 .map(|belt| belt.slot(1).unwrap().is_none())
                 .unwrap_or(false),
-            InserterTargetType::Inventory(entity) => inventories
-                .get_inventory(*entity, InventoryType::Output)
-                .map_or(false, |(_, inventory)| {
+            InserterTargetType::Inventory(entity) => {
+                inventories.get(*entity).map_or(false, |inventory| {
                     inventory.has_any_from_filter(&action.item.to_filter())
-                }),
+                })
+            }
             InserterTargetType::ItemOnGround(entity) => {
                 // Check if the item is still on the ground
                 collider_query
@@ -463,7 +467,7 @@ fn inserter_planner(
     mut inserter_query: Query<(Entity, &Transform, &mut Inserter), With<Powered>>,
     collider_query: Query<(&Collider, &GlobalTransform)>,
     rapier_context: Res<RapierContext>,
-    inventories: Inventories,
+    mut inventories_set: ParamSet<(Inventories, Query<&Inventory>)>,
     belts_query: Query<&TransportBelt>,
 ) {
     for (inserter_entity, _inserter_transform, mut inserter) in &mut inserter_query {
@@ -478,7 +482,7 @@ fn inserter_planner(
                     .map_or(true, |current_action| {
                         !check_inserter_action_valid(
                             &inserter,
-                            &inventories,
+                            &inventories_set.p1(),
                             &belts_query,
                             &rapier_context,
                             &collider_query,
@@ -489,11 +493,17 @@ fn inserter_planner(
             if new_action_needed {
                 let new_action = plan_inserter_action(
                     &inserter,
-                    &inventories,
+                    &inventories_set.p0(),
                     &collider_query,
                     &belts_query,
                     &rapier_context,
                 );
+                // Determine the direction of movement based on whether the inserter is holding something
+                inserter.target_arm_position = if inserter.holding.is_some() {
+                    1.0
+                } else {
+                    -1.0
+                };
                 inserter.current_action = new_action;
             }
         }
@@ -517,7 +527,13 @@ pub fn inserter_tick(
             commands.entity(inserter_entity).remove::<Working>();
         }
 
-        if inserter.timer.tick(time.delta()).just_finished() {
+        // Move towards the target location
+        inserter.arm_position +=
+            inserter.speed * time.delta_seconds() * inserter.target_arm_position.signum();
+        // Clamp the extension value to ensure it stays within the range [-1.0, 1.0]
+        inserter.arm_position = inserter.arm_position.clamp(-1.0, 1.0);
+
+        if (inserter.arm_position - inserter.target_arm_position).abs() < 0.01 {
             if let Some(action) = inserter.current_action.clone() {
                 if let Some(stack) = inserter.holding.take() {
                     // Dropoff
