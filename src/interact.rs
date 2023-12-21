@@ -19,7 +19,7 @@ use crate::{
     inventory::Inventory,
     player::Player,
     terrain::{CursorWorldPos, HoveredTile, COAL, IRON, STONE, TREE},
-    types::Product,
+    types::Item,
 };
 
 pub struct InteractPlugin;
@@ -108,10 +108,10 @@ fn interact_completion(
             let tile_entity = interaction.target;
             if let Ok(tile_texture) = tile_query.get(tile_entity) {
                 match tile_texture.0 {
-                    COAL => inventory.add_item(Product::Intermediate("Coal".into()), 1),
-                    IRON => inventory.add_item(Product::Intermediate("Iron ore".into()), 1),
-                    STONE => inventory.add_item(Product::Intermediate("Stone".into()), 1),
-                    TREE => inventory.add_item(Product::Intermediate("Wood".into()), 1),
+                    COAL => inventory.add_item(Item::new("Coal"), 1),
+                    IRON => inventory.add_item(Item::new("Iron ore"), 1),
+                    STONE => inventory.add_item(Item::new("Stone"), 1),
+                    TREE => inventory.add_item(Item::new("Wood"), 1),
                     _ => vec![],
                 };
             }

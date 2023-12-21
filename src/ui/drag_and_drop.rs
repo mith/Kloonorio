@@ -70,19 +70,19 @@ pub fn clear_hand(
 
 #[cfg(test)]
 mod test {
-    use crate::{inventory::Stack, types::Product, ui::inventory_grid::InventoryIndex};
+    use crate::{inventory::Stack, types::Item, ui::inventory_grid::InventoryIndex};
 
     use super::*;
     use bevy::utils::HashMap;
     use proptest::prelude::*;
 
     prop_compose! {
-    fn arb_product()(product in any::<u32>()) -> Product {
+    fn arb_product()(product in any::<u32>()) -> Item {
         match product % 4 {
-            0 => Product::Intermediate("Wood".into()),
-            1 => Product::Intermediate("Stone".into()),
-            2 => Product::Intermediate("Iron ore".into()),
-            3 => Product::Intermediate("Coal".into()),
+            0 => Item::new("Wood"),
+            1 => Item::new("Stone"),
+            2 => Item::new("Iron ore"),
+            3 => Item::new("Coal"),
             _ => unreachable!(),
         }
         }
@@ -114,10 +114,10 @@ mod test {
             .iter()
                 .flatten()
                 .fold(HashMap::new(), |mut acc, stack| {
-                if acc.contains_key(&stack.resource) {
-                    *acc.get_mut(&stack.resource).unwrap() += stack.amount;
+                if acc.contains_key(&stack.item) {
+                    *acc.get_mut(&stack.item).unwrap() += stack.amount;
                 } else {
-                    acc.insert(stack.resource.clone(), stack.amount);
+                    acc.insert(stack.item.clone(), stack.amount);
                 }
                     acc
             });
@@ -147,10 +147,10 @@ mod test {
             .iter()
                 .flatten()
                 .fold(HashMap::new(), |mut acc, stack| {
-                if acc.contains_key(&stack.resource) {
-                    *acc.get_mut(&stack.resource).unwrap() += stack.amount;
+                if acc.contains_key(&stack.item) {
+                    *acc.get_mut(&stack.item).unwrap() += stack.amount;
                 } else {
-                    acc.insert(stack.resource.clone(), stack.amount);
+                    acc.insert(stack.item.clone(), stack.amount);
                 }
                     acc
             });
@@ -167,7 +167,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Product::Intermediate("Wood".into()), 1);
+        inventory.add_item(Item::new("Wood"), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -196,7 +196,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Product::Intermediate("Wood".into()), 1);
+        inventory.add_item(Item::new("Wood"), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -222,7 +222,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Product::Intermediate("Wood".into()), 1);
+        inventory.add_item(Item::new("Wood"), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -248,8 +248,8 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.slots[0] = Some(Stack::new(Product::Intermediate("Wood".into()), 1));
-        inventory.slots[1] = Some(Stack::new(Product::Intermediate("Wood".into()), 1));
+        inventory.slots[0] = Some(Stack::new(Item::new("Wood"), 1));
+        inventory.slots[1] = Some(Stack::new(Item::new("Wood"), 1));
 
         let player_id = app.world.spawn((Player, inventory)).id();
 

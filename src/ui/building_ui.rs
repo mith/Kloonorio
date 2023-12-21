@@ -3,7 +3,7 @@ use bevy_egui::EguiContexts;
 
 use crate::{
     inventory::{Fuel, Inventory, Output, Source, Storage},
-    loading::{Definitions, Recipes, Resources, Structures},
+    loading::{Definitions, Items, Recipes, Structures},
     picker::SelectedBuilding,
     placeable::Building,
     player::Player,
@@ -74,7 +74,7 @@ pub fn building_ui(
                                     hand,
                                     &mut slot_events,
                                     &definitions.structures,
-                                    &definitions.resources,
+                                    &definitions.items,
                                 );
                             });
                         });
@@ -96,7 +96,7 @@ pub fn building_ui(
                                         hand,
                                         &mut slot_events,
                                         &definitions.structures,
-                                        &definitions.resources,
+                                        &definitions.items,
                                     );
                                 }
                                 if let Ok(assembler) = assembler_query.get_mut(*selected_building) {
@@ -123,7 +123,7 @@ pub fn building_ui(
                                         hand,
                                         &mut slot_events,
                                         &definitions.structures,
-                                        &definitions.resources,
+                                        &definitions.items,
                                     );
                                 }
 
@@ -140,7 +140,7 @@ pub fn building_ui(
                                         hand,
                                         &mut slot_events,
                                         &definitions.structures,
-                                        &definitions.resources,
+                                        &definitions.items,
                                     );
                                 }
                             });
@@ -162,7 +162,7 @@ fn burner_widget(
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
     structures: &Structures,
-    resources: &Resources,
+    resources: &Items,
 ) {
     ui.horizontal(|ui| {
         ui.label("Fuel:");
@@ -193,7 +193,7 @@ fn crafting_machine_widget(
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
     structures: &Structures,
-    resources: &Resources,
+    resources: &Items,
 ) {
     ui.horizontal_centered(|ui| {
         inventory_grid(
@@ -259,7 +259,7 @@ fn assembling_machine_widget(
 
 #[cfg(test)]
 mod test {
-    use crate::types::Product;
+    use crate::types::Item;
 
     use super::*;
 
@@ -288,7 +288,7 @@ mod test {
         let building_a_id = app.world.spawn((Burner::new(), Building)).id();
 
         let mut inventory = Inventory::new(1);
-        inventory.add_item(Product::Intermediate("Wood".into()), 1);
+        inventory.add_item(Item::new("Wood"), 1);
         let a_child = app.world.spawn((Fuel, inventory)).id();
 
         app.world
@@ -300,7 +300,7 @@ mod test {
             .spawn((Burner::new(), Building))
             .with_children(|b| {
                 let mut inventory = Inventory::new(1);
-                inventory.add_item(Product::Intermediate("Coal".into()), 1);
+                inventory.add_item(Item::new("Coal"), 1);
                 b.spawn((Fuel, inventory));
             })
             .id();

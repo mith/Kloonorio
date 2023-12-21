@@ -9,10 +9,10 @@ use bevy::{
 use bevy_egui::EguiContexts;
 
 use crate::{
-    intermediate_loader::{Intermediate, IntermediateAsset},
+    item_loader::ItemAsset,
     recipe_loader::RecipesAsset,
     structure_loader::{Structure, StructuresAsset},
-    types::{AppState, GameState, Recipe},
+    types::{AppState, GameState, Item, Recipe},
 };
 
 #[derive(Resource, Default)]
@@ -67,17 +67,17 @@ impl DerefMut for Icons {
 }
 
 #[derive(Resource, Default)]
-pub struct Resources(HashMap<String, Intermediate>);
+pub struct Items(HashMap<String, Item>);
 
-impl Deref for Resources {
-    type Target = HashMap<String, Intermediate>;
+impl Deref for Items {
+    type Target = HashMap<String, Item>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for Resources {
+impl DerefMut for Items {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -88,7 +88,7 @@ pub struct Definitions<'w> {
     pub structures: Res<'w, Structures>,
     pub recipes: Res<'w, Recipes>,
     pub icons: Res<'w, Icons>,
-    pub resources: Res<'w, Resources>,
+    pub items: Res<'w, Items>,
 }
 
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
@@ -100,17 +100,17 @@ fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState
 
 fn load_resources(
     mut gamestate: ResMut<GameState>,
-    resource_assets: Res<Assets<IntermediateAsset>>,
-    mut resources: ResMut<Resources>,
+    item_assets: Res<Assets<ItemAsset>>,
+    mut resources: ResMut<Items>,
 ) {
-    let resource_asset = resource_assets.get(&gamestate.resources_handle);
-    if gamestate.resources_loaded || resource_asset.is_none() {
+    let item_asset = item_assets.get(&gamestate.resources_handle);
+    if gamestate.items_loaded || item_asset.is_none() {
         return;
     }
 
-    if let Some(IntermediateAsset(loaded_resource)) = resource_asset {
-        resources.extend(loaded_resource.iter().map(|r| (r.name.clone(), r.clone())));
-        gamestate.resources_loaded = true;
+    if let Some(ItemAsset(loaded_resource)) = item_asset {
+        resources.extend(loaded_resource.iter().map(|r| (r.to_string(), r.clone())));
+        gamestate.items_loaded = true;
     }
 }
 
@@ -183,7 +183,7 @@ fn check_loading(gamestate: Res<GameState>, mut next_state: ResMut<NextState<App
     if gamestate.recipes_loaded
         && gamestate.structures_loaded
         && gamestate.icons_loaded
-        && gamestate.resources_loaded
+        && gamestate.items_loaded
     {
         next_state.set(AppState::Running);
     }
@@ -196,7 +196,7 @@ impl Plugin for LoadingPlugin {
         app.insert_resource(Structures::default())
             .insert_resource(Recipes::default())
             .insert_resource(Icons::default())
-            .insert_resource(Resources::default())
+            .insert_resource(Items::default())
             .add_systems(OnEnter(AppState::Loading), start_loading)
             .add_systems(
                 Update,

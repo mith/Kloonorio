@@ -1,6 +1,5 @@
 use bevy::{
     app::{App, Plugin, Update},
-    core::Name,
     ecs::{
         component::Component,
         entity::Entity,
@@ -15,7 +14,7 @@ use bevy::{
 
 use crate::{
     inventory::{Inventory, ItemFilter, Output, Source},
-    types::{ActiveCraft, CraftingQueue, Powered, Recipe, Working},
+    types::{ActiveCraft, CraftingQueue, Item, Powered, Recipe, Working},
 };
 
 pub struct AssemblerPlugin;
@@ -56,7 +55,7 @@ fn assembler_change_recipe(
                     .recipe
                     .ingredients
                     .iter()
-                    .map(|(p, _)| Name::new(p.to_string()))
+                    .map(|(p, _)| Item::new(p.to_string()))
                     .collect(),
             );
         }

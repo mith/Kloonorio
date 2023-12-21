@@ -1,11 +1,10 @@
-use std::{collections::VecDeque, fmt::Display};
+use std::{borrow::Cow, collections::VecDeque, ops::Deref};
 
 use bevy::{asset::LoadedFolder, prelude::*, reflect::TypeUuid};
 use serde::Deserialize;
 
 use crate::{
-    intermediate_loader::IntermediateAsset, recipe_loader::RecipesAsset,
-    structure_loader::StructuresAsset,
+    item_loader::ItemAsset, recipe_loader::RecipesAsset, structure_loader::StructuresAsset,
 };
 
 #[derive(Clone, PartialEq, Eq, Component, Debug, Hash, States, Default)]
@@ -25,38 +24,48 @@ pub struct GameState {
     pub structures_loaded: bool,
     pub icons_loaded: bool,
     pub icons_handle: Handle<LoadedFolder>,
-    pub resources_loaded: bool,
-    pub resources_handle: Handle<IntermediateAsset>,
+    pub items_loaded: bool,
+    pub resources_handle: Handle<ItemAsset>,
 }
 
 #[derive(Component)]
 pub struct StaticDimensions(pub IVec2);
 
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Deserialize, TypeUuid, Reflect)]
+/// An item is a "thing" that can be stored in an inventory, used in or produced by a recipe, etc.
+#[derive(Hash, Eq, PartialEq, Debug, Clone, TypeUuid, Reflect, Deserialize)]
+#[serde(from = "String")]
 #[uuid = "28a860c7-96ee-44e5-ae3b-8a25d9a863d5"]
-pub enum Product {
-    Intermediate(String),
-    Structure(String),
-}
+pub struct Item(Name);
 
-impl Product {
-    pub fn name(&self) -> Name {
-        Name::new(
-            match self {
-                Product::Intermediate(name) => name,
-                Product::Structure(name) => name,
-            }
-            .to_string(),
-        )
+impl Item {
+    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
+        Self(Name::new(name))
     }
 }
 
-impl Display for Product {
+impl std::fmt::Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Product::Intermediate(name) => write!(f, "{}", name),
-            Product::Structure(name) => write!(f, "{}", name),
-        }
+        self.0.fmt(f)
+    }
+}
+
+impl From<String> for Item {
+    fn from(name: String) -> Self {
+        Self(Name::new(name))
+    }
+}
+
+impl AsRef<str> for Item {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl Deref for Item {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -79,8 +88,8 @@ pub struct ActiveCraft {
 #[derive(Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "1ca725c1-5a0d-484f-8d04-a5a42960e208"]
 pub struct Recipe {
-    pub ingredients: Vec<(Product, u32)>,
-    pub products: Vec<(Product, u32)>,
+    pub ingredients: Vec<(Item, u32)>,
+    pub products: Vec<(Item, u32)>,
     pub crafting_time: f32,
     pub name: String,
 }

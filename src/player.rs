@@ -18,7 +18,7 @@ use bevy::{
 
 use crate::{
     inventory::Inventory,
-    types::{AppState, CraftingQueue, Product},
+    types::{AppState, CraftingQueue, Item},
     ui::{hotbar::Hotbar, inventory_grid::Hand},
     ysort::YSort,
 };
@@ -35,14 +35,14 @@ impl Plugin for PlayerPlugin {
 pub struct Player;
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut inventory = Inventory::new(100);
-    inventory.add_item(Product::Structure("Wooden chest".into()), 100);
-    inventory.add_item(Product::Structure("Burner mining drill".into()), 100);
-    inventory.add_item(Product::Structure("Stone furnace".into()), 100);
-    inventory.add_item(Product::Structure("Burner inserter".into()), 100);
-    inventory.add_item(Product::Intermediate("Coal".into()), 200);
-    inventory.add_item(Product::Intermediate("Iron plate".into()), 200);
-    inventory.add_item(Product::Structure("Transport belt".into()), 200);
-    inventory.add_item(Product::Structure("Burner assembling machine".into()), 100);
+    inventory.add_item(Item::new("Wooden chest"), 100);
+    inventory.add_item(Item::new("Burner mining drill"), 100);
+    inventory.add_item(Item::new("Stone furnace"), 100);
+    inventory.add_item(Item::new("Burner inserter"), 100);
+    inventory.add_item(Item::new("Coal"), 200);
+    inventory.add_item(Item::new("Iron plate"), 200);
+    inventory.add_item(Item::new("Transport belt"), 200);
+    inventory.add_item(Item::new("Burner assembling machine"), 100);
     commands
         .spawn((
             Name::new("Player"),

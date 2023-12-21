@@ -6,7 +6,7 @@ use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext};
 use crate::{
     discrete_rotation::DiscreteRotation,
     inventory::Stack,
-    types::{AppState, Product},
+    types::{AppState, Item},
     util::product_to_texture,
 };
 
@@ -18,7 +18,7 @@ use super::inserter::Dropoff;
 
 #[derive(Component, Reflect)]
 pub struct TransportBelt {
-    slots: VecDeque<Option<Product>>,
+    slots: VecDeque<Option<Item>>,
     dropoff: Entity,
 }
 
@@ -35,7 +35,7 @@ impl TransportBelt {
     }
 
     /// Add a stack to the belt at the given slot. Returns true if the stack was added
-    pub fn add(&mut self, slot: usize, stack: Product) -> bool {
+    pub fn add(&mut self, slot: usize, stack: Item) -> bool {
         if self.can_add(slot) {
             self.slots[slot] = Some(stack);
             return true;
@@ -44,11 +44,11 @@ impl TransportBelt {
         }
     }
 
-    pub fn slot(&self, slot: usize) -> Option<&Option<Product>> {
+    pub fn slot(&self, slot: usize) -> Option<&Option<Item>> {
         self.slots.get(slot)
     }
 
-    pub fn slot_mut(&mut self, slot: usize) -> Option<&mut Option<Product>> {
+    pub fn slot_mut(&mut self, slot: usize) -> Option<&mut Option<Item>> {
         self.slots.get_mut(slot)
     }
 }
@@ -109,7 +109,7 @@ pub fn transport_belt_tick(
                                     1
                                 }
                             };
-                            b.add(slot, stack.resource.clone())
+                            b.add(slot, stack.item.clone())
                         })
                         .unwrap_or(false)
                 })
@@ -252,7 +252,7 @@ mod test {
         app.insert_resource(timer);
 
         let mut belt = TransportBelt::new(dropoff_point);
-        belt.add(0, Product::Intermediate("Coal".into()));
+        belt.add(0, Item::new("Coal"));
 
         let belt_entity = app
             .world
@@ -269,7 +269,7 @@ mod test {
 
         assert_eq!(
             app.world.get::<TransportBelt>(belt_entity).unwrap().slots,
-            vec![None, Some(Product::Intermediate("Coal".into())), None]
+            vec![None, Some(Item::new("Coal")), None]
         );
 
         let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
@@ -279,7 +279,7 @@ mod test {
 
         assert_eq!(
             app.world.get::<TransportBelt>(belt_entity).unwrap().slots,
-            vec![None, None, Some(Product::Intermediate("Coal".into()))]
+            vec![None, None, Some(Item::new("Coal"))]
         );
     }
 
@@ -294,8 +294,8 @@ mod test {
         app.add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0));
         let dropoff_point = app.world.spawn(TransformBundle::default()).id();
         let mut belt = TransportBelt::new(dropoff_point);
-        belt.add(0, Product::Intermediate("Coal".into()));
-        belt.add(1, Product::Intermediate("Iron ore".into()));
+        belt.add(0, Item::new("Coal"));
+        belt.add(1, Item::new("Iron ore"));
 
         let belt_entity = app
             .world
@@ -315,11 +315,7 @@ mod test {
 
         assert_eq!(
             app.world.get::<TransportBelt>(belt_entity).unwrap().slots,
-            vec![
-                None,
-                Some(Product::Intermediate("Coal".into())),
-                Some(Product::Intermediate("Iron ore".into()))
-            ]
+            vec![None, Some(Item::new("Coal")), Some(Item::new("Iron ore"))]
         );
     }
 
@@ -334,8 +330,8 @@ mod test {
 
         let dropoff_point = app.world.spawn(TransformBundle::default()).id();
         let mut belt = TransportBelt::new(dropoff_point);
-        belt.add(0, Product::Intermediate("Coal".into()));
-        belt.add(2, Product::Intermediate("Iron ore".into()));
+        belt.add(0, Item::new("Coal"));
+        belt.add(2, Item::new("Iron ore"));
 
         let belt_entity = app
             .world
@@ -355,11 +351,7 @@ mod test {
 
         assert_eq!(
             app.world.get::<TransportBelt>(belt_entity).unwrap().slots,
-            vec![
-                None,
-                Some(Product::Intermediate("Coal".into())),
-                Some(Product::Intermediate("Iron ore".into()))
-            ]
+            vec![None, Some(Item::new("Coal")), Some(Item::new("Iron ore"))]
         );
     }
 
@@ -380,8 +372,8 @@ mod test {
             ))
             .id();
         let mut belt_a = TransportBelt::new(dropoff_point);
-        belt_a.add(1, Product::Intermediate("Coal".into()));
-        belt_a.add(2, Product::Intermediate("Iron ore".into()));
+        belt_a.add(1, Item::new("Coal"));
+        belt_a.add(2, Item::new("Iron ore"));
 
         let belt_a_entity = app
             .world
@@ -413,12 +405,12 @@ mod test {
 
         assert_eq!(
             app.world.get::<TransportBelt>(belt_a_entity).unwrap().slots,
-            vec![None, None, Some(Product::Intermediate("Coal".into()))]
+            vec![None, None, Some(Item::new("Coal"))]
         );
 
         assert_eq!(
             app.world.get::<TransportBelt>(belt_b_entity).unwrap().slots,
-            vec![None, Some(Product::Intermediate("Iron ore".into())), None]
+            vec![None, Some(Item::new("Iron ore")), None]
         );
     }
 }

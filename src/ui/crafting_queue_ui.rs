@@ -6,7 +6,7 @@ use bevy_egui::EguiContexts;
 use egui::{Align2, Color32, PointerButton, Response, Sense};
 
 use crate::{
-    loading::{Icons, Resources, Structures},
+    loading::{Icons, Items, Structures},
     player::Player,
     types::CraftingQueue,
 };
@@ -18,7 +18,7 @@ pub fn crafting_queue_ui(
     mut crafting_queue_query: Query<&mut CraftingQueue, With<Player>>,
     icons: Res<Icons>,
     structures: Res<Structures>,
-    resources: Res<Resources>,
+    resources: Res<Items>,
 ) {
     let mut to_cancel: Vec<usize> = vec![];
     egui::Area::new("Crafting queue")

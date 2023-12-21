@@ -19,7 +19,7 @@ use egui::{
 
 use crate::{
     inventory::Inventory,
-    loading::{Icons, Resources, Structures},
+    loading::{Icons, Items, Structures},
     player::Player,
 };
 
@@ -58,7 +58,7 @@ fn hotbar_ui(
     mut hotbar_query: Query<(Entity, &mut Hotbar, &Inventory, &mut Hand), With<Player>>,
     icons: Res<Icons>,
     structures: Res<Structures>,
-    resources: Res<Resources>,
+    resources: Res<Items>,
 ) {
     egui::Area::new("Hotbar")
         .movable(false)
@@ -99,7 +99,7 @@ fn hotbar_ui(
                                             if let Some(item) = &inventory.slots[inventory_idx.slot]
                                             {
                                                 hotbar_item.item =
-                                                    Some(Name::new(item.resource.to_string()));
+                                                    Some(Name::new(item.item.to_string()));
                                             }
                                         }
                                     }

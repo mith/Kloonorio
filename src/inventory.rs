@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::HashSet};
 use tracing::instrument;
 
-use crate::types::Product;
+use crate::{types::Item, util::try_subtract};
 
 #[derive(Component)]
 pub struct Source;
@@ -19,13 +19,16 @@ pub const MAX_STACK_SIZE: u32 = 1000;
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Reflect)]
 pub struct Stack {
-    pub resource: Product,
+    pub item: Item,
     pub amount: u32,
 }
 
 impl Stack {
-    pub fn new(resource: Product, amount: u32) -> Self {
-        Self { resource, amount }
+    pub fn new(resource: Item, amount: u32) -> Self {
+        Self {
+            item: resource,
+            amount,
+        }
     }
 
     /// Add an amount to the stack, returning the amount that could not be added.
@@ -52,7 +55,7 @@ pub struct Inventory {
 #[derive(Debug, Clone, PartialEq, Eq, Reflect)]
 pub enum ItemFilter {
     All,
-    Only(HashSet<Name>),
+    Only(HashSet<Item>),
 }
 
 impl Inventory {
@@ -63,7 +66,7 @@ impl Inventory {
         }
     }
 
-    pub fn new_with_filter(size: u32, allowed_products: HashSet<Name>) -> Self {
+    pub fn new_with_filter(size: u32, allowed_products: HashSet<Item>) -> Self {
         Self {
             slots: vec![None; size as usize],
             allowed_items: ItemFilter::Only(allowed_products),
@@ -71,10 +74,10 @@ impl Inventory {
     }
 
     /// Return true if the inventory has enough space for the items
-    pub fn can_add(&self, items: &[(Product, u32)]) -> bool {
+    pub fn can_add(&self, items: &[(Item, u32)]) -> bool {
         if let ItemFilter::Only(allowed_products) = &self.allowed_items {
             for (product, _) in items {
-                if !allowed_products.contains(&product.name()) {
+                if !allowed_products.contains(product) {
                     return false;
                 }
             }
@@ -86,7 +89,7 @@ impl Inventory {
             let mut added = false;
             for slot in slots.iter_mut() {
                 if let Some(stack) = slot {
-                    if stack.resource == item_resource {
+                    if stack.item == item_resource {
                         if stack.amount + item_amount <= MAX_STACK_SIZE {
                             stack.amount += item_amount;
                             added = true;
@@ -111,14 +114,14 @@ impl Inventory {
     }
 
     /// Add the items to the inventory, returning the remainder
-    pub fn add_items(&mut self, items: &[(Product, u32)]) -> Vec<(Product, u32)> {
+    pub fn add_items(&mut self, items: &[(Item, u32)]) -> Vec<(Item, u32)> {
         let mut remainder = Vec::new();
         for (resource, amount) in items {
             let mut amount = *amount;
 
             // First iterate over existing stacks
             for stack in self.slots.iter_mut().flatten() {
-                if stack.resource == *resource {
+                if stack.item == *resource {
                     let space = MAX_STACK_SIZE - stack.amount;
                     if space >= amount {
                         stack.amount += amount;
@@ -140,7 +143,7 @@ impl Inventory {
             // Then put in the first empty slot
             if let Some(slot) = self.slots.iter_mut().find(|s| s.is_none()) {
                 *slot = Some(Stack {
-                    resource: resource.clone(),
+                    item: resource.clone(),
                     amount: amount.min(MAX_STACK_SIZE),
                 });
                 amount = 0;
@@ -154,57 +157,46 @@ impl Inventory {
         remainder
     }
 
-    pub fn add_item(&mut self, resource: Product, amount: u32) -> Vec<(Product, u32)> {
-        self.add_items(&[(resource, amount)])
+    pub fn add_item(&mut self, item: Item, amount: u32) -> Vec<(Item, u32)> {
+        self.add_items(&[(item, amount)])
     }
 
-    pub fn has_items(&self, items: &[(Product, u32)]) -> bool {
-        for (resource, amount) in items {
-            let amount_in_inventory = self.num_items(resource);
-            if *amount >= amount_in_inventory {
-                return false;
-            }
-        }
-        true
-    }
-
-    pub fn has_any_from_filter(&self, filter: &ItemFilter) -> bool {
-        match filter {
-            ItemFilter::All => self.slots.iter().any(|s| s.is_some()),
-            ItemFilter::Only(allowed_products) => {
-                for slot in self.slots.iter() {
-                    if let Some(stack) = slot {
-                        if allowed_products.contains(&Name::new(stack.resource.to_string())) {
-                            return true;
-                        }
-                    }
-                }
+    pub fn has_item(&self, item: &Item) -> bool {
+        self.slots.iter().any(|s| {
+            if let Some(stack) = s {
+                stack.item == *item
+            } else {
                 false
             }
-        }
+        })
     }
 
-    pub fn take_any_from_filter(&mut self, filter: &ItemFilter, max_amount: u32) -> Option<Stack> {
-        match filter {
-            ItemFilter::All => self.take_stack(max_amount),
-            ItemFilter::Only(allowed_products) => {
-                for slot in self.slots.iter_mut() {
-                    if let Some(stack) = slot {
-                        if allowed_products.contains(&Name::new(stack.resource.to_string())) {
-                            return self.take_stack(max_amount);
-                        }
+    pub fn has_items(&self, items: &[(Item, u32)]) -> bool {
+        let mut remaining = items.to_vec();
+
+        for slot in self.slots.iter() {
+            if let Some(stack) = slot {
+                for (resource, amount) in remaining.iter_mut() {
+                    if *resource == stack.item {
+                        *amount = amount.saturating_sub(stack.amount);
                     }
                 }
-                None
+            }
+            // Check if all items have been found
+            if remaining.iter().all(|(_, amount)| *amount == 0) {
+                return true;
             }
         }
+
+        // If any item is still required (amount > 0), return false
+        !remaining.iter().any(|(_, amount)| *amount > 0)
     }
 
-    pub fn num_items(&self, resource: &Product) -> u32 {
+    pub fn num_items(&self, resource: &Item) -> u32 {
         let mut amount = 0;
         for slot in self.slots.iter() {
             if let Some(stack) = slot {
-                if stack.resource == *resource {
+                if stack.item == *resource {
                     amount += stack.amount;
                 }
             }
@@ -213,28 +205,21 @@ impl Inventory {
     }
 
     /// Removes all items atomically, returning true on success
-    pub fn remove_items(&mut self, items: &[(Product, u32)]) -> bool {
+    pub fn remove_items(&mut self, items: &[(Item, u32)]) -> bool {
         if !self.has_items(items) {
             return false;
         }
 
         for (resource, amount) in items {
-            let mut amount = *amount;
+            let mut amount_to_remove = *amount;
             for slot in self.slots.iter_mut() {
-                if amount == 0 {
-                    break;
-                }
-                if let Some(stack) = slot {
-                    if stack.resource == *resource {
-                        if stack.amount >= amount {
-                            stack.amount -= amount;
-                            amount = 0;
-                        } else {
-                            amount -= stack.amount;
-                            stack.amount = 0;
-                        }
+                if let Some(stack) = slot.as_mut() {
+                    if stack.item == *resource && amount_to_remove > 0 {
+                        let removed_amount = try_subtract(&mut stack.amount, amount_to_remove);
+                        amount_to_remove -= removed_amount;
+
                         if stack.amount == 0 {
-                            *slot = None;
+                            *slot = None; // Clear the slot if the stack is empty
                         }
                     }
                 }
@@ -243,11 +228,35 @@ impl Inventory {
         true
     }
 
+    /// Take a stack of items from the inventory, returning a stack of
+    /// items where the amount is min(requested_amount, amount_in_inventory)
+    pub fn try_take_item(&mut self, item: &Item, requested_amount: u32) -> Option<Stack> {
+        let mut amount = 0;
+        for slot in self.slots.iter_mut() {
+            if let Some(stack) = slot {
+                if stack.item == *item {
+                    let taken = try_subtract(&mut stack.amount, requested_amount - amount);
+                    amount += taken;
+
+                    if stack.amount == 0 {
+                        *slot = None;
+                    }
+                }
+            }
+        }
+
+        if amount == 0 {
+            return None;
+        }
+
+        Some(Stack::new(item.clone(), amount))
+    }
+
     pub fn add_stack(&mut self, stack: Stack) -> Option<Stack> {
         let mut stack = stack;
         for slot in self.slots.iter_mut() {
             if let Some(existing_stack) = slot {
-                if existing_stack.resource == stack.resource {
+                if existing_stack.item == stack.item {
                     let overflow = existing_stack.add(stack.amount);
                     if overflow == 0 {
                         return None;
@@ -263,37 +272,10 @@ impl Inventory {
         Some(stack)
     }
 
-    pub fn take_stack(&mut self, max_size: u32) -> Option<Stack> {
-        let mut return_stack: Option<Stack> = None;
-
-        for slot in self.slots.iter_mut() {
-            if let Some(existing_stack) = slot {
-                if let Some(ref mut stack) = return_stack {
-                    if stack.resource == existing_stack.resource {
-                        let taking_n = max_size.min(existing_stack.amount);
-                        stack.amount += taking_n;
-                        existing_stack.amount -= taking_n;
-                        if existing_stack.amount == 0 {
-                            *slot = None;
-                        }
-                    }
-                } else {
-                    let taking_n = existing_stack.amount.min(max_size);
-                    return_stack = Some(Stack::new(existing_stack.resource.clone(), taking_n));
-                    existing_stack.amount -= taking_n;
-                    if existing_stack.amount == 0 {
-                        *slot = None;
-                    }
-                }
-            }
-        }
-        return_stack
-    }
-
     pub fn find_item(&self, item: &str) -> Option<usize> {
         self.slots.iter().enumerate().find_map(|(index, slot)| {
             if let Some(stack) = slot {
-                if stack.resource.to_string() == item {
+                if stack.item.to_string() == item {
                     Some(index)
                 } else {
                     None
@@ -307,8 +289,23 @@ impl Inventory {
     pub fn has_space_for(&self, stack: &Stack) -> bool {
         for slot in self.slots.iter() {
             if let Some(existing_stack) = slot {
-                if existing_stack.resource == stack.resource {
+                if existing_stack.item == stack.item {
                     if existing_stack.amount + stack.amount <= MAX_STACK_SIZE {
+                        return true;
+                    }
+                }
+            } else {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn has_space_for_item(&self, item: &Item) -> bool {
+        for slot in self.slots.iter() {
+            if let Some(existing_stack) = slot {
+                if existing_stack.item == *item {
+                    if existing_stack.amount < MAX_STACK_SIZE {
                         return true;
                     }
                 }
@@ -365,7 +362,7 @@ pub fn transfer_between_stacks(source_stack: &mut Stack, target_stack: &mut Stac
     if source_stack == target_stack {
         return;
     }
-    if target_stack.resource == source_stack.resource {
+    if target_stack.item == source_stack.item {
         debug!("Adding source stack to target stack");
         let remainder = target_stack.add(source_stack.amount);
         source_stack.amount = remainder;
@@ -382,259 +379,181 @@ mod test {
     #[test]
     fn has_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
-        assert!(inventory.has_items(&[
-            (Product::Intermediate("Stone".into()), 5),
-            (Product::Intermediate("Wood".into()), 10)
-        ]));
-        assert!(!inventory.has_items(&[
-            (Product::Intermediate("Stone".into()), 5),
-            (Product::Intermediate("Wood".into()), 30)
-        ]));
+        inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert!(inventory.has_items(&[(Item::new("Stone"), 5), (Item::new("Wood"), 10)]));
+        assert!(!inventory.has_items(&[(Item::new("Stone"), 5), (Item::new("Wood"), 30)]));
+    }
+
+    #[test]
+    fn has_items_exact() {
+        let mut inventory = Inventory::new(12);
+        inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert!(inventory.has_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]));
     }
 
     #[test]
     fn remove_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
-        inventory.remove_items(&[
-            (Product::Intermediate("Stone".into()), 5),
-            (Product::Intermediate("Wood".into()), 10),
-        ]);
-        assert_eq!(
-            inventory.slots[0],
-            Some(Stack::new(Product::Intermediate("Stone".into()), 5))
-        );
-        assert_eq!(
-            inventory.slots[1],
-            Some(Stack::new(Product::Intermediate("Wood".into()), 10))
-        );
+        inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert!(inventory.remove_items(&[(Item::new("Stone"), 5), (Item::new("Wood"), 10)]));
+        assert_eq!(inventory.slots[0], Some(Stack::new(Item::new("Stone"), 5)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Item::new("Wood"), 10)));
     }
 
     #[test]
     fn remove_items_empty() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
-        inventory.remove_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
+        inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert!(inventory.remove_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]));
         assert!(inventory.slots.iter().all(|s| s.is_none()));
     }
 
     #[test]
     fn remove_items_not_enough() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
-        assert!(!inventory.remove_items(&[
-            (Product::Intermediate("Stone".into()), 5),
-            (Product::Intermediate("Wood".into()), 30)
-        ]));
-        assert_eq!(
-            inventory.slots[0],
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
-        assert_eq!(
-            inventory.slots[1],
-            Some(Stack::new(Product::Intermediate("Wood".into()), 20))
-        );
+        inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert!(!inventory.remove_items(&[(Item::new("Stone"), 5), (Item::new("Wood"), 30)]));
+        assert_eq!(inventory.slots[0], Some(Stack::new(Item::new("Stone"), 10)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Item::new("Wood"), 20)));
     }
+
+    #[test]
+    fn remove_items_not_in_inventory() {
+        let mut inventory = Inventory::new(12);
+        inventory.add_items(&[(Item::new("Stone"), 5)]);
+        assert!(!inventory.remove_items(&[(Item::new("Wood"), 1)]));
+        assert_eq!(inventory.slots[0], Some(Stack::new(Item::new("Stone"), 5)));
+    }
+
     #[test]
     fn add_items() {
         let mut inventory = Inventory::new(12);
-        inventory.add_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
-        assert_eq!(
-            inventory.slots[0],
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
-        assert_eq!(
-            inventory.slots[1],
-            Some(Stack::new(Product::Intermediate("Wood".into()), 20))
-        );
+        inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert_eq!(inventory.slots[0], Some(Stack::new(Item::new("Stone"), 10)));
+        assert_eq!(inventory.slots[1], Some(Stack::new(Item::new("Wood"), 20)));
     }
 
     #[test]
     fn add_items_remainder() {
         let mut inventory = Inventory::new(1);
-        let remainder = inventory.add_items(&[
-            (Product::Intermediate("Stone".into()), 10),
-            (Product::Intermediate("Wood".into()), 20),
-        ]);
-        assert_eq!(
-            inventory.slots[0],
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
-        assert_eq!(remainder, vec![(Product::Intermediate("Wood".into()), 20)]);
+        let remainder = inventory.add_items(&[(Item::new("Stone"), 10), (Item::new("Wood"), 20)]);
+        assert_eq!(inventory.slots[0], Some(Stack::new(Item::new("Stone"), 10)));
+        assert_eq!(remainder, vec![(Item::new("Wood"), 20)]);
     }
 
     #[test]
     fn add_items_stack() {
         let mut inventory = Inventory::new(2);
-        inventory.slots[1] = Some(Stack::new(Product::Structure("Stone furnace".into()), 10));
-        inventory.add_items(&[(Product::Structure("Stone furnace".into()), 1)]);
+        inventory.slots[1] = Some(Stack::new(Item::new("Stone furnace"), 10));
+        inventory.add_items(&[(Item::new("Stone furnace"), 1)]);
         assert_eq!(
             inventory.slots[1],
-            Some(Stack::new(Product::Structure("Stone furnace".into()), 11))
+            Some(Stack::new(Item::new("Stone furnace"), 11))
         );
     }
 
     #[test]
     fn add_stack() {
         let mut inventory = Inventory::new(12);
-        inventory.add_stack(Stack::new(Product::Intermediate("Stone".into()), 10));
-        assert_eq!(
-            inventory.slots[0],
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
+        inventory.add_stack(Stack::new(Item::new("Stone"), 10));
+        assert_eq!(inventory.slots[0], Some(Stack::new(Item::new("Stone"), 10)));
     }
 
     #[test]
     fn add_stack_remainder() {
         let mut inventory = Inventory::new(0);
-        let remainder = inventory.add_stack(Stack::new(Product::Intermediate("Stone".into()), 10));
-        assert_eq!(
-            remainder,
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
+        let remainder = inventory.add_stack(Stack::new(Item::new("Stone"), 10));
+        assert_eq!(remainder, Some(Stack::new(Item::new("Stone"), 10)));
     }
 
     #[test]
-    fn take_stack() {
+    fn try_take_item() {
         let mut inventory = Inventory::new(12);
-        inventory.add_stack(Stack::new(Product::Intermediate("Stone".into()), 10));
-        let taken = inventory.take_stack(100);
+        inventory.add_stack(Stack::new(Item::new("Stone"), 10));
+        let taken = inventory.try_take_item(&Item::new("Stone"), 100);
 
-        assert_eq!(
-            taken,
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
+        assert_eq!(taken, Some(Stack::new(Item::new("Stone"), 10)));
         assert!(inventory.slots.iter().all(|s| s.is_none()));
     }
 
     #[test]
-    fn take_stack_multiple_slots() {
+    fn try_take_item_clear_empty_slot() {
         let mut inventory = Inventory::new(12);
-        inventory.slots[0] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
-        inventory.slots[1] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
-        let taken = inventory.take_stack(100);
+        inventory.slots[0] = Some(Stack::new(Item::new("Stone"), 10));
+        let taken = inventory.try_take_item(&Item::new("Stone"), 100);
 
-        assert_eq!(
-            taken,
-            Some(Stack::new(Product::Intermediate("Stone".into()), 20))
-        );
+        assert_eq!(taken, Some(Stack::new(Item::new("Stone"), 10)));
         assert!(inventory.slots.iter().all(|s| s.is_none()));
     }
 
     #[test]
     fn transfer_between_stacks_swap() {
-        let mut source_stack = Stack::new(Product::Intermediate("Stone".into()), 10);
-        let mut target_stack = Stack::new(Product::Intermediate("Iron ore".into()), 20);
+        let mut source_stack = Stack::new(Item::new("Stone"), 10);
+        let mut target_stack = Stack::new(Item::new("Iron ore"), 20);
 
         transfer_between_stacks(&mut source_stack, &mut target_stack);
 
-        assert_eq!(
-            source_stack,
-            Stack::new(Product::Intermediate("Iron ore".into()), 20)
-        );
-        assert_eq!(
-            target_stack,
-            Stack::new(Product::Intermediate("Stone".into()), 10)
-        );
+        assert_eq!(source_stack, Stack::new(Item::new("Iron ore"), 20));
+        assert_eq!(target_stack, Stack::new(Item::new("Stone"), 10));
     }
 
     #[test]
     fn transfer_between_stacks_same() {
-        let mut source_stack = Stack::new(Product::Intermediate("Stone".into()), 10);
-        let mut target_stack = Stack::new(Product::Intermediate("Stone".into()), 20);
+        let mut source_stack = Stack::new(Item::new("Stone"), 10);
+        let mut target_stack = Stack::new(Item::new("Stone"), 20);
 
         transfer_between_stacks(&mut source_stack, &mut target_stack);
 
-        assert_eq!(
-            source_stack,
-            Stack::new(Product::Intermediate("Stone".into()), 0)
-        );
-        assert_eq!(
-            target_stack,
-            Stack::new(Product::Intermediate("Stone".into()), 30)
-        );
+        assert_eq!(source_stack, Stack::new(Item::new("Stone"), 0));
+        assert_eq!(target_stack, Stack::new(Item::new("Stone"), 30));
     }
 
     #[test]
     fn transfer_between_slots_swap() {
-        let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
-        let mut target_slot = Some(Stack::new(Product::Intermediate("Iron ore".into()), 20));
+        let mut source_slot = Some(Stack::new(Item::new("Stone"), 10));
+        let mut target_slot = Some(Stack::new(Item::new("Iron ore"), 20));
 
         transfer_between_slots(&mut source_slot, &mut target_slot);
 
-        assert_eq!(
-            source_slot,
-            Some(Stack::new(Product::Intermediate("Iron ore".into()), 20))
-        );
-        assert_eq!(
-            target_slot,
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
+        assert_eq!(source_slot, Some(Stack::new(Item::new("Iron ore"), 20)));
+        assert_eq!(target_slot, Some(Stack::new(Item::new("Stone"), 10)));
     }
 
     #[test]
     fn transfer_between_slots_merge_stacks() {
-        let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
-        let mut target_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 20));
+        let mut source_slot = Some(Stack::new(Item::new("Stone"), 10));
+        let mut target_slot = Some(Stack::new(Item::new("Stone"), 20));
 
         transfer_between_slots(&mut source_slot, &mut target_slot);
 
         assert_eq!(source_slot, None);
-        assert_eq!(
-            target_slot,
-            Some(Stack::new(Product::Intermediate("Stone".into()), 30))
-        );
+        assert_eq!(target_slot, Some(Stack::new(Item::new("Stone"), 30)));
     }
 
     #[test]
     fn transfer_between_slots_empty() {
-        let mut source_slot = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
+        let mut source_slot = Some(Stack::new(Item::new("Stone"), 10));
         let mut target_slot = None;
 
         transfer_between_slots(&mut source_slot, &mut target_slot);
 
         assert_eq!(source_slot, None);
-        assert_eq!(
-            target_slot,
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
+        assert_eq!(target_slot, Some(Stack::new(Item::new("Stone"), 10)));
     }
 
     #[test]
     fn drop_within_inventory_swap() {
         let mut inventory = Inventory::new(12);
 
-        inventory.slots[0] = Some(Stack::new(Product::Intermediate("Stone".into()), 10));
-        inventory.slots[1] = Some(Stack::new(Product::Intermediate("Iron ore".into()), 20));
+        inventory.slots[0] = Some(Stack::new(Item::new("Stone"), 10));
+        inventory.slots[1] = Some(Stack::new(Item::new("Iron ore"), 20));
 
         drop_within_inventory(&mut inventory, 1, 0);
 
         assert_eq!(
             inventory.slots[0],
-            Some(Stack::new(Product::Intermediate("Iron ore".into()), 20))
+            Some(Stack::new(Item::new("Iron ore"), 20))
         );
-        assert_eq!(
-            inventory.slots[1],
-            Some(Stack::new(Product::Intermediate("Stone".into()), 10))
-        );
+        assert_eq!(inventory.slots[1], Some(Stack::new(Item::new("Stone"), 10)));
     }
 }

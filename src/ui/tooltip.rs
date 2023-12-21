@@ -1,12 +1,11 @@
 use egui::{Color32, Response, RichText};
 
 use crate::{
-    intermediate_loader::Intermediate,
     inventory::Stack,
-    loading::{Resources, Structures},
+    loading::{Items, Structures},
     structure_components::StructureComponent,
     structure_loader::Structure,
-    types::Recipe,
+    types::{Item, Recipe},
 };
 
 use super::icon::resource_icon;
@@ -15,7 +14,7 @@ pub fn item_tooltip(
     ui: &mut egui::Ui,
     name: &str,
     structures: &Structures,
-    resources: &Resources,
+    resources: &Items,
 ) -> Response {
     egui::Grid::new("item_tooltip")
         .spacing([3., 3.])
@@ -33,7 +32,7 @@ pub fn item_tooltip(
                 structure_rows(ui, structure);
             }
             if let Some(resource) = resources.get(name) {
-                resource_rows(ui, resource);
+                item_rows(ui, resource);
             }
         })
         .response
@@ -57,7 +56,7 @@ pub fn structure_rows(ui: &mut egui::Ui, structure: &Structure) {
     }
 }
 
-pub fn resource_rows(ui: &mut egui::Ui, resource: &Intermediate) {
+pub fn item_rows(ui: &mut egui::Ui, resource: &Item) {
     let _ = resource;
     ui.end_row();
 }
@@ -67,7 +66,7 @@ pub fn recipe_tooltip(
     recipe: &Recipe,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
     structures: &Structures,
-    resources: &Resources,
+    resources: &Items,
 ) -> Response {
     egui::Grid::new("recipe_tooltip")
         .spacing([3., 3.])
@@ -108,7 +107,7 @@ pub fn recipe_tooltip(
                     structure_rows(ui, structure);
                 }
                 if let Some(resource) = resources.get(&product.to_string()) {
-                    resource_rows(ui, resource);
+                    item_rows(ui, resource);
                 }
                 ui.end_row();
             }

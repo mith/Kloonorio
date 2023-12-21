@@ -7,7 +7,7 @@ pub fn resource_icon(
     stack: &Stack,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
 ) -> Response {
-    let icon_name = &stack.resource.to_string().to_lowercase().replace(" ", "_");
+    let icon_name = &stack.item.to_string().to_lowercase().replace(" ", "_");
     let response = {
         if let Some(egui_img) = icons.get(icon_name) {
             ui.image((*egui_img, egui::Vec2::new(32., 32.)))

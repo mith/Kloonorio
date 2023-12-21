@@ -6,18 +6,13 @@ use bevy::{
 };
 use serde::Deserialize;
 
+use crate::types::Item;
+
 #[derive(Default)]
-pub struct IntermediateAssetLoader;
-
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
-#[uuid = "5ccee2a9-9fcd-4a56-ba64-bb3cb24c208f"]
-pub struct Intermediate {
-    pub name: String,
-}
-
+pub struct ItemAssetLoader;
 #[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
 #[uuid = "09483f6e-220b-486c-aaf2-857b4c9cab23"]
-pub struct IntermediateAsset(pub Vec<Intermediate>);
+pub struct ItemAsset(pub Vec<Item>);
 
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
@@ -30,8 +25,8 @@ pub enum IntermediateAssetLoaderError {
     RonSpannedError(#[from] ron::error::SpannedError),
 }
 
-impl AssetLoader for IntermediateAssetLoader {
-    type Asset = IntermediateAsset;
+impl AssetLoader for ItemAssetLoader {
+    type Asset = ItemAsset;
     type Settings = ();
     type Error = IntermediateAssetLoaderError;
     fn load<'a>(
@@ -49,7 +44,7 @@ impl AssetLoader for IntermediateAssetLoader {
             reader.read_to_end(&mut buf).await?;
             let intermediate_asset = ron::de::from_bytes(&buf)?;
             debug!("Finished loading");
-            Ok(IntermediateAsset(intermediate_asset))
+            Ok(ItemAsset(intermediate_asset))
         })
     }
 
@@ -58,11 +53,11 @@ impl AssetLoader for IntermediateAssetLoader {
     }
 }
 
-pub struct IntermediateLoaderPlugin;
+pub struct ItemLoaderPlugin;
 
-impl Plugin for IntermediateLoaderPlugin {
+impl Plugin for ItemLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<IntermediateAsset>()
-            .init_asset_loader::<IntermediateAssetLoader>();
+        app.init_asset::<ItemAsset>()
+            .init_asset_loader::<ItemAssetLoader>();
     }
 }

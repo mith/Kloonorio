@@ -9,9 +9,9 @@ mod camera;
 mod craft;
 mod discrete_rotation;
 mod interact;
-mod intermediate_loader;
 mod inventory;
 mod isometric_sprite;
+mod item_loader;
 mod loading;
 mod picker;
 mod placeable;
@@ -30,8 +30,8 @@ use crate::{
     camera::PanZoomCameraPlugin,
     craft::CraftPlugin,
     interact::{InteractPlugin, PlayerSettings},
-    intermediate_loader::IntermediateLoaderPlugin,
     isometric_sprite::IsometricSpritePlugin,
+    item_loader::ItemLoaderPlugin,
     loading::LoadingPlugin,
     picker::PickerPlugin,
     player::PlayerPlugin,
@@ -39,7 +39,7 @@ use crate::{
     recipe_loader::RecipeLoaderPlugin,
     structure_loader::StructureLoaderPlugin,
     terrain::TerrainPlugin,
-    types::{AppState, GameState, Product},
+    types::{AppState, GameState, Item},
     ui::UiPlugin,
     ysort::YSortPlugin,
 };
@@ -65,7 +65,7 @@ fn main() {
         //     name_filter: Some("Interesting".into()),
         //     ..default()
         // })
-        .register_type::<Product>()
+        .register_type::<Item>()
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, 8.0),
             ..default()
@@ -79,7 +79,7 @@ fn main() {
             RecipeLoaderPlugin,
             StructureLoaderPlugin,
             StructureComponentsPlugin,
-            IntermediateLoaderPlugin,
+            ItemLoaderPlugin,
             LoadingPlugin,
             PickerPlugin,
             UiPlugin,

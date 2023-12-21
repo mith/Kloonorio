@@ -18,7 +18,7 @@ use crate::{
     },
     structure_loader::Structure,
     terrain::{CursorWorldPos, TILE_SIZE},
-    types::{CraftingQueue, Product},
+    types::{CraftingQueue, Item},
     ui::{inventory_grid::Hand, HoveringUI},
     ysort::YSort,
 };
@@ -51,59 +51,57 @@ pub fn placeable(
     for (hand_entity, mut hand) in &mut placeable_query {
         let mut inventory = inventories_query.get_mut(hand_entity).unwrap();
         if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
-            if let Product::Structure(structure_name) = &stack.resource {
-                let structure = structures.get(structure_name).unwrap();
-                let texture_atlas_handle =
-                    create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
+            let structure_name = &*stack.item;
+            let structure = structures.get(structure_name).unwrap();
+            let texture_atlas_handle =
+                create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
 
-                let translation = cursor_to_structure_position(&cursor_pos, structure);
+            let translation = cursor_to_structure_position(&cursor_pos, structure);
 
-                let rotation = *hand.rotation.get_or_insert_with(|| {
-                    DiscreteRotation::new(structure.sides.try_into().unwrap())
-                });
+            let rotation = *hand
+                .rotation
+                .get_or_insert_with(|| DiscreteRotation::new(structure.sides.try_into().unwrap()));
 
-                if rapier_context
-                    .intersection_with_shape(
-                        translation,
-                        0.,
-                        &structure_collider(structure),
-                        QueryFilter::new().exclude_sensors(),
-                    )
-                    .is_some()
-                {
-                    spawn_structure_ghost(
+            if rapier_context
+                .intersection_with_shape(
+                    translation,
+                    0.,
+                    &structure_collider(structure),
+                    QueryFilter::new().exclude_sensors(),
+                )
+                .is_some()
+            {
+                spawn_structure_ghost(
+                    &mut commands,
+                    translation,
+                    rotation,
+                    texture_atlas_handle,
+                    Color::rgba(1.0, 0.3, 0.3, 0.5),
+                    structure,
+                );
+            } else if mouse_input.just_pressed(MouseButton::Left) {
+                if inventory.remove_items(&[(Item::new(structure.name.clone()), 1)]) {
+                    debug!("Placing {:?}", structure);
+                    place_structure(
                         &mut commands,
+                        texture_atlas_handle.clone(),
                         translation,
                         rotation,
-                        texture_atlas_handle,
-                        Color::rgba(1.0, 0.3, 0.3, 0.5),
                         structure,
                     );
-                } else if mouse_input.just_pressed(MouseButton::Left) {
-                    if inventory.remove_items(&[(Product::Structure(structure.name.clone()), 1)]) {
-                        debug!("Placing {:?}", structure);
-                        place_structure(
-                            &mut commands,
-                            texture_atlas_handle.clone(),
-                            translation,
-                            rotation,
-                            structure,
-                        );
-                        if !inventory.has_items(&[(Product::Structure(structure.name.clone()), 1)])
-                        {
-                            hand.clear();
-                        }
+                    if !inventory.has_items(&[(Item::new(structure.name.clone()), 1)]) {
+                        hand.clear();
                     }
-                } else {
-                    spawn_structure_ghost(
-                        &mut commands,
-                        translation,
-                        rotation,
-                        texture_atlas_handle,
-                        Color::rgba(1.0, 1.0, 1.0, 0.5),
-                        structure,
-                    );
                 }
+            } else {
+                spawn_structure_ghost(
+                    &mut commands,
+                    translation,
+                    rotation,
+                    texture_atlas_handle,
+                    Color::rgba(1.0, 1.0, 1.0, 0.5),
+                    structure,
+                );
             }
         }
     }
@@ -295,7 +293,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                         Source,
                         Inventory::new_with_filter(
                             *slots,
-                            filter.iter().map(|s| Name::new(s.clone())).collect(),
+                            filter.iter().map(|s| Item::new(s.clone())).collect(),
                         ),
                         TransformBundle::default(),
                         Sensor,
@@ -320,7 +318,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                 entity_commands.with_children(|p| {
                     p.spawn((
                         Fuel,
-                        Inventory::new_with_filter(*slots, HashSet::from_iter([Name::new("Coal")])),
+                        Inventory::new_with_filter(*slots, HashSet::from_iter([Item::new("Coal")])),
                         TransformBundle::default(),
                         Sensor,
                         structure_collider(structure),

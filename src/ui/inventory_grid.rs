@@ -5,7 +5,7 @@ use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Se
 use crate::{
     discrete_rotation::DiscreteRotation,
     inventory::{Inventory, Stack},
-    loading::{Resources, Structures},
+    loading::{Items, Structures},
 };
 
 use super::{icon::resource_icon, tooltip::item_tooltip};
@@ -179,7 +179,7 @@ pub fn inventory_grid(
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
     structures: &Structures,
-    resources: &Resources,
+    resources: &Items,
 ) {
     let grid_height = (inventory.slots.len() as f32 / 10.).ceil() as usize;
     egui::Grid::new(entity)
@@ -202,7 +202,7 @@ pub fn inventory_grid(
                                 response.on_hover_ui_at_pointer(|ui| {
                                     item_tooltip(
                                         ui,
-                                        &stack.resource.to_string(),
+                                        &stack.item.to_string(),
                                         &structures,
                                         &resources,
                                     );

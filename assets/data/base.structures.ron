@@ -44,7 +44,7 @@
 		animated: false,
 		components: [
 			Burner,
-			Inserter(2, 4),
+			Inserter(0.5, 1),
 			Fuel(1)
 		]
 	),

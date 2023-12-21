@@ -5,7 +5,7 @@ use egui::{epaint, Pos2, Response, Sense, Stroke};
 
 use crate::{
     inventory::Inventory,
-    loading::{Icons, Recipes, Resources, Structures},
+    loading::{Icons, Items, Recipes, Structures},
     player::Player,
     terrain::TerrainSet,
     types::{ActiveCraft, CraftingQueue, Recipe},
@@ -50,7 +50,7 @@ pub fn craft_ui(
     build_queue: &mut CraftingQueue,
     icons: &HashMap<String, egui::TextureId>,
     structures: &Structures,
-    resources: &Resources,
+    resources: &Items,
 ) {
     let mut recipe_it = recipes.values();
     egui::Grid::new("crafting")
@@ -147,7 +147,7 @@ fn character_ui(
     mut slot_events: EventWriter<SlotEvent>,
     character_ui_open: Res<CharacterUiOpen>,
     structures: Res<Structures>,
-    resources: Res<Resources>,
+    resources: Res<Items>,
 ) {
     if !character_ui_open.0 {
         return;
