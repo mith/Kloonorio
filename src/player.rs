@@ -40,7 +40,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     inventory.add_item(Product::Structure("Stone furnace".into()), 100);
     inventory.add_item(Product::Structure("Burner inserter".into()), 100);
     inventory.add_item(Product::Intermediate("Coal".into()), 200);
-    inventory.add_item(Product::Intermediate("Iron ore".into()), 200);
+    inventory.add_item(Product::Intermediate("Iron plate".into()), 200);
     inventory.add_item(Product::Structure("Transport belt".into()), 200);
     inventory.add_item(Product::Structure("Burner assembling machine".into()), 100);
     commands

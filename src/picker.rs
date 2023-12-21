@@ -13,7 +13,7 @@ use bevy::{
 use bevy_egui::EguiContexts;
 use bevy_rapier2d::{pipeline::QueryFilter, plugin::RapierContext};
 use egui::Align2;
-use tracing::{info, instrument};
+use tracing::{debug, instrument};
 
 use crate::{placeable::Building, player::Player, terrain::CursorWorldPos};
 
@@ -32,7 +32,7 @@ pub struct SelectedBuilding(pub Entity);
 #[derive(Component)]
 pub struct Pickable;
 
-#[instrument(skip(commands, rapier_context, building_query, player_query))]
+#[instrument(skip_all)]
 fn pick_building(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
@@ -50,7 +50,7 @@ fn pick_building(
         if let Ok(_building) = building_query.get(entity) {
             let player = player_query.single();
             commands.entity(player).insert(SelectedBuilding(entity));
-            info!("Selected building: {:?}", entity);
+            debug!("Selected building: {:?}", entity);
             return false;
         }
         true

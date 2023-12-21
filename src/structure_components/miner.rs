@@ -45,14 +45,14 @@ pub fn miner_tick(
                 if is_minable(tile_texture.0) {
                     if miner.timer.tick(time.delta()).just_finished() {
                         let stack = Stack::new(texture_id_to_product(tile_texture.clone()), 1);
-                        info!("Produced {:?}", stack);
+                        debug!("Produced {:?}", stack);
 
                         let drop_point = miner_children
                             .iter()
                             .find(|c| dropoff_query.get(**c).is_ok())
                             .map(|c| dropoff_query.get(*c).unwrap().translation())
                             .unwrap();
-                        info!("Dropping at {:?}", drop_point);
+                        debug!("Dropping at {:?}", drop_point);
 
                         drop_stack_at_point(
                             &mut commands,

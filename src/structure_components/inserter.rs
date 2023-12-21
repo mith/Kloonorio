@@ -409,9 +409,38 @@ fn check_inserter_action_valid<'w, 's, 'a>(
                 .map(|belt| belt.can_add(1))
                 .unwrap_or(false),
             InserterTargetType::Inventory(entity) => {
-                inventories.get(*entity).map_or(false, |inventory| {
-                    inventory.has_any_from_filter(&action.item.to_filter())
-                })
+                let inventory_in_range = collider_query
+                    .get(inserter.dropoff_location_entity)
+                    .ok()
+                    .map(|(c, t)| {
+                        let mut dropoff_entities = Vec::new();
+                        rapier_context.intersections_with_shape(
+                            t.translation().xy(),
+                            0.,
+                            c,
+                            QueryFilter::new().exclude_solids(),
+                            |entity| {
+                                dropoff_entities.push(entity);
+                                true
+                            },
+                        );
+                        dropoff_entities
+                    })
+                    .into_iter()
+                    .flatten()
+                    .any(|e| e == *entity);
+
+                if !inventory_in_range {
+                    return false;
+                }
+
+                let space_in_inventory = inventories.get(*entity).map_or(false, |inventory| {
+                    inserter
+                        .holding
+                        .as_ref()
+                        .map_or(true, |stack| inventory.has_space_for(&stack))
+                });
+                space_in_inventory
             }
             InserterTargetType::ItemOnGround(_entity) => {
                 // TODO: Check if the ground is clear
@@ -440,22 +469,9 @@ fn check_inserter_action_valid<'w, 's, 'a>(
                     inventory.has_any_from_filter(&action.item.to_filter())
                 })
             }
-            InserterTargetType::ItemOnGround(entity) => {
-                // Check if the item is still on the ground
-                collider_query
-                    .get(*entity)
-                    .ok()
-                    .and_then(|(c, t)| {
-                        rapier_context.intersection_with_shape(
-                            t.translation().xy(),
-                            0.,
-                            c,
-                            QueryFilter::new()
-                                .exclude_sensors()
-                                .predicate(&|e| e != inserter.pickup_location_entity),
-                        )
-                    })
-                    .is_some()
+            InserterTargetType::ItemOnGround(_entity) => {
+                // TODO: Check if the ground is clear
+                true
             }
         }
     });
@@ -471,7 +487,7 @@ fn inserter_planner(
     belts_query: Query<&TransportBelt>,
 ) {
     for (inserter_entity, _inserter_transform, mut inserter) in &mut inserter_query {
-        let span = info_span!("Inserter tick", inserter = ?inserter_entity);
+        let span = info_span!("Inserter planner", inserter = ?inserter_entity);
         let _enter = span.enter();
 
         {
@@ -491,6 +507,7 @@ fn inserter_planner(
                     });
 
             if new_action_needed {
+                debug!("Planning new action");
                 let new_action = plan_inserter_action(
                     &inserter,
                     &inventories_set.p0(),
@@ -498,12 +515,12 @@ fn inserter_planner(
                     &belts_query,
                     &rapier_context,
                 );
-                // Determine the direction of movement based on whether the inserter is holding something
                 inserter.target_arm_position = if inserter.holding.is_some() {
                     1.0
                 } else {
                     -1.0
                 };
+                debug!(target_arm_position = ?inserter.target_arm_position);
                 inserter.current_action = new_action;
             }
         }
@@ -530,7 +547,6 @@ pub fn inserter_tick(
         // Move towards the target location
         inserter.arm_position +=
             inserter.speed * time.delta_seconds() * inserter.target_arm_position.signum();
-        // Clamp the extension value to ensure it stays within the range [-1.0, 1.0]
         inserter.arm_position = inserter.arm_position.clamp(-1.0, 1.0);
 
         if (inserter.arm_position - inserter.target_arm_position).abs() < 0.01 {
@@ -550,6 +566,7 @@ pub fn inserter_tick(
                             // TODO: Implement dropping items on the ground
                         }
                     }
+                    inserter.current_action = None;
                 } else {
                     // Pickup
                     match action.pickup.unwrap() {
@@ -590,7 +607,7 @@ pub fn burner_inserter_tick(
             if stack.resource == Product::Intermediate("Coal".into())
                 && !fuel_inventory.has_items(&[(Product::Intermediate("Coal".into()), 2)])
             {
-                info!("Taking fuel from hand to refuel");
+                debug!("Taking fuel from hand to refuel");
                 fuel_inventory.add_stack(stack.to_owned());
                 inserter.holding = None;
             }

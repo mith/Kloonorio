@@ -71,7 +71,7 @@ pub fn drop_into_entity_inventory(
     if let Ok(inventory) = inventories_query.get_mut(collider_entity).as_mut() {
         if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
             inventory.add_stack(stack);
-            info!("Dropped into inventory");
+            debug!("Dropped into inventory");
             return true;
         } else {
             debug!("No space in inventory");
@@ -82,7 +82,7 @@ pub fn drop_into_entity_inventory(
         for child in children.iter_descendants(collider_entity) {
             if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
                 if inventory.can_add(&[(stack.resource.clone(), stack.amount)]) {
-                    info!("Dropped into child inventory");
+                    debug!("Dropped into child inventory");
                     inventory.add_stack(stack);
                     return true;
                 }
@@ -103,7 +103,7 @@ pub fn take_stack_from_entity_inventory(
     if let Ok(inventory) = inventories_query.get_mut(target_entity).as_mut() {
         let taken = inventory.take_stack(max_size);
         if let Some(ref stack) = taken {
-            info!(stack = ?stack, "Found stack in inventory");
+            debug!(stack = ?stack, "Found stack in inventory");
         }
         return taken;
     } else {
@@ -113,7 +113,7 @@ pub fn take_stack_from_entity_inventory(
             if let Ok(inventory) = inventories_query.get_mut(child).as_mut() {
                 debug!("Found inventory on child");
                 if let Some(stack) = inventory.take_stack(max_size) {
-                    info!(stack = ?stack, "Found stack in child entity");
+                    debug!(stack = ?stack, "Found stack in child entity");
                     return Some(stack);
                 } else {
                     debug!("No stack found in child entity");
@@ -151,21 +151,21 @@ pub fn drop_stack_at_point(
         &Collider::ball(0.2),
         QueryFilter::new().exclude_sensors(),
     ) {
-        info!(collider_entity = ?collider_entity, "Found entity at drop point");
+        debug!(collider_entity = ?collider_entity, "Found entity at drop point");
         if let Ok(mut belt) = belts_query.get_mut(collider_entity) {
-            info!("Found belt at drop point");
+            debug!("Found belt at drop point");
             if belt.add(1, stack.resource.clone()) {
-                info!("Added to belt");
+                debug!("Added to belt");
                 return true;
             } else {
-                info!("Belt full");
+                debug!("Belt full");
                 return false;
             }
         } else {
             drop_into_entity_inventory(inventories_query, collider_entity, stack, children)
         }
     } else {
-        info!("No entity found at drop point, dropping on the ground");
+        debug!("No entity found at drop point, dropping on the ground");
         spawn_stack(commands, stack, asset_server, drop_point);
         true
     }

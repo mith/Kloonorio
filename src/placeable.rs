@@ -81,7 +81,7 @@ pub fn placeable(
                     );
                 } else if mouse_input.just_pressed(MouseButton::Left) {
                     if inventory.remove_items(&[(Product::Structure(structure.name.clone()), 1)]) {
-                        info!("Placing {:?}", structure);
+                        debug!("Placing {:?}", structure);
                         place_structure(
                             &mut commands,
                             texture_atlas_handle.clone(),
@@ -117,7 +117,7 @@ pub fn placeable_rotation(
         if let Ok((_hand_entity, mut hand)) = placeable_query.get_single_mut() {
             if let Some(rotation) = hand.rotation.as_mut() {
                 rotation.rotate();
-                info!("Rotated to {:?}", hand.rotation);
+                debug!("Rotated to {:?}", hand.rotation);
             }
         }
     }
@@ -279,7 +279,13 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             StructureComponent::Inventory(slots) => {
                 debug!("Spawning inventory");
                 entity_commands.with_children(|p| {
-                    p.spawn((Storage, Inventory::new(*slots)));
+                    p.spawn((
+                        Storage,
+                        Inventory::new(*slots),
+                        TransformBundle::default(),
+                        Sensor,
+                        structure_collider(structure),
+                    ));
                 });
             }
             StructureComponent::Source(slots, filter) => {
@@ -291,13 +297,22 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                             *slots,
                             filter.iter().map(|s| Name::new(s.clone())).collect(),
                         ),
+                        TransformBundle::default(),
+                        Sensor,
+                        structure_collider(structure),
                     ));
                 });
             }
             StructureComponent::Output(slots) => {
                 debug!("Spawning output");
                 entity_commands.with_children(|p| {
-                    p.spawn((Output, Inventory::new(*slots)));
+                    p.spawn((
+                        Output,
+                        Inventory::new(*slots),
+                        TransformBundle::default(),
+                        Sensor,
+                        structure_collider(structure),
+                    ));
                 });
             }
             StructureComponent::Fuel(slots) => {
@@ -306,6 +321,9 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                     p.spawn((
                         Fuel,
                         Inventory::new_with_filter(*slots, HashSet::from_iter([Name::new("Coal")])),
+                        TransformBundle::default(),
+                        Sensor,
+                        structure_collider(structure),
                     ));
                 });
             }

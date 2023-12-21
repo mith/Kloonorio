@@ -39,7 +39,7 @@ pub fn drop_system(
                 if inventory.slots[drop.slot].is_some() {
                     // No item it hand, but there is an item in the slot, pick it up
                     let inventory_index = InventoryIndex::new(drop.entity, drop.slot);
-                    info!(inventory_index = ?inventory_index, "Putting clicked slot in hand");
+                    debug!(inventory_index = ?inventory_index, "Putting clicked slot in hand");
                     hand.set_item(drop.entity, drop.slot);
                 }
             }
@@ -50,7 +50,7 @@ pub fn drop_system(
                 let slot: &Option<Stack> = &inventory.slots[item_in_hand.slot];
                 if slot.is_none() {
                     hand.clear();
-                    info!("Emptied hand");
+                    debug!("Emptied hand");
                 }
             }
         }
