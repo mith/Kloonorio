@@ -74,7 +74,7 @@ impl Inventory {
     pub fn can_add(&self, items: &[(Product, u32)]) -> bool {
         if let ItemFilter::Only(allowed_products) = &self.allowed_items {
             for (product, _) in items {
-                if !allowed_products.contains(&Name::new(product.to_string())) {
+                if !allowed_products.contains(&product.name()) {
                     return false;
                 }
             }

@@ -87,7 +87,7 @@ fn main() {
             CraftPlugin,
             PlayerPlugin,
         ))
-        .add_plugins((PanZoomCameraPlugin))
+        .add_plugins(PanZoomCameraPlugin)
         .register_type::<Stack>()
         .add_systems(
             Update,

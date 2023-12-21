@@ -125,22 +125,6 @@ pub fn take_stack_from_entity_inventory(
     }
 }
 
-#[instrument(skip(belts_query))]
-pub fn take_stack_from_entity_belt(
-    belts_query: &mut Query<&mut TransportBelt>,
-    target_entity: Entity,
-    max_size: u32,
-) -> Option<Stack> {
-    if let Ok(mut belt) = belts_query.get_mut(target_entity) {
-        belt.take().map(|product| Stack {
-            resource: product,
-            amount: 1,
-        })
-    } else {
-        None
-    }
-}
-
 /// Drop a stack in a suitable inventory or drop it on the floor. Returns false when neither could
 /// be done
 #[instrument(skip(
@@ -249,53 +233,13 @@ impl Inventories<'_, '_> {
         &self,
         entity: Entity,
         inventory_type: InventoryType,
-    ) -> Option<&Inventory> {
+    ) -> Option<(Entity, &Inventory)> {
+        let children = self.children.get(entity).ok()?;
         match inventory_type {
-            InventoryType::Fuel => self.fuel_inventories.get(entity).ok().map(|i| i.inventory),
-            InventoryType::Source => self
-                .source_inventories
-                .get(entity)
-                .ok()
-                .map(|i| i.inventory),
-            InventoryType::Output => self
-                .output_inventories
-                .get(entity)
-                .ok()
-                .map(|i| i.inventory),
-            InventoryType::Storage => self
-                .storage_inventories
-                .get(entity)
-                .ok()
-                .map(|i| i.inventory),
-        }
-    }
-
-    pub fn get_inventory_mut(
-        &mut self,
-        entity: Entity,
-        inventory_type: InventoryType,
-    ) -> Option<Mut<Inventory>> {
-        match inventory_type {
-            InventoryType::Fuel => self
-                .fuel_inventories
-                .get_mut(entity)
-                .ok()
-                .map(|i| i.inventory),
-            InventoryType::Source => self
-                .source_inventories
-                .get_mut(entity)
-                .ok()
-                .map(|i| i.inventory),
-            InventoryType::Output => self
-                .output_inventories
-                .get_mut(entity)
-                .ok()
-                .map(|i| i.inventory),
-            InventoryType::Storage => self
-                .storage_inventories
-                .get_mut(entity)
-                .ok()
-                .map(|i| i.inventory),
+            InventoryType::Fuel => try_get_inventory_child(children, &self.fuel_inventories),
+            InventoryType::Source => try_get_inventory_child(children, &self.source_inventories),
+            InventoryType::Output => try_get_inventory_child(children, &self.output_inventories),
+            InventoryType::Storage => try_get_inventory_child(children, &self.storage_inventories),
         }
     }
 }
@@ -347,22 +291,6 @@ where
         .flat_map(|c| output_query.get(*c).map(|i| (*c, i.inventory)))
         .next();
     output
-}
-
-pub fn try_get_inventory_child_mut<'b, I>(
-    children: &Children,
-    output_query: &'b mut Query<InventoryQuery<I>>,
-) -> Option<(Entity, Mut<'b, Inventory>)>
-where
-    I: ReadOnlyWorldQuery,
-{
-    let child_id = children.iter().find(|c| output_query.get(**c).is_ok());
-    if let Some(child_id) = child_id {
-        let output = output_query.get_mut(*child_id).unwrap();
-        Some((*child_id, output.inventory))
-    } else {
-        None
-    }
 }
 
 #[cfg(test)]

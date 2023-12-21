@@ -44,22 +44,12 @@ impl TransportBelt {
         }
     }
 
-    pub fn slots(&self) -> &VecDeque<Option<Product>> {
-        &self.slots
+    pub fn slot(&self, slot: usize) -> Option<&Option<Product>> {
+        self.slots.get(slot)
     }
 
     pub fn slot_mut(&mut self, slot: usize) -> Option<&mut Option<Product>> {
         self.slots.get_mut(slot)
-    }
-
-    /// Take an item from the belt from any slot.
-    pub fn take(&mut self) -> Option<Product> {
-        for slot in 0..self.slots.len() {
-            if let Some(product) = self.slots[slot].take() {
-                return Some(product);
-            }
-        }
-        return None;
     }
 }
 

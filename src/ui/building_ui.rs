@@ -1,4 +1,4 @@
-use bevy::{ecs::storage, prelude::*, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
 use crate::{
@@ -14,8 +14,8 @@ use crate::{
     types::CraftingQueue,
     ui::inventory_grid::{inventory_grid, Hand, SlotEvent},
     util::{
-        get_inventory_child, try_get_inventory_child, try_get_inventory_child_mut,
-        FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery, StorageInventoryQuery,
+        get_inventory_child, try_get_inventory_child, FuelInventoryQuery, OutputInventoryQuery,
+        SourceInventoryQuery, StorageInventoryQuery,
     },
 };
 
