@@ -85,7 +85,7 @@ impl DiscreteRotation {
         }
     }
 
-    pub fn to_radians(&self) -> f32 {
+    pub fn radians(&self) -> f32 {
         match self.max {
             1 => 0.0,
             2 => self.current as f32 * std::f32::consts::PI,

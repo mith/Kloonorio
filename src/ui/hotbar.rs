@@ -92,9 +92,10 @@ fn hotbar_ui(
                                     }
                                     if response.clicked() {
                                         if let Some(item) = &hotbar_item.item {
-                                            inventory
-                                                .find_item(item.as_str())
-                                                .map(|index| hand.set_item(player_entity, index));
+                                            if let Some(index) = inventory.find_item(item.as_str())
+                                            {
+                                                hand.set_item(player_entity, index)
+                                            }
                                         } else if let Some(inventory_idx) = hand.get_item() {
                                             if let Some(item) = &inventory.slots[inventory_idx.slot]
                                             {
@@ -196,9 +197,9 @@ fn hotbar_keyboard(
         for (key, index) in bindings_map.iter() {
             if keyboard_input.just_pressed(*key) {
                 if let Some(item) = &hotbar.0[*index as usize].item {
-                    inventory
-                        .find_item(item.as_str())
-                        .map(|index| hand.set_item(player_entity, index));
+                    if let Some(index) = inventory.find_item(item.as_str()) {
+                        hand.set_item(player_entity, index)
+                    }
                 }
             }
         }

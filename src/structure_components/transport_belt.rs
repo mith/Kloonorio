@@ -31,16 +31,16 @@ impl TransportBelt {
     }
 
     pub fn can_add(&self, slot: usize) -> bool {
-        return self.slots[slot].is_none();
+        self.slots[slot].is_none()
     }
 
     /// Add a stack to the belt at the given slot. Returns true if the stack was added
     pub fn add(&mut self, slot: usize, stack: Item) -> bool {
         if self.can_add(slot) {
             self.slots[slot] = Some(stack);
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 
@@ -81,8 +81,7 @@ pub fn transport_belt_tick(
                     b.1.compass_direction(),
                 )
             })
-            .unwrap()
-            .clone();
+            .unwrap();
 
         // First handle the last slot
         if let Some(product) = last_slot {
@@ -138,7 +137,7 @@ pub fn transport_belt_tick(
                 debug!("Belt full");
                 // Could not transfer to other belt, shift items if there is space
                 // instead of rotating the belt
-                if let Some((belt, _)) = belts_query.get_mut(entity).as_mut().ok() {
+                if let Ok((belt, _)) = belts_query.get_mut(entity).as_mut() {
                     for i in (0..belt.slots.len()).rev().skip(1) {
                         if belt.slots[i + 1].is_none() && belt.slots[i].is_some() {
                             belt.slots[i + 1] = belt.slots[i].clone();

@@ -54,7 +54,7 @@ fn main() {
         // .add_plugin(LogDiagnosticsPlugin::default())
         .insert_resource(Time::<Fixed>::from_hz(60.))
         .add_plugins((
-            FrameTimeDiagnosticsPlugin::default(),
+            FrameTimeDiagnosticsPlugin,
             DefaultPlugins
                 .set(AssetPlugin { ..default() })
                 .set(ImagePlugin::default_nearest()),

@@ -174,11 +174,7 @@ fn find_pickups(
     collider_query
         .get(inserter.pickup_location_entity)
         .ok()
-        .map(|(_c, t)| {
-            let pickup_entities =
-                find_entities_on_position(rapier_context, t.translation().xy(), None);
-            pickup_entities
-        })
+        .map(|(_c, t)| find_entities_on_position(rapier_context, t.translation().xy(), None))
         .into_iter()
         .flatten()
         .flat_map(move |entity| {
@@ -190,9 +186,9 @@ fn find_pickups(
         .collect()
 }
 
-fn find_inventory_dropoffs_for_entity<'w, 's, 'a>(
+fn find_inventory_dropoffs_for_entity<'a>(
     entity: Entity,
-    inventories: &'a Inventories<'w, 's>,
+    inventories: &'a Inventories<'_, '_>,
     target_item: &'a InserterTargetItem,
 ) -> impl Iterator<Item = DropoffRequest> + 'a {
     [
@@ -232,9 +228,9 @@ fn find_inventory_dropoffs_for_entity<'w, 's, 'a>(
     })
 }
 
-fn find_belt_dropoffs_for_entity<'w, 's, 'a>(
+fn find_belt_dropoffs_for_entity<'a>(
     entity: Entity,
-    belts_query: &'a Query<'w, 's, &TransportBelt>,
+    belts_query: &'a Query<'_, '_, &TransportBelt>,
 ) -> impl Iterator<Item = DropoffRequest> + 'a {
     belts_query
         .get(entity)
@@ -263,16 +259,12 @@ fn find_dropoffs(
     collider_query
         .get(inserter.dropoff_location_entity)
         .ok()
-        .map(|(_c, t)| {
-            let dropoff_entities =
-                find_entities_on_position(rapier_context, t.translation().xy(), None);
-            dropoff_entities
-        })
+        .map(|(_c, t)| find_entities_on_position(rapier_context, t.translation().xy(), None))
         .into_iter()
         .flatten()
         .flat_map(move |entity| {
             let inventory_dropoffs =
-                find_inventory_dropoffs_for_entity(entity, inventories, &target_item);
+                find_inventory_dropoffs_for_entity(entity, inventories, target_item);
             let belt_dropoffs = find_belt_dropoffs_for_entity(entity, belts_query);
 
             inventory_dropoffs.chain(belt_dropoffs)
@@ -414,7 +406,7 @@ fn check_inserter_action_valid<'w, 's, 'a>(
         }
     });
 
-    return pickup_valid;
+    pickup_valid
 }
 
 fn inserter_planner(
@@ -440,7 +432,7 @@ fn inserter_planner(
                             &belts_query,
                             &rapier_context,
                             &collider_query,
-                            &current_action,
+                            current_action,
                         )
                     });
 

@@ -94,15 +94,13 @@ impl Inventory {
         }
 
         // Check if there's enough space in the existing stacks.
-        for slot in self.slots.iter() {
-            if let Some(stack) = slot {
-                if let Some(needed) = space_needed.get_mut(&stack.item) {
-                    let space_in_slot = MAX_STACK_SIZE - stack.amount;
-                    if *needed > space_in_slot {
-                        *needed -= space_in_slot;
-                    } else {
-                        *needed = 0;
-                    }
+        for stack in self.slots.iter().flatten() {
+            if let Some(needed) = space_needed.get_mut(&stack.item) {
+                let space_in_slot = MAX_STACK_SIZE - stack.amount;
+                if *needed > space_in_slot {
+                    *needed -= space_in_slot;
+                } else {
+                    *needed = 0;
                 }
             }
         }
@@ -129,7 +127,7 @@ impl Inventory {
     }
 
     pub fn can_add_item(&self, item: &Item) -> bool {
-        return self.can_add(&[(item.clone(), 1)]);
+        self.can_add(&[(item.clone(), 1)])
     }
 
     /// Add the items to the inventory, returning the remainder
@@ -146,15 +144,13 @@ impl Inventory {
 
     pub fn add_item(&mut self, item: &Item, amount: u32) -> u32 {
         let mut amount = amount;
-        for slot in self.slots.iter_mut() {
-            if let Some(stack) = slot {
-                if stack.item == *item {
-                    let space_available = MAX_STACK_SIZE - stack.amount;
-                    if space_available > 0 {
-                        let transfer_amount = std::cmp::min(space_available, amount);
-                        stack.amount += transfer_amount;
-                        amount -= transfer_amount;
-                    }
+        for stack in self.slots.iter_mut().flatten() {
+            if stack.item == *item {
+                let space_available = MAX_STACK_SIZE - stack.amount;
+                if space_available > 0 {
+                    let transfer_amount = std::cmp::min(space_available, amount);
+                    stack.amount += transfer_amount;
+                    amount -= transfer_amount;
                 }
             }
         }
@@ -206,11 +202,9 @@ impl Inventory {
 
     pub fn num_items(&self, resource: &Item) -> u32 {
         let mut amount = 0;
-        for slot in self.slots.iter() {
-            if let Some(stack) = slot {
-                if stack.item == *resource {
-                    amount += stack.amount;
-                }
+        for stack in self.slots.iter().flatten() {
+            if stack.item == *resource {
+                amount += stack.amount;
             }
         }
         amount
@@ -503,7 +497,7 @@ mod test {
 
             // Test item finding
             for item in &items_to_test {
-                prop_assert!(inventory.find_item(&item.to_string()).is_some());
+                prop_assert!(inventory.find_item(item.as_ref()).is_some());
             }
 
             // Remove items
@@ -904,7 +898,7 @@ mod test {
                         if amount == &0 {
                             return state;
                         }
-                        let current_count = stored_items.get(&item).copied().unwrap_or(0);
+                        let current_count = stored_items.get(item).copied().unwrap_or(0);
                         let mut total_count = current_count + amount;
 
                         let mut slots_needed = total_count / MAX_STACK_SIZE;
@@ -931,7 +925,7 @@ mod test {
                         }
                     }
                     Transition::RemoveItem(item, amount) => {
-                        let current_count = stored_items.get(&item).copied().unwrap_or(0);
+                        let current_count = stored_items.get(item).copied().unwrap_or(0);
                         if current_count < *amount {
                             removals.push(false);
                         } else {
@@ -941,7 +935,7 @@ mod test {
                         }
                     }
                     Transition::CheckItem(item) => {
-                        if stored_items.get(&item).map_or(false, |f| *f > 0) {
+                        if stored_items.get(item).map_or(false, |f| *f > 0) {
                             checks.push(true);
                         } else {
                             checks.push(false);
@@ -950,7 +944,7 @@ mod test {
                     Transition::CanAdd(items) => {
                         let mut scratch = stored_items.clone();
                         for (item, amount) in items {
-                            let current_count = scratch.get(&item).copied().unwrap_or(0);
+                            let current_count = scratch.get(item).copied().unwrap_or(0);
                             scratch.insert(item.clone(), current_count + amount);
                         }
 
@@ -1023,7 +1017,7 @@ mod test {
             ) {
                 // Check item counts
                 for (item, &count) in &ref_state.items {
-                    assert_eq!(state.num_items(&item), count);
+                    assert_eq!(state.num_items(item), count);
                 }
 
                 // Check that stack sizes never exceed max stack size

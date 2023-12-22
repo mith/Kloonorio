@@ -28,11 +28,8 @@ pub fn texture_id_to_product(index: TileTextureIndex) -> Item {
     }
 }
 
-pub fn product_to_texture(product: &Item) -> String {
-    match product {
-        // Product::name) => name.to_lowercase().replace(" ", "_"),
-        _ => "no_icon".to_string(),
-    }
+pub fn product_to_texture(_product: &Item) -> String {
+    "no_icon".to_string()
 }
 
 /// Spawn a stack of items at the given position
@@ -277,14 +274,10 @@ pub fn find_entities_on_position(
     filter: Option<QueryFilter>,
 ) -> Vec<Entity> {
     let mut entities = Vec::new();
-    rapier_context.intersections_with_point(
-        position,
-        filter.unwrap_or_else(QueryFilter::new),
-        |entity| {
-            entities.push(entity);
-            true
-        },
-    );
+    rapier_context.intersections_with_point(position, filter.unwrap_or_default(), |entity| {
+        entities.push(entity);
+        true
+    });
     entities
 }
 

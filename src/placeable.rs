@@ -128,8 +128,8 @@ fn cursor_to_structure_position(cursor_pos: &CursorWorldPos, structure: &Structu
         grid_fitted_min_corner,
         grid_fitted_min_corner + structure.size.as_vec2(),
     );
-    let translation = structure_rect.center() - Vec2::splat(0.5);
-    translation
+
+    structure_rect.center() - Vec2::splat(0.5)
 }
 
 pub fn create_structure_texture_atlas(
@@ -137,9 +137,9 @@ pub fn create_structure_texture_atlas(
     structure: &Structure,
     texture_atlases: &mut ResMut<Assets<TextureAtlas>>,
 ) -> Handle<TextureAtlas> {
-    let texture_handle = asset_server.load(&format!(
+    let texture_handle = asset_server.load(format!(
         "textures/{}.png",
-        &structure.name.to_lowercase().replace(" ", "_")
+        &structure.name.to_lowercase().replace(' ', "_")
     ));
     let rows = {
         if structure.animated {
@@ -157,20 +157,18 @@ pub fn create_structure_texture_atlas(
         None,
         None,
     );
-    let texture_atlas_handle = texture_atlases.add(texture_atlas);
-    texture_atlas_handle
+
+    texture_atlases.add(texture_atlas)
 }
 
 fn structure_texture_size(structure: &Structure) -> Vec2 {
-    let tile_size = if structure.animated {
+    if structure.animated {
         // For animated structures, add 2 tiles to each dimension for the border
         (structure.size.as_vec2() + Vec2::new(2., 2.)) * Vec2::new(TILE_SIZE.x, TILE_SIZE.y)
     } else {
         // For non-animated structures, just multiply the structure size by the tile size
         structure.size.as_vec2() * Vec2::new(TILE_SIZE.x, TILE_SIZE.y)
-    };
-
-    tile_size
+    }
 }
 
 pub fn place_structure(
@@ -226,12 +224,12 @@ pub fn spawn_structure_ghost(
     .insert(Ghost);
 }
 
-fn spawn_structure_base<'w, 's, 'a, 't>(
+fn spawn_structure_base<'w, 's, 'a>(
     commands: &'a mut Commands<'w, 's>,
     name: String,
     rotation: DiscreteRotation,
     translation: Vec2,
-    structure: &'t Structure,
+    structure: &Structure,
     texture_atlas_handle: Handle<TextureAtlas>,
     color: Color,
 ) -> EntityCommands<'w, 's, 'a> {
@@ -242,7 +240,7 @@ fn spawn_structure_base<'w, 's, 'a, 't>(
         IsometricSpriteBundle {
             texture_atlas: texture_atlas_handle,
             transform: Transform::from_translation(translation.extend(1.))
-                .with_rotation(Quat::from_rotation_z(-rotation.to_radians())),
+                .with_rotation(Quat::from_rotation_z(-rotation.radians())),
 
             sprite: IsometricSprite {
                 color,
@@ -416,7 +414,7 @@ mod test {
                 .rotation
                 .as_ref()
                 .unwrap()
-                .to_radians(),
+                .radians(),
             PI * 0.5
         );
     }

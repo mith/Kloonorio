@@ -44,7 +44,7 @@ pub fn miner_tick(
             if let Some(tile_texture) = terrain.tile_texture_index(tile_entity) {
                 if is_minable(tile_texture.0) {
                     if miner.timer.tick(time.delta()).just_finished() {
-                        let stack = Stack::new(texture_id_to_product(tile_texture.clone()), 1);
+                        let stack = Stack::new(texture_id_to_product(tile_texture), 1);
                         debug!("Produced {:?}", stack);
 
                         let drop_point = miner_children

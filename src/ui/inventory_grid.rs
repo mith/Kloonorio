@@ -200,12 +200,7 @@ pub fn inventory_grid(
                                 });
 
                                 response.on_hover_ui_at_pointer(|ui| {
-                                    item_tooltip(
-                                        ui,
-                                        &stack.item.to_string(),
-                                        &structures,
-                                        &resources,
-                                    );
+                                    item_tooltip(ui, stack.item.as_ref(), structures, resources);
                                 });
                             }
                         })

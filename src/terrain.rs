@@ -469,7 +469,6 @@ impl<'w, 's> Terrain<'w, 's> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use tokio;
 
     #[tokio::test]
     async fn generate_chunk_is_reproducible() {

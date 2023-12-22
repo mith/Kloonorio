@@ -7,7 +7,7 @@ pub fn resource_icon(
     stack: &Stack,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
 ) -> Response {
-    let icon_name = &stack.item.to_string().to_lowercase().replace(" ", "_");
+    let icon_name = &stack.item.to_string().to_lowercase().replace(' ', "_");
     let response = {
         if let Some(egui_img) = icons.get(icon_name) {
             ui.image((*egui_img, egui::Vec2::new(32., 32.)))
@@ -25,7 +25,7 @@ pub fn recipe_icon(
     recipe: &Recipe,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
 ) -> Response {
-    item_icon(ui, &recipe.products[0].0.to_string(), icons)
+    item_icon(ui, recipe.products[0].0.as_ref(), icons)
 }
 
 pub fn item_icon(
@@ -33,7 +33,7 @@ pub fn item_icon(
     name: &str,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
 ) -> Response {
-    let icon_name = &name.to_lowercase().replace(" ", "_");
+    let icon_name = &name.to_lowercase().replace(' ', "_");
     let response = {
         if let Some(egui_img) = icons.get(icon_name) {
             ui.add(egui::Image::new((*egui_img, egui::Vec2::new(32., 32.))))

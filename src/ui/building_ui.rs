@@ -90,7 +90,7 @@ pub fn building_ui(
                                 {
                                     inventory_grid(
                                         inventory_child,
-                                        &inventory,
+                                        inventory,
                                         ui,
                                         &definitions.icons,
                                         hand,
@@ -102,7 +102,7 @@ pub fn building_ui(
                                 if let Ok(assembler) = assembler_query.get_mut(*selected_building) {
                                     assembling_machine_widget(
                                         ui,
-                                        &assembler,
+                                        assembler,
                                         *selected_building,
                                         &mut assembler_recipe_change_events,
                                         &definitions.recipes,
