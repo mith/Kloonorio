@@ -288,7 +288,7 @@ mod test {
         let building_a_id = app.world.spawn((Burner::new(), Building)).id();
 
         let mut inventory = Inventory::new(1);
-        inventory.add_item(Item::new("Wood"), 1);
+        inventory.add_item(&Item::new("Wood"), 1);
         let a_child = app.world.spawn((Fuel, inventory)).id();
 
         app.world
@@ -300,7 +300,7 @@ mod test {
             .spawn((Burner::new(), Building))
             .with_children(|b| {
                 let mut inventory = Inventory::new(1);
-                inventory.add_item(Item::new("Coal"), 1);
+                inventory.add_item(&Item::new("Coal"), 1);
                 b.spawn((Fuel, inventory));
             })
             .id();

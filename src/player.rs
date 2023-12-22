@@ -35,14 +35,14 @@ impl Plugin for PlayerPlugin {
 pub struct Player;
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut inventory = Inventory::new(100);
-    inventory.add_item(Item::new("Wooden chest"), 100);
-    inventory.add_item(Item::new("Burner mining drill"), 100);
-    inventory.add_item(Item::new("Stone furnace"), 100);
-    inventory.add_item(Item::new("Burner inserter"), 100);
-    inventory.add_item(Item::new("Coal"), 200);
-    inventory.add_item(Item::new("Iron plate"), 200);
-    inventory.add_item(Item::new("Transport belt"), 200);
-    inventory.add_item(Item::new("Burner assembling machine"), 100);
+    inventory.add_item(&Item::new("Wooden chest"), 100);
+    inventory.add_item(&Item::new("Burner mining drill"), 100);
+    inventory.add_item(&Item::new("Stone furnace"), 100);
+    inventory.add_item(&Item::new("Burner inserter"), 100);
+    inventory.add_item(&Item::new("Coal"), 200);
+    inventory.add_item(&Item::new("Iron plate"), 200);
+    inventory.add_item(&Item::new("Transport belt"), 200);
+    inventory.add_item(&Item::new("Burner assembling machine"), 100);
     commands
         .spawn((
             Name::new("Player"),

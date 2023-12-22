@@ -25,6 +25,7 @@ serde = { version = "1.0", features = ["derive"] }
 bevy-inspector-egui = "0.21.0"
 anyhow = "1.0.75"
 thiserror = "1.0.50"
+proptest-state-machine = "0.1.0"
 
 [profile.dev.package."*"]
 opt-level = 3

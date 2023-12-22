@@ -378,9 +378,9 @@ fn check_inserter_action_valid<'w, 's, 'a>(
                 return false;
             }
 
-            let space_in_inventory = inventories.get(entity).map_or(false, |inventory| {
-                inventory.has_space_for(&Stack::new(action.item.clone(), 1))
-            });
+            let space_in_inventory = inventories
+                .get(entity)
+                .map_or(false, |inventory| inventory.can_add_item(&action.item));
             space_in_inventory
         }
         InserterTargetType::ItemOnGround(_entity) => {

@@ -77,7 +77,7 @@ mod test {
     use proptest::prelude::*;
 
     prop_compose! {
-    fn arb_product()(product in any::<u32>()) -> Item {
+    fn arb_item()(product in any::<u32>()) -> Item {
         match product % 4 {
             0 => Item::new("Wood"),
             1 => Item::new("Stone"),
@@ -89,10 +89,10 @@ mod test {
     }
 
     prop_compose! {
-    fn arb_inventory(size: u32)(products in prop::collection::vec(arb_product(), 1..(size as usize))) -> Inventory {
+    fn arb_inventory(size: u32)(items in prop::collection::vec(arb_item(), 1..(size as usize))) -> Inventory {
         let mut inventory = Inventory::new(size);
-        for product in products {
-            inventory.add_item(product, 1);
+        for item in items {
+            inventory.add_item(&item, 1);
         }
             inventory
     }
@@ -167,7 +167,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Item::new("Wood"), 1);
+        inventory.add_item(&Item::new("Wood"), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -196,7 +196,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Item::new("Wood"), 1);
+        inventory.add_item(&Item::new("Wood"), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
@@ -222,7 +222,7 @@ mod test {
 
         let mut inventory = Inventory::new(10);
 
-        inventory.add_item(Item::new("Wood"), 1);
+        inventory.add_item(&Item::new("Wood"), 1);
 
         let player_id = app.world.spawn((Player, inventory)).id();
 
