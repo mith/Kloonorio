@@ -11,7 +11,7 @@ use crate::types::Recipe;
 #[derive(Default)]
 pub struct RecipesAssetLoader;
 
-#[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Asset, Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "6b92cebe-2ec6-4e22-b85d-499873f9c22c"]
 pub struct RecipesAsset(pub Vec<Recipe>);
 
@@ -58,7 +58,8 @@ pub struct RecipeLoaderPlugin;
 
 impl Plugin for RecipeLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<RecipesAsset>()
+        app.register_type::<RecipesAsset>()
+            .init_asset::<RecipesAsset>()
             .init_asset_loader::<RecipesAssetLoader>();
     }
 }

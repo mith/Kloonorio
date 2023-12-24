@@ -117,7 +117,8 @@ pub struct IsometricSpritePlugin;
 
 impl Plugin for IsometricSpritePlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<IsometricSprite>();
+        app.register_type::<RotationAtlasIndexes>()
+            .register_type::<IsometricSprite>();
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.add_systems(

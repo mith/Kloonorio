@@ -7,7 +7,7 @@ pub mod transport_belt;
 
 use bevy::{
     app::{App, FixedUpdate, Plugin},
-    reflect::TypeUuid,
+    reflect::{Reflect, Struct, TypeUuid},
     utils::HashSet,
 };
 use serde::Deserialize;
@@ -25,7 +25,8 @@ pub struct StructureComponentsPlugin;
 
 impl Plugin for StructureComponentsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((InserterPlugin, TransportBeltPlugin, AssemblerPlugin))
+        app.register_type::<StructureComponent>()
+            .add_plugins((InserterPlugin, TransportBeltPlugin, AssemblerPlugin))
             .add_systems(
                 FixedUpdate,
                 (smelter_tick, burner_tick, burner_load, miner_tick),
@@ -33,7 +34,7 @@ impl Plugin for StructureComponentsPlugin {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "990c9ea7-3c00-4d6b-b9f0-c62b86bb9973"]
 pub enum StructureComponent {
     Smelter,

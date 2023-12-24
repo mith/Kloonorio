@@ -15,7 +15,7 @@ use crate::{
     types::{AppState, GameState, Item, Recipe},
 };
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Reflect)]
 pub struct Structures(HashMap<String, Structure>);
 
 impl Deref for Structures {
@@ -32,7 +32,7 @@ impl DerefMut for Structures {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Reflect)]
 pub struct Recipes(HashMap<String, Recipe>);
 
 impl Deref for Recipes {
@@ -66,7 +66,7 @@ impl DerefMut for Icons {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Reflect)]
 pub struct Items(HashMap<String, Item>);
 
 impl Deref for Items {
@@ -193,7 +193,10 @@ pub struct LoadingPlugin;
 
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Structures::default())
+        app.register_type::<Structures>()
+            .register_type::<Recipes>()
+            .register_type::<Items>()
+            .insert_resource(Structures::default())
             .insert_resource(Recipes::default())
             .insert_resource(Icons::default())
             .insert_resource(Items::default())

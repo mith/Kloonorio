@@ -10,7 +10,7 @@ use crate::types::Item;
 
 #[derive(Default)]
 pub struct ItemAssetLoader;
-#[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Asset, Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "09483f6e-220b-486c-aaf2-857b4c9cab23"]
 pub struct ItemAsset(pub Vec<Item>);
 
@@ -57,7 +57,8 @@ pub struct ItemLoaderPlugin;
 
 impl Plugin for ItemLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<ItemAsset>()
+        app.register_type::<ItemAsset>()
+            .init_asset::<ItemAsset>()
             .init_asset_loader::<ItemAssetLoader>();
     }
 }

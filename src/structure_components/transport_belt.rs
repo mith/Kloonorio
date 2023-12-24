@@ -51,6 +51,10 @@ impl TransportBelt {
     pub fn slot_mut(&mut self, slot: usize) -> Option<&mut Option<Item>> {
         self.slots.get_mut(slot)
     }
+
+    pub fn slots(&self) -> impl Iterator<Item = &Option<Item>> {
+        self.slots.iter()
+    }
 }
 
 #[derive(Resource)]

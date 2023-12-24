@@ -19,13 +19,22 @@ impl Plugin for InserterPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                (inserter_planner, inserter_tick).chain(),
+                (
+                    inserter_planner,
+                    apply_deferred.in_set(InserterFlush),
+                    inserter_tick,
+                    animate_arm_position,
+                )
+                    .chain(),
                 burner_inserter_tick,
             ),
         )
         .register_type::<Inserter>();
     }
 }
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Reflect, SystemSet)]
+struct InserterFlush;
 
 #[derive(Component, Debug, Reflect)]
 pub struct Inserter {
@@ -134,11 +143,11 @@ fn find_inventory_pickups_for_entity<'a>(
         })
 }
 
-fn find_belt_pickups_for_entity(
+fn find_belt_pickups_for_entity<'a>(
     entity: Entity,
-    belts_query: &Query<&TransportBelt>,
-    target_item: &InserterTargetItem,
-) -> Vec<AvailablePickup> {
+    belts_query: &'a Query<&TransportBelt>,
+    target_item: &'a InserterTargetItem,
+) -> impl Iterator<Item = AvailablePickup> + 'a {
     belts_query
         .get(entity)
         .ok()
@@ -160,7 +169,6 @@ fn find_belt_pickups_for_entity(
                 }
             })
         })
-        .collect()
 }
 
 fn find_pickups(
@@ -293,14 +301,6 @@ fn plan_inserter_action(
         rapier_context,
         &target_item,
     );
-    let pickups = find_pickups(
-        inserter,
-        inventories,
-        belts_query,
-        rapier_context,
-        collider_query,
-        &target_item,
-    );
     if let Some(holding) = inserter.holding.as_ref() {
         dropoffs
             .iter()
@@ -316,17 +316,24 @@ fn plan_inserter_action(
     } else {
         // Iterate through each dropoff and try to find a matching pickup
         dropoffs.iter().find_map(|dropoff| {
-            pickups
-                .iter()
-                .find(|pickup| match dropoff.target_item {
-                    InserterTargetItem::Any => true,
-                    InserterTargetItem::Filter(ref filter) => filter.contains(&pickup.target_item),
-                })
-                .map(|pickup| InserterAction {
-                    pickup: Some(pickup.target_type.clone()),
-                    dropoff: dropoff.target_type.clone(),
-                    item: pickup.target_item.clone(),
-                })
+            find_pickups(
+                inserter,
+                inventories,
+                belts_query,
+                rapier_context,
+                collider_query,
+                &dropoff.target_item,
+            )
+            .iter()
+            .find(|pickup| match dropoff.target_item {
+                InserterTargetItem::Any => true,
+                InserterTargetItem::Filter(ref filter) => filter.contains(&pickup.target_item),
+            })
+            .map(|pickup| InserterAction {
+                pickup: Some(pickup.target_type.clone()),
+                dropoff: dropoff.target_type.clone(),
+                item: pickup.target_item.clone(),
+            })
         })
     }
 }
@@ -410,6 +417,7 @@ fn check_inserter_action_valid<'w, 's, 'a>(
 }
 
 fn inserter_planner(
+    mut commands: Commands,
     mut inserter_query: Query<(Entity, &Transform, &mut Inserter), With<Powered>>,
     collider_query: Query<(&Collider, &GlobalTransform)>,
     rapier_context: Res<RapierContext>,
@@ -437,7 +445,7 @@ fn inserter_planner(
                     });
 
             if new_action_needed {
-                info!("Planning new action");
+                trace!("Planning new action");
                 let new_action = plan_inserter_action(
                     &inserter,
                     &inventories_set.p0(),
@@ -451,15 +459,21 @@ fn inserter_planner(
                     -1.0
                 };
                 debug!(target_arm_position = ?inserter.target_arm_position);
+                if new_action.is_some() {
+                    commands.entity(inserter_entity).insert(Working);
+                    info!(action=?new_action, "New action planned");
+                } else {
+                    debug!("No action planned");
+                    commands.entity(inserter_entity).remove::<Working>();
+                }
                 inserter.current_action = new_action;
             }
         }
     }
 }
 
-pub fn inserter_tick(
-    mut commands: Commands,
-    mut inserter_query: Query<(Entity, &Transform, &mut Inserter), With<Powered>>,
+fn inserter_tick(
+    mut inserter_query: Query<(Entity, &Transform, &mut Inserter), (With<Powered>, With<Working>)>,
     time: Res<Time<Fixed>>,
     mut inventories: Query<&mut Inventory>,
     mut belts_query: Query<&mut TransportBelt>,
@@ -467,12 +481,6 @@ pub fn inserter_tick(
     for (inserter_entity, _inserter_transform, mut inserter) in &mut inserter_query {
         let span = info_span!("Inserter tick", inserter = ?inserter_entity);
         let _enter = span.enter();
-
-        if inserter.current_action.is_some() {
-            commands.entity(inserter_entity).insert(Working);
-        } else {
-            commands.entity(inserter_entity).remove::<Working>();
-        }
 
         // Move towards the target location
         inserter.arm_position +=
@@ -523,7 +531,37 @@ pub fn inserter_tick(
     }
 }
 
-pub fn burner_inserter_tick(
+fn animate_arm_position(
+    inserter_query: Query<(&GlobalTransform, &Inserter)>,
+    transform_query: Query<&GlobalTransform>,
+    mut gizmos: Gizmos,
+) {
+    for (inserter_transform, inserter) in &mut inserter_query.iter() {
+        let span = info_span!("Animate arm position", inserter = ?inserter);
+        let _enter = span.enter();
+
+        let arm_position = inserter.arm_position;
+        let inserter_location = inserter_transform.translation().xy();
+        let pickup_location = transform_query
+            .get(inserter.pickup_location_entity)
+            .unwrap()
+            .translation()
+            .xy();
+        let dropoff_location = transform_query
+            .get(inserter.dropoff_location_entity)
+            .unwrap()
+            .translation()
+            .xy();
+
+        let arm_position = pickup_location.lerp(dropoff_location, (arm_position + 1.0) / 2.0);
+
+        gizmos.circle_2d(inserter_location, 0.3, Color::BLUE);
+        gizmos.circle_2d(arm_position, 0.2, Color::TURQUOISE);
+        gizmos.line_2d(inserter_location, arm_position, Color::RED);
+    }
+}
+
+fn burner_inserter_tick(
     mut burner_inserter_query: Query<(Entity, &mut Inserter, &Children), With<Burner>>,
     mut fuel_query: Query<FuelInventoryQuery>,
 ) {
@@ -540,6 +578,369 @@ pub fn burner_inserter_tick(
                 fuel_inventory.add_stack(stack.to_owned());
                 inserter.holding = None;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use bevy::{
+        app::{App, Plugin, Update},
+        asset::AssetPlugin,
+        ecs::system::{Query, Res},
+        hierarchy::BuildWorldChildren,
+        render::{
+            settings::{RenderCreation, WgpuSettings},
+            texture::ImagePlugin,
+            RenderPlugin,
+        },
+        scene::ScenePlugin,
+        time::TimePlugin,
+        transform::{
+            components::{GlobalTransform, Transform},
+            TransformBundle, TransformPlugin,
+        },
+        utils::HashSet,
+        window::WindowPlugin,
+    };
+    use bevy_rapier2d::{
+        geometry::{Collider, Sensor},
+        plugin::{NoUserData, RapierContext, RapierPhysicsPlugin},
+    };
+    use proptest::{prelude::*, strategy::ValueTree};
+    use proptest::{strategy::Strategy, test_runner::TestRunner};
+    use rand::seq::SliceRandom;
+
+    use crate::{
+        inventory::{Inventory, Storage},
+        structure_components::{
+            inserter::{
+                find_belt_pickups_for_entity, find_inventory_pickups_for_entity, find_pickups,
+                Dropoff, Inserter, InserterTargetItem, Pickup,
+            },
+            transport_belt::TransportBelt,
+        },
+        types::Item,
+        util::Inventories,
+    };
+    // Strategy to generate random items
+    fn arb_item() -> impl Strategy<Value = Item> {
+        "Item [a-zA-Z0-9]{1,10}".prop_map(Item::new)
+    }
+
+    // Strategy to generate random inventory with items
+    fn arb_inventory() -> impl Strategy<Value = Inventory> {
+        prop::collection::vec(arb_item(), 1..10).prop_map(|items| {
+            let mut inventory = Inventory::new(10);
+            for item in items {
+                inventory.add_item(&item, 1);
+            }
+            inventory
+        })
+    }
+
+    // Strategy to generate random InserterTargetItem
+    fn arb_target_item(items: &HashSet<Item>) -> impl Strategy<Value = InserterTargetItem> {
+        let item_vec = items.iter().cloned().collect::<Vec<_>>();
+
+        prop_oneof![
+            Just(InserterTargetItem::Any),
+            prop::collection::vec(prop::sample::select(item_vec.clone()), 1..=item_vec.len())
+                .prop_map(InserterTargetItem::Filter)
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn test_find_inventory_pickups(
+            inventory in arb_inventory(),
+        ) {
+            let mut app = App::new();
+
+            let inventory_entity = app.world.spawn((inventory.clone(), Storage)).id();
+
+            let mut items = HashSet::<Item>::new();
+            items.extend(inventory.slots.iter().flatten().map(|stack| stack.item.clone()));
+
+            let mut test_runner = TestRunner::default();
+            let target_item = arb_target_item(&items).new_tree(&mut test_runner).unwrap().current();
+            let target_item_1 = target_item.clone();
+
+            app.add_systems(Update, move |inventories: Inventories| {
+                let pickups = find_inventory_pickups_for_entity(inventory_entity, &inventories, &target_item_1).collect::<Vec<_>>();
+
+                match &target_item_1 {
+                    InserterTargetItem::Any => {
+                        assert_eq!(
+                            pickups.len(),
+                            inventory.slots.iter().flatten().count(),
+                            "Mismatch in pickups count for target 'Any'. Expected: {}, Found: {}",
+                            inventory.slots.iter().flatten().count(),
+                            pickups.len(),
+                        );
+                    }
+                    InserterTargetItem::Filter(filter) => {
+                        let expected_pickups = inventory.slots.iter().flatten().filter(|stack| filter.contains(&stack.item)).count();
+                        assert_eq!(
+                            pickups.len(),
+                            expected_pickups,
+                            "Mismatch in pickups count for target 'Filter({:?})'. Expected: {}, Found: {}",
+                            filter,
+                            expected_pickups,
+                            pickups.len(),
+                        );
+                    }
+                }
+            });
+
+            // Test empty inventory
+            let empty_inventory_entity = app.world.spawn((Inventory::new(10), Storage)).id();
+            app.add_systems(Update, move |inventories: Inventories| {
+                let pickups = find_inventory_pickups_for_entity(empty_inventory_entity, &inventories, &target_item).collect::<Vec<_>>();
+                assert!(pickups.is_empty(), "There should be no pickups for an empty inventory.");
+            });
+
+            // Test target item not in inventory
+            let nonexistent_item = Item::new("Nonexistent");
+            let nonexistent_target = InserterTargetItem::Filter(vec![nonexistent_item]);
+            app.add_systems(Update, move |inventories: Inventories| {
+                let pickups = find_inventory_pickups_for_entity(inventory_entity, &inventories, &nonexistent_target).collect::<Vec<_>>();
+                assert!(pickups.is_empty(), "There should be no pickups for a nonexistent target item.");
+            });
+
+            // Run the app update to execute the systems
+            app.update();
+        }
+    }
+
+    prop_compose! {
+        fn arb_belt_slots()
+        (input in prop::collection::vec(arb_item(), 1..=3)) -> Vec<Option<Item>>
+        {
+            let mut indices = [0, 1, 2];
+            indices.shuffle(&mut rand::thread_rng());
+            let mut slots = vec![None, None, None];
+            for (i, item) in input.into_iter().enumerate() {
+                slots[indices[i]] = Some(item);
+            }
+            slots
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_find_belt_pickups(
+            items_in_slots in arb_belt_slots(),
+        ) {
+            let mut app = App::new();
+
+            let dropoff_entity = app.world.spawn_empty().id();
+            let mut belt = TransportBelt::new(dropoff_entity);
+            for (i, item) in items_in_slots.iter().enumerate() {
+                *belt.slot_mut(i).unwrap() = item.clone();
+
+            }
+            let belt_entity = app.world.spawn(belt).id();
+
+            // Collect all items in the belt slots
+            let items = items_in_slots.into_iter().flatten().collect::<HashSet<_>>();
+
+            let mut test_runner = TestRunner::default();
+            let target_item = arb_target_item(&items).new_tree(&mut test_runner).unwrap().current();
+            let target_item_1 = target_item.clone();
+
+            app.add_systems(Update, move |belts_query: Query<&TransportBelt>| {
+                let pickups = find_belt_pickups_for_entity(belt_entity, &belts_query, &target_item_1).collect::<Vec<_>>();
+
+                match &target_item_1 {
+                    InserterTargetItem::Any => {
+                        let expected_pickups = belts_query.get(belt_entity).unwrap().slot(1).unwrap().iter().count();
+                        assert_eq!(
+                            pickups.len(),
+                            expected_pickups,
+                            "Mismatch in pickups count for target 'Any'. Expected: {}, Found: {}",
+                            expected_pickups,
+                            pickups.len(),
+                        );
+                    }
+                    InserterTargetItem::Filter(filter) => {
+                        let expected_pickups = belts_query.get(belt_entity).unwrap().slot(1).unwrap().iter().filter(|item| filter.contains(item)).count();
+                        assert_eq!(
+                            pickups.len(),
+                            expected_pickups,
+                            "Mismatch in pickups count for target 'Filter({:?})'. Expected: {}, Found: {}",
+                            filter,
+                            expected_pickups,
+                            pickups.len(),
+                        );
+                    }
+                }
+            });
+
+            let empty_belt_entity = app.world.spawn(TransportBelt::new(dropoff_entity)).id();
+
+            app.add_systems(Update, move |belts_query: Query<&TransportBelt>| {
+                let pickups = find_belt_pickups_for_entity(empty_belt_entity, &belts_query, &target_item).collect::<Vec<_>>();
+
+                assert_eq!(pickups.len(), 0, "There should be no pickups for an empty belt.");
+            });
+
+            app.add_systems(Update, move |belts_query: Query<&TransportBelt>| {
+                // Create a nonexistent target item
+                let nonexistent_item = Item::new("Nonexistent");
+
+                let pickups = find_belt_pickups_for_entity(belt_entity, &belts_query, &InserterTargetItem::Filter(vec![nonexistent_item])).collect::<Vec<_>>();
+
+                assert_eq!(pickups.len(), 0, "There should be no pickups for a nonexistent target item.");
+            });
+
+            // Run the app update to execute the system
+            app.update();
+        }
+    }
+
+    proptest! {
+
+        #[test]
+        fn test_find_pickups(
+            inventory in arb_inventory(),
+            items_in_slots in arb_belt_slots(),
+        ) {
+            // Create a Bevy App with necessary plugins
+            let mut app = App::new();
+            app.add_plugins((
+                HeadlessRenderPlugin,
+                TransformPlugin,
+                TimePlugin,
+                RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0)
+            ));
+
+            let pickup_transform = Transform::from_xyz(-1.0, 0.0, 0.0);
+            let dropoff_transform = Transform::from_xyz(1.0, 0.0, 0.0);
+
+            let inserter_entity = {
+                let inserter_transform = Transform::from_xyz(0.0, 0.0, 0.0);
+                let pickup = app
+                .world
+                .spawn((
+                    TransformBundle::from(pickup_transform),
+                    Pickup,
+                ))
+                .id();
+                let dropoff = app
+                    .world
+                    .spawn((
+                        TransformBundle::from(dropoff_transform),
+                        Dropoff,
+                    ))
+                    .id();
+
+                app
+                    .world
+                    .spawn((
+                        TransformBundle::from(inserter_transform),
+                        Inserter::new(1.0, 10, dropoff, pickup),
+                    )).push_children(&[pickup, dropoff])
+                    .id()
+            };
+
+            let belt_entity = {
+                let dropoff_entity = app.world.spawn_empty().id();
+                let mut belt = TransportBelt::new(dropoff_entity);
+                for (i, item) in items_in_slots.iter().enumerate() {
+                    *belt.slot_mut(i).unwrap() = item.clone();
+
+                }
+                app.world.spawn((
+                    belt,
+                    Collider::ball(0.5),
+                    TransformBundle::from(pickup_transform),
+                )).id()
+            };
+
+            let inventory_entity = app.world.spawn((
+                inventory.clone(),
+                Storage,
+                Sensor,
+                Collider::ball(0.5),
+                TransformBundle::from(pickup_transform),
+            )).id();
+
+            app.update();
+
+            app.add_systems(Update, move |
+                inventories: Inventories,
+                belts_query: Query<&TransportBelt>,
+                rapier_context: Res<RapierContext>,
+                collider_query: Query<(&Collider, &GlobalTransform)>,
+                inserter_query: Query<&Inserter>,
+                | {
+                let mut items = HashSet::<Item>::new();
+                items.extend(inventory.slots.iter().flatten().map(|stack| stack.item.clone()));
+
+                let mut test_runner = TestRunner::default();
+                let target_item = arb_target_item(&items).new_tree(&mut test_runner).unwrap().current();
+                let target_item_1 = target_item.clone();
+
+                let inserter = inserter_query.get(inserter_entity).unwrap();
+
+                let pickups = find_pickups(
+                    inserter,
+                    &inventories,
+                    &belts_query,
+                    &rapier_context,
+                    &collider_query,
+                    &target_item_1,
+                );
+
+                match &target_item_1 {
+                    InserterTargetItem::Any => {
+                        let expected_pickups = inventory.slots.iter().flatten().count();
+                        assert_eq!(
+                            pickups.len(),
+                            expected_pickups,
+                            "Mismatch in pickups count for target 'Any'. Expected: {}, Found: {}",
+                            expected_pickups,
+                            pickups.len(),
+                        );
+                    }
+                    InserterTargetItem::Filter(filter) => {
+                        let expected_pickups = inventory.slots.iter().flatten().filter(|stack| filter.contains(&stack.item)).count();
+                        assert_eq!(
+                            pickups.len(),
+                            expected_pickups,
+                            "Mismatch in pickups count for target 'Filter({:?})'. Expected: {}, Found: {}",
+                            filter,
+                            expected_pickups,
+                            pickups.len(),
+                        );
+                    }
+                }
+            });
+
+            // Update the app to synchronize transforms and physics
+            app.update();
+
+
+        }
+    }
+
+    struct HeadlessRenderPlugin;
+
+    impl Plugin for HeadlessRenderPlugin {
+        fn build(&self, app: &mut App) {
+            app.add_plugins((
+                WindowPlugin::default(),
+                AssetPlugin::default(),
+                ScenePlugin::default(),
+                RenderPlugin {
+                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                        backends: None,
+                        ..Default::default()
+                    }),
+                },
+                ImagePlugin::default(),
+            ));
         }
     }
 }

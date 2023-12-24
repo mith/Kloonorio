@@ -7,14 +7,14 @@ use crate::{
     item_loader::ItemAsset, recipe_loader::RecipesAsset, structure_loader::StructuresAsset,
 };
 
-#[derive(Clone, PartialEq, Eq, Component, Debug, Hash, States, Default)]
+#[derive(Clone, PartialEq, Eq, Component, Debug, Hash, States, Default, Reflect)]
 pub enum AppState {
     #[default]
     Loading,
     Running,
 }
 
-#[derive(Default, Resource)]
+#[derive(Default, Resource, Reflect)]
 pub struct GameState {
     pub map_loaded: bool,
     pub spawned: bool,
@@ -77,9 +77,10 @@ pub struct Powered;
 #[component(storage = "SparseSet")]
 pub struct Working;
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Reflect)]
 pub struct CraftingQueue(pub VecDeque<ActiveCraft>);
 
+#[derive(Reflect)]
 pub struct ActiveCraft {
     pub recipe: Recipe,
     pub timer: Timer,

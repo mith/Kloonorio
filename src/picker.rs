@@ -9,6 +9,7 @@ use bevy::{
     },
     input::{mouse::MouseButton, Input},
     math::{Vec2, Vec3Swizzles},
+    reflect::Reflect,
 };
 use bevy_egui::EguiContexts;
 use bevy_rapier2d::{pipeline::QueryFilter, plugin::RapierContext};
@@ -21,11 +22,12 @@ pub struct PickerPlugin;
 
 impl Plugin for PickerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (pick_building, hover_pickable));
+        app.register_type::<SelectedBuilding>()
+            .add_systems(Update, (pick_building, hover_pickable));
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[component(storage = "SparseSet")]
 pub struct SelectedBuilding(pub Entity);
 

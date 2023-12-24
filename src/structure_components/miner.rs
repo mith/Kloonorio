@@ -5,7 +5,7 @@ use bevy_rapier2d::prelude::RapierContext;
 use crate::{
     interact::is_minable,
     inventory::{Inventory, Output, Stack},
-    terrain::Terrain,
+    terrain::TerrainParams,
     types::{Powered, Working},
     util::{drop_stack_at_point, texture_id_to_product},
 };
@@ -28,7 +28,7 @@ impl Miner {
 pub fn miner_tick(
     mut commands: Commands,
     mut miner_query: Query<(Entity, &Transform, &mut Miner, &Children), With<Powered>>,
-    terrain: Terrain,
+    terrain: TerrainParams,
     time: Res<Time>,
     asset_server: Res<AssetServer>,
     rapier_context: Res<RapierContext>,

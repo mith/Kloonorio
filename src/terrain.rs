@@ -29,23 +29,25 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(TilemapPlugin)
+            .register_type::<TerrainSettings>()
+            .register_type::<ChunkManager>()
+            .register_type::<CursorWorldPos>()
+            .register_type::<HoveredTile>()
             .insert_resource(ChunkManager::default())
             .insert_resource(TerrainSettings {
                 seed: 1234567,
                 chunk_spawn_radius: 5,
             })
             .insert_resource(CursorWorldPos(Vec3::new(-100., -100., 0.)))
+            .add_systems(Startup, setup_terrain)
             .add_systems(
                 Update,
                 (
                     spawn_chunks_around_camera,
-                    spawn_chunk,
-                    // despawn_outofrange_chunks,
-                    // debug_ui,
+                    spawn_chunk_tilemap,
                     update_cursor_pos,
-                    // hover_info_ui,
                     hovered_tile,
-                    // highlight_tile_labels,
+                    chunk_gizmos.run_if(resource_exists::<TerrainDebug>()),
                 )
                     .in_set(TerrainSet)
                     .run_if(in_state(AppState::Running)),
@@ -53,10 +55,13 @@ impl Plugin for TerrainPlugin {
     }
 }
 
-pub const CHUNK_SIZE: UVec2 = UVec2 { x: 8, y: 8 };
+pub const CHUNK_SIZE: UVec2 = UVec2 { x: 9, y: 9 };
 pub const TILE_SIZE: TilemapTileSize = TilemapTileSize { x: 16., y: 16. };
 
-#[derive(Resource)]
+#[derive(Component)]
+pub struct Terrain;
+
+#[derive(Resource, Debug, Reflect)]
 struct TerrainSettings {
     seed: u32,
     chunk_spawn_radius: i32,
@@ -82,7 +87,7 @@ pub const STONE: u32 = 7;
 pub const COAL: u32 = 8;
 pub const IRON: u32 = 9;
 
-#[derive(Default, Resource)]
+#[derive(Default, Resource, Debug, Reflect)]
 pub struct ChunkManager {
     spawned_chunks: HashSet<IVec2>,
     loading_chunks: HashSet<IVec2>,
@@ -224,10 +229,19 @@ async fn generate_chunk_noise(seed: u32, chunk_position: IVec2) -> (IVec2, Chunk
     (chunk_position, chunk)
 }
 
+fn setup_terrain(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Terrain"),
+        Terrain,
+        TransformBundle::default(),
+        VisibilityBundle::default(),
+    ));
+}
+
 #[derive(Component)]
 struct TileLabel;
 
-fn spawn_chunk(
+fn spawn_chunk_tilemap(
     mut commands: Commands,
     mut chunk_task: Query<(Entity, &mut GenerateChunk)>,
     mut chunk_manager: ResMut<ChunkManager>,
@@ -242,11 +256,12 @@ fn spawn_chunk(
             };
 
             let map_transform = Transform::from_translation(Vec3::new(
-                chunk_position.x as f32 * CHUNK_SIZE.x as f32,
-                chunk_position.y as f32 * CHUNK_SIZE.y as f32,
+                -(0.5 * CHUNK_SIZE.x as f32) + 0.5,
+                -(0.5 * CHUNK_SIZE.y as f32) + 0.5,
                 0.0,
             ));
 
+            let tilemap_entity = commands.spawn_empty().id();
             let mut tile_storage = TileStorage::empty(tilemap_size);
             for ((x, y), tile) in chunk.indexed_iter() {
                 let x = x as u32;
@@ -256,27 +271,14 @@ fn spawn_chunk(
                     let tile_entity = commands
                         .spawn(TileBundle {
                             position: tile_pos,
-                            tilemap_id: TilemapId(chunk_entity),
+                            tilemap_id: TilemapId(tilemap_entity),
                             texture_index: TileTextureIndex(*texture_id),
 
                             ..default()
                         })
                         .id();
 
-                    // let tile_center = tile_pos
-                    //     .center_in_world(&TILE_SIZE.into(), &map_type)
-                    //     .extend(1.0);
-                    // let transform = Transform::from_translation(tile_center);
-                    // commands
-                    //     .entity(tile_entity)
-                    //     .insert_bundle(SpriteBundle {
-                    //         texture: asset_server.load("textures/tile.png"),
-                    //         transform,
-                    //         ..default()
-                    //     });
-                    //     .insert(TileLabel);
-
-                    commands.entity(chunk_entity).add_child(tile_entity);
+                    commands.entity(tilemap_entity).add_child(tile_entity);
                     tile_storage.set(&tile_pos, tile_entity);
                 } else {
                     warn!("Tile at {:?} is empty", TilePos { x, y });
@@ -285,25 +287,29 @@ fn spawn_chunk(
 
             let texture_handle = asset_server.load("textures/terrain.png");
 
+            commands.entity(tilemap_entity).insert(TilemapBundle {
+                grid_size: TILE_SIZE.into(),
+                size: CHUNK_SIZE.into(),
+                storage: tile_storage,
+                texture: TilemapTexture::Single(texture_handle),
+                tile_size: TILE_SIZE,
+                transform: map_transform.with_scale(Vec3::new(
+                    1. / TILE_SIZE.x,
+                    1. / TILE_SIZE.y,
+                    1.,
+                )),
+                map_type,
+                ..default()
+            });
+
             debug!(position = ?chunk_position, "Adding chunk to world");
-            commands.entity(chunk_entity).insert((
-                Name::new(format!("Chunk {},{}", chunk_position.x, chunk_position.y)),
-                TilemapBundle {
-                    grid_size: TILE_SIZE.into(),
-                    size: CHUNK_SIZE.into(),
-                    storage: tile_storage,
-                    texture: TilemapTexture::Single(texture_handle),
-                    tile_size: TILE_SIZE,
-                    transform: map_transform.with_scale(Vec3::new(
-                        1. / TILE_SIZE.x,
-                        1. / TILE_SIZE.y,
-                        1.,
-                    )),
-                    map_type,
-                    ..default()
-                },
-                SpawnedChunk,
-            ));
+            commands
+                .entity(chunk_entity)
+                .insert((
+                    Name::new(format!("Chunk {},{}", chunk_position.x, chunk_position.y)),
+                    SpawnedChunk,
+                ))
+                .add_child(tilemap_entity);
 
             commands.entity(chunk_entity).remove::<GenerateChunk>();
             chunk_manager.loading_chunks.remove(&chunk_position);
@@ -318,6 +324,7 @@ fn spawn_chunks_around_camera(
     camera_query: Query<&GlobalTransform, With<Camera>>,
     chunk_manager: ResMut<ChunkManager>,
     terrain_settings: Res<TerrainSettings>,
+    terrain_query: Query<Entity, With<Terrain>>,
 ) {
     for transform in &camera_query {
         let camera_chunk_pos = global_pos_to_chunk_pos(&transform.translation().xy());
@@ -328,12 +335,25 @@ fn spawn_chunks_around_camera(
             for x in
                 (camera_chunk_pos.x - chunk_spawn_radius)..(camera_chunk_pos.x + chunk_spawn_radius)
             {
+                let terrain_entity = terrain_query.single();
                 if !chunk_manager.spawned_chunks.contains(&IVec2::new(x, y)) {
                     let thread_pool = AsyncComputeTaskPool::get();
                     let seed = terrain_settings.seed;
                     let task = thread_pool
                         .spawn(async move { generate_chunk_noise(seed, IVec2::new(x, y)).await });
-                    commands.spawn(GenerateChunk(task));
+                    commands.entity(terrain_entity).with_children(|parent| {
+                        parent.spawn((
+                            GenerateChunk(task),
+                            TransformBundle::from_transform(Transform::from_translation(
+                                Vec3::new(
+                                    x as f32 * CHUNK_SIZE.x as f32,
+                                    y as f32 * CHUNK_SIZE.y as f32,
+                                    0.0,
+                                ),
+                            )),
+                            VisibilityBundle::default(),
+                        ));
+                    });
                 }
             }
         }
@@ -346,7 +366,7 @@ pub fn global_pos_to_chunk_pos(camera_pos: &Vec2) -> IVec2 {
     camera_pos / chunk_size
 }
 
-#[derive(Debug, Default, Resource)]
+#[derive(Debug, Default, Resource, Reflect)]
 pub struct CursorWorldPos(pub Vec3);
 
 fn update_cursor_pos(
@@ -365,10 +385,45 @@ fn update_cursor_pos(
     *cursor_pos = CursorWorldPos(point.extend(0.));
 }
 
+#[derive(Resource, Default)]
+pub struct TerrainDebug;
+
+fn chunk_gizmos(mut gizmos: Gizmos, chunk_query: Query<&GlobalTransform, With<SpawnedChunk>>) {
+    for transform in chunk_query.iter() {
+        let half_width = CHUNK_SIZE.x as f32 / 2.0;
+        let half_height = CHUNK_SIZE.y as f32 / 2.0;
+        let center = transform.translation().truncate();
+
+        // Draw chunk borders
+        gizmos.line_2d(
+            center + Vec2::new(-half_width, -half_height),
+            center + Vec2::new(half_width, -half_height),
+            Color::WHITE,
+        );
+        gizmos.line_2d(
+            center + Vec2::new(half_width, -half_height),
+            center + Vec2::new(half_width, half_height),
+            Color::WHITE,
+        );
+        gizmos.line_2d(
+            center + Vec2::new(half_width, half_height),
+            center + Vec2::new(-half_width, half_height),
+            Color::WHITE,
+        );
+        gizmos.line_2d(
+            center + Vec2::new(-half_width, half_height),
+            center + Vec2::new(-half_width, -half_height),
+            Color::WHITE,
+        );
+
+        gizmos.rect_2d(center, 0., Vec2::ONE, Color::WHITE);
+    }
+}
+
 #[derive(Component)]
 struct HighlightedLabel;
 
-#[derive(Component)]
+#[derive(Component, Debug, Reflect)]
 #[component(storage = "SparseSet")]
 pub struct HoveredTile {
     pub entity: Entity,
@@ -423,7 +478,7 @@ pub fn hovered_tile(
 }
 
 #[derive(SystemParam)]
-pub struct Terrain<'w, 's> {
+pub struct TerrainParams<'w, 's> {
     chunks: Query<
         'w,
         's,
@@ -439,7 +494,7 @@ pub struct Terrain<'w, 's> {
     tiles: Query<'w, 's, &'static TileTextureIndex>,
 }
 
-impl<'w, 's> Terrain<'w, 's> {
+impl<'w, 's> TerrainParams<'w, 's> {
     pub fn tile_entity_at_point(&self, point: Vec2) -> Option<Entity> {
         for (chunk_transform, tile_storage, chunk_size, grid_size, map_type) in &self.chunks {
             let point_in_chunk_pos: Vec2 = {

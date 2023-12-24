@@ -114,11 +114,11 @@ mod test {
             .iter()
                 .flatten()
                 .fold(HashMap::new(), |mut acc, stack| {
-                if acc.contains_key(&stack.item) {
-                    *acc.get_mut(&stack.item).unwrap() += stack.amount;
-                } else {
-                    acc.insert(stack.item.clone(), stack.amount);
-                }
+                    if acc.contains_key(&stack.item) {
+                        *acc.get_mut(&stack.item).unwrap() += stack.amount;
+                    } else {
+                        acc.insert(stack.item.clone(), stack.amount);
+                    }
                     acc
             });
 

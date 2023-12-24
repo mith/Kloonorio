@@ -11,7 +11,7 @@ use crate::structure_components::StructureComponent;
 #[derive(Default)]
 pub struct StructuresAssetLoader;
 
-#[derive(Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "540f864d-3e80-4e5d-8be5-1846d7be2484"]
 pub struct Structure {
     pub name: String,
@@ -22,7 +22,7 @@ pub struct Structure {
     pub animated: bool,
 }
 
-#[derive(Asset, TypePath, Clone, Debug, Deserialize, TypeUuid)]
+#[derive(Asset, Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "97b2a898-da7d-4a72-a192-05e18d309950"]
 pub struct StructuresAsset(pub Vec<Structure>);
 
@@ -70,7 +70,9 @@ pub struct StructureLoaderPlugin;
 
 impl Plugin for StructureLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<StructuresAsset>()
+        app.register_type::<Structure>()
+            .register_type::<StructuresAsset>()
+            .init_asset::<StructuresAsset>()
             .init_asset_loader::<StructuresAssetLoader>();
     }
 }
