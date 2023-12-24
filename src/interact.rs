@@ -9,7 +9,7 @@ use bevy::{
     input::{mouse::MouseButton, Input},
     math::Vec3Swizzles,
     time::{Time, Timer, TimerMode},
-    transform::components::Transform,
+    transform::components::GlobalTransform,
 };
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
 use bevy_egui::EguiContexts;
@@ -18,7 +18,7 @@ use egui::Align2;
 use crate::{
     inventory::Inventory,
     player::Player,
-    terrain::{CursorWorldPos, HoveredTile, COAL, IRON, STONE, TREE},
+    terrain::{HoveredTile, COAL, IRON, STONE, TREE},
     types::Item,
 };
 
@@ -55,10 +55,12 @@ pub struct PlayerSettings {
 
 fn interact(
     mut commands: Commands,
-    cursor_pos: Res<CursorWorldPos>,
     tile_query: Query<&TileTextureIndex>,
     mouse_button_input: Res<Input<MouseButton>>,
-    player_query: Query<(Entity, &Transform, &HoveredTile), (With<Player>, Without<MineCountdown>)>,
+    player_query: Query<
+        (Entity, &GlobalTransform, &HoveredTile),
+        (With<Player>, Without<MineCountdown>),
+    >,
     player_settings: Res<PlayerSettings>,
 ) {
     if player_query.is_empty() {
@@ -72,9 +74,9 @@ fn interact(
 
     if let Ok(tile_texture) = tile_query.get(hovered_tile.entity) {
         let tile_distance = player_transform
-            .translation
+            .translation()
             .xy()
-            .distance(cursor_pos.0.xy());
+            .distance(hovered_tile.tile_center);
         if is_minable(tile_texture.0) && tile_distance < player_settings.max_mining_distance {
             commands.entity(player_entity).insert(MineCountdown {
                 timer: Timer::from_seconds(1.0, TimerMode::Repeating),

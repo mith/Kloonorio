@@ -7,10 +7,9 @@ use std::hash::{BuildHasher, Hasher};
 use ahash::{AHasher, RandomState};
 use bevy::{
     ecs::system::SystemParam,
-    math::{Vec3Swizzles, Vec4Swizzles},
+    math::Vec3Swizzles,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
-    transform,
     utils::{HashMap, HashSet},
 };
 use bevy_ecs_tilemap::prelude::*;
@@ -429,9 +428,7 @@ pub fn hovered_tile(
     mut commands: Commands,
     cursor_world_pos: Res<CursorWorldPos>,
     hovered_tile_query: Query<Entity, With<HoveredTile>>,
-    children_query: Query<&Children>,
-    tilemap_query: Query<(&TileStorage, &GlobalTransform)>,
-    chunk_manager: Res<ChunkManager>,
+    terrain_params: TerrainParams,
     player_query: Query<Entity, With<Player>>,
 ) {
     for hovered_tile in &hovered_tile_query {
@@ -443,49 +440,12 @@ pub fn hovered_tile(
     };
 
     let cursor_pos = cursor_world_pos.0;
-    let chunk_id = terrain_pos_to_chunk_id(cursor_pos.xy());
 
-    if let Some((_tilemap_entity, tile_storage, tilemap_transform)) = chunk_manager
-        .entities
-        .get(&chunk_id)
-        .and_then(|chunk_entity| {
-            children_query.get(*chunk_entity).ok().and_then(|children| {
-                children.iter().find_map(|child| {
-                    tilemap_query
-                        .get(*child)
-                        .ok()
-                        .map(|(storage, transform)| (*child, storage, transform))
-                })
-            })
-        })
-    {
-        // Convert the cursor's global position to the chunk's local coordinate system
-        let local_cursor_pos = tilemap_transform
-            .compute_matrix()
-            .inverse()
-            .transform_point3(cursor_pos)
-            .truncate();
-
-        // Calculate the tile position from the local cursor position
-        let tile_x =
-            ((local_cursor_pos.x + CHUNK_SIZE.x as f32 / 2.0) / TILE_SIZE.x).floor() as u32;
-        let tile_y =
-            ((local_cursor_pos.y + CHUNK_SIZE.y as f32 / 2.0) / TILE_SIZE.y).floor() as u32;
-        let tile_pos = TilePos {
-            x: tile_x,
-            y: tile_y,
-        };
-
-        // Retrieve the tile entity
-        if let Some(tile_entity) = tile_storage.checked_get(&tile_pos) {
-            let tile_center = tile_pos.center_in_world(&TILE_SIZE.into(), &TilemapType::Square);
-            let tile_center =
-                tilemap_transform.compute_matrix() * tile_center.extend(0.0).extend(1.0);
-            commands.entity(player_entity).insert(HoveredTile {
-                entity: tile_entity,
-                tile_center: tile_center.xy(),
-            });
-        }
+    if let Some(tile_entity) = terrain_params.tile_entity_at_global_pos(cursor_pos.xy()) {
+        commands.entity(player_entity).insert(HoveredTile {
+            entity: tile_entity,
+            tile_center: cursor_pos.xy().round(),
+        });
     }
 }
 
@@ -509,61 +469,69 @@ pub struct TerrainParams<'w, 's> {
     terrain_query: Query<'w, 's, &'static GlobalTransform, With<Terrain>>,
     chunk_manager: Res<'w, ChunkManager>,
     children_query: Query<'w, 's, &'static Children>,
-    tilemap_query: Query<'w, 's, (&'static TileStorage, &'static GlobalTransform)>,
+    tilemap_query: Query<
+        'w,
+        's,
+        (
+            &'static TileStorage,
+            &'static TilemapGridSize,
+            &'static GlobalTransform,
+        ),
+    >,
 }
 
 impl<'w, 's> TerrainParams<'w, 's> {
-    pub fn tile_entity_at_global_pos(&self, global_pos: Vec2) -> Option<Entity> {
-        // Transform the global position to the terrain's local coordinate system
+    /// Retrieves the tile entity at a given world position.
+    ///
+    /// # Arguments
+    /// * `world_position` - The position in the world.
+    ///
+    /// # Returns
+    /// An `Option<Entity>` representing the tile entity at the specified world position.
+    /// Returns `None` if no tile entity is found at that position.
+    pub fn tile_entity_at_global_pos(&self, world_position: Vec2) -> Option<Entity> {
+        // Retrieve the global transform of the terrain to convert world positions
         let terrain_transform = self.terrain_query.single();
-        let local_pos = terrain_transform
+
+        // Transform the world position to the terrain's local coordinate system
+        let terrain_local_position = terrain_transform
             .compute_matrix()
             .inverse()
-            .transform_point3(global_pos.extend(0.))
+            .transform_point3(world_position.extend(0.0))
             .truncate();
-        let chunk_id = terrain_pos_to_chunk_id(local_pos);
 
-        // Calculate the terrain tile position from the local position
-        let terrain_tile_pos = local_pos.as_ivec2();
+        // Calculate the coordinates of the chunk based on the local position within the terrain
+        let chunk_coordinates = terrain_pos_to_chunk_id(terrain_local_position);
 
-        // Calculate the tilemap position from the terrain tile position
-        // Terrain tile position (0, 0) is at the center of the tilemap
-        // of the chunk at chunk position (0, 0)
+        // Retrieve the tilemap entity and tile storage for the chunk that contains the given position
+        self.chunk_manager
+            .entities
+            .get(&chunk_coordinates)
+            .and_then(|chunk_entity| self.children_query.get(*chunk_entity).ok())
+            .and_then(|children| {
+                // Find the tilemap entity among the children of the chunk entity
+                children
+                    .iter()
+                    .find_map(|child| self.tilemap_query.get(*child).ok())
+            })
+            .and_then(|(tile_storage, tilemap_grid_size, tilemap_transform)| {
+                // Convert the world position to the local position within the tilemap
+                let local_tilemap_position = tilemap_transform
+                    .compute_matrix()
+                    .inverse()
+                    .transform_point3(world_position.extend(0.0))
+                    .truncate();
 
-        let tilemap_pos = terrain_tile_pos - (chunk_id * CHUNK_SIZE.as_ivec2());
-
-        // Retrieve the tilemap entity and tile storage for the chunk
-        if let Some(tile_storage) =
-            self.chunk_manager
-                .entities
-                .get(&chunk_id)
-                .and_then(|chunk_entity| {
-                    self.children_query
-                        .get(*chunk_entity)
-                        .ok()
-                        .and_then(|children| {
-                            children.iter().find_map(|child| {
-                                self.tilemap_query
-                                    .get(*child)
-                                    .ok()
-                                    .map(|(storage, _transform)| storage)
-                            })
-                        })
-                })
-        {
-            // Convert the tilemap position to a TilePos
-            let tile_x = tilemap_pos.x as u32;
-            let tile_y = tilemap_pos.y as u32;
-            let tile_pos = TilePos {
-                x: tile_x,
-                y: tile_y,
-            };
-
-            // Retrieve the tile entity from the tile storage
-            return tile_storage.get(&tile_pos);
-        }
-
-        None
+                // Calculate the tile position from the local position within the tilemap
+                TilePos::from_world_pos(
+                    &local_tilemap_position,
+                    &CHUNK_SIZE.into(),
+                    tilemap_grid_size,
+                    &TilemapType::Square,
+                )
+                // Retrieve the tile entity from the tile storage
+                .and_then(|tile_pos| tile_storage.get(&tile_pos))
+            })
     }
 
     pub fn tile_texture_index(&self, tile_entity: Entity) -> Option<TileTextureIndex> {
