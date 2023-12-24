@@ -10,6 +10,7 @@ use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
+    transform,
     utils::{HashMap, HashSet},
 };
 use bevy_ecs_tilemap::prelude::*;
@@ -47,7 +48,7 @@ impl Plugin for TerrainPlugin {
                     spawn_chunk_tilemap,
                     update_cursor_pos,
                     hovered_tile,
-                    chunk_gizmos.run_if(resource_exists::<TerrainDebug>()),
+                    (chunk_gizmos, hovered_tile_gizmo).run_if(resource_exists::<TerrainDebug>()),
                 )
                     .in_set(TerrainSet)
                     .run_if(in_state(AppState::Running)),
@@ -327,7 +328,7 @@ fn spawn_chunks_around_camera(
     terrain_query: Query<Entity, With<Terrain>>,
 ) {
     for transform in &camera_query {
-        let camera_chunk_pos = global_pos_to_chunk_pos(&transform.translation().xy());
+        let camera_chunk_pos = terrain_pos_to_chunk_id(transform.translation().xy());
         let chunk_spawn_radius = terrain_settings.chunk_spawn_radius;
         for y in
             (camera_chunk_pos.y - chunk_spawn_radius)..(camera_chunk_pos.y + chunk_spawn_radius)
@@ -358,12 +359,6 @@ fn spawn_chunks_around_camera(
             }
         }
     }
-}
-
-pub fn global_pos_to_chunk_pos(camera_pos: &Vec2) -> IVec2 {
-    let camera_pos = camera_pos.as_ivec2();
-    let chunk_size: IVec2 = IVec2::new(CHUNK_SIZE.x as i32, CHUNK_SIZE.y as i32);
-    camera_pos / chunk_size
 }
 
 #[derive(Debug, Default, Resource, Reflect)]
@@ -432,85 +427,140 @@ pub struct HoveredTile {
 
 pub fn hovered_tile(
     mut commands: Commands,
-    cursor_pos: Res<CursorWorldPos>,
+    cursor_world_pos: Res<CursorWorldPos>,
     hovered_tile_query: Query<Entity, With<HoveredTile>>,
-    chunks_query: Query<
-        (
-            &Transform,
-            &TileStorage,
-            &TilemapSize,
-            &TilemapGridSize,
-            &TilemapType,
-        ),
-        With<SpawnedChunk>,
-    >,
+    children_query: Query<&Children>,
+    tilemap_query: Query<(&TileStorage, &GlobalTransform)>,
+    chunk_manager: Res<ChunkManager>,
     player_query: Query<Entity, With<Player>>,
 ) {
-    if player_query.is_empty() {
-        return;
-    }
-    let player_entity = player_query.single();
-
     for hovered_tile in &hovered_tile_query {
         commands.entity(hovered_tile).remove::<HoveredTile>();
     }
-    let cursor_pos = cursor_pos.0;
-    for (chunk_transform, tile_storage, chunk_size, grid_size, map_type) in &chunks_query {
-        let cursor_in_chunk_pos: Vec2 = {
-            // Extend the cursor_pos vec3 by 1.0
-            let cursor_pos = Vec4::from((cursor_pos, 1.));
-            let cursor_in_chunk_pos = chunk_transform.compute_matrix().inverse() * cursor_pos;
-            cursor_in_chunk_pos.xy()
+
+    let Some(player_entity) = player_query.iter().next() else {
+        return;
+    };
+
+    let cursor_pos = cursor_world_pos.0;
+    let chunk_id = terrain_pos_to_chunk_id(cursor_pos.xy());
+
+    if let Some((_tilemap_entity, tile_storage, tilemap_transform)) = chunk_manager
+        .entities
+        .get(&chunk_id)
+        .and_then(|chunk_entity| {
+            children_query.get(*chunk_entity).ok().and_then(|children| {
+                children.iter().find_map(|child| {
+                    tilemap_query
+                        .get(*child)
+                        .ok()
+                        .map(|(storage, transform)| (*child, storage, transform))
+                })
+            })
+        })
+    {
+        // Convert the cursor's global position to the chunk's local coordinate system
+        let local_cursor_pos = tilemap_transform
+            .compute_matrix()
+            .inverse()
+            .transform_point3(cursor_pos)
+            .truncate();
+
+        // Calculate the tile position from the local cursor position
+        let tile_x =
+            ((local_cursor_pos.x + CHUNK_SIZE.x as f32 / 2.0) / TILE_SIZE.x).floor() as u32;
+        let tile_y =
+            ((local_cursor_pos.y + CHUNK_SIZE.y as f32 / 2.0) / TILE_SIZE.y).floor() as u32;
+        let tile_pos = TilePos {
+            x: tile_x,
+            y: tile_y,
         };
 
-        if let Some(tile_pos) =
-            TilePos::from_world_pos(&cursor_in_chunk_pos, chunk_size, grid_size, map_type)
-        {
-            if let Some(tile_entity) = tile_storage.get(&tile_pos) {
-                let tile_center = tile_pos.center_in_world(&TILE_SIZE.into(), map_type);
-                commands.entity(player_entity).insert(HoveredTile {
-                    entity: tile_entity,
-                    tile_center: chunk_transform.translation.xy() + tile_center,
-                });
-            }
+        // Retrieve the tile entity
+        if let Some(tile_entity) = tile_storage.checked_get(&tile_pos) {
+            let tile_center = tile_pos.center_in_world(&TILE_SIZE.into(), &TilemapType::Square);
+            let tile_center =
+                tilemap_transform.compute_matrix() * tile_center.extend(0.0).extend(1.0);
+            commands.entity(player_entity).insert(HoveredTile {
+                entity: tile_entity,
+                tile_center: tile_center.xy(),
+            });
         }
+    }
+}
+
+fn terrain_pos_to_chunk_id(terrain_pos: Vec2) -> IVec2 {
+    IVec2::new(
+        ((terrain_pos.x + CHUNK_SIZE.x as f32 * 0.5) / CHUNK_SIZE.x as f32).floor() as i32,
+        ((terrain_pos.y + CHUNK_SIZE.y as f32 * 0.5) / CHUNK_SIZE.y as f32).floor() as i32,
+    )
+}
+
+fn hovered_tile_gizmo(mut gizmos: Gizmos, hovered_tile_query: Query<&HoveredTile>) {
+    for hovered_tile in &hovered_tile_query {
+        let tile_center = hovered_tile.tile_center;
+        gizmos.rect_2d(tile_center, 0., Vec2::ONE, Color::YELLOW);
     }
 }
 
 #[derive(SystemParam)]
 pub struct TerrainParams<'w, 's> {
-    chunks: Query<
-        'w,
-        's,
-        (
-            &'static Transform,
-            &'static TileStorage,
-            &'static TilemapSize,
-            &'static TilemapGridSize,
-            &'static TilemapType,
-        ),
-        With<SpawnedChunk>,
-    >,
     tiles: Query<'w, 's, &'static TileTextureIndex>,
+    terrain_query: Query<'w, 's, &'static GlobalTransform, With<Terrain>>,
+    chunk_manager: Res<'w, ChunkManager>,
+    children_query: Query<'w, 's, &'static Children>,
+    tilemap_query: Query<'w, 's, (&'static TileStorage, &'static GlobalTransform)>,
 }
 
 impl<'w, 's> TerrainParams<'w, 's> {
-    pub fn tile_entity_at_point(&self, point: Vec2) -> Option<Entity> {
-        for (chunk_transform, tile_storage, chunk_size, grid_size, map_type) in &self.chunks {
-            let point_in_chunk_pos: Vec2 = {
-                // Extend the cursor_pos vec3 by 1.0
-                let cursor_pos = Vec4::from((point, 0., 1.));
-                let cursor_in_chunk_pos = chunk_transform.compute_matrix().inverse() * cursor_pos;
-                cursor_in_chunk_pos.xy()
+    pub fn tile_entity_at_global_pos(&self, global_pos: Vec2) -> Option<Entity> {
+        // Transform the global position to the terrain's local coordinate system
+        let terrain_transform = self.terrain_query.single();
+        let local_pos = terrain_transform
+            .compute_matrix()
+            .inverse()
+            .transform_point3(global_pos.extend(0.))
+            .truncate();
+        let chunk_id = terrain_pos_to_chunk_id(local_pos);
+
+        // Calculate the terrain tile position from the local position
+        let terrain_tile_pos = local_pos.as_ivec2();
+
+        // Calculate the tilemap position from the terrain tile position
+        // Terrain tile position (0, 0) is at the center of the tilemap
+        // of the chunk at chunk position (0, 0)
+
+        let tilemap_pos = terrain_tile_pos - (chunk_id * CHUNK_SIZE.as_ivec2());
+
+        // Retrieve the tilemap entity and tile storage for the chunk
+        if let Some(tile_storage) =
+            self.chunk_manager
+                .entities
+                .get(&chunk_id)
+                .and_then(|chunk_entity| {
+                    self.children_query
+                        .get(*chunk_entity)
+                        .ok()
+                        .and_then(|children| {
+                            children.iter().find_map(|child| {
+                                self.tilemap_query
+                                    .get(*child)
+                                    .ok()
+                                    .map(|(storage, _transform)| storage)
+                            })
+                        })
+                })
+        {
+            // Convert the tilemap position to a TilePos
+            let tile_x = tilemap_pos.x as u32;
+            let tile_y = tilemap_pos.y as u32;
+            let tile_pos = TilePos {
+                x: tile_x,
+                y: tile_y,
             };
 
-            if let Some(tile_pos) =
-                TilePos::from_world_pos(&point_in_chunk_pos, chunk_size, grid_size, map_type)
-            {
-                if let Some(tile_entity) = tile_storage.get(&tile_pos) {
-                    return Some(tile_entity);
-                }
-            }
+            // Retrieve the tile entity from the tile storage
+            return tile_storage.get(&tile_pos);
         }
 
         None
@@ -532,5 +582,26 @@ mod test {
         let chunk_a = generate_chunk_noise(seed, position).await;
         let chunk_b = generate_chunk_noise(seed, position).await;
         assert_eq!(chunk_a, chunk_b);
+    }
+
+    #[test]
+    fn test_global_pos_to_chunk_id() {
+        let test_cases :Vec<(IVec2, Vec2)> =
+            // generate IVec2 from (-1, -1) to (1, 1)
+            (-1..=1).flat_map(|x| (-1..=1).map(move |y| IVec2::new(x, y)))
+            // generate global position by multiplying chunk size by 0.6
+            .map(|chunk_id| {
+                (chunk_id, Vec2::new(CHUNK_SIZE.x as f32 * 0.6, CHUNK_SIZE.y as f32 * 0.6) * chunk_id.as_vec2())
+            })
+            .collect();
+
+        for (expected_chunk_id, global_pos) in test_cases {
+            let chunk_id = terrain_pos_to_chunk_id(global_pos);
+            assert_eq!(
+                chunk_id, expected_chunk_id,
+                "global_pos_to_chunk_id failed for global position {:?}: expected {:?}, got {:?}",
+                global_pos, expected_chunk_id, chunk_id
+            );
+        }
     }
 }

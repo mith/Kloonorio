@@ -40,7 +40,7 @@ pub fn miner_tick(
     for (miner_entity, transform, mut miner, miner_children) in miner_query.iter_mut() {
         let span = info_span!("Miner tick", miner = ?miner_entity);
         let _enter = span.enter();
-        if let Some(tile_entity) = terrain.tile_entity_at_point(transform.translation.xy()) {
+        if let Some(tile_entity) = terrain.tile_entity_at_global_pos(transform.translation.xy()) {
             if let Some(tile_texture) = terrain.tile_texture_index(tile_entity) {
                 if is_minable(tile_texture.0) {
                     if miner.timer.tick(time.delta()).just_finished() {

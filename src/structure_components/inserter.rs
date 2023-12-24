@@ -555,9 +555,9 @@ fn animate_arm_position(
 
         let arm_position = pickup_location.lerp(dropoff_location, (arm_position + 1.0) / 2.0);
 
-        gizmos.circle_2d(inserter_location, 0.3, Color::BLUE);
-        gizmos.circle_2d(arm_position, 0.2, Color::TURQUOISE);
-        gizmos.line_2d(inserter_location, arm_position, Color::RED);
+        gizmos.circle_2d(inserter_location, 1., Color::YELLOW);
+        gizmos.circle_2d(arm_position, 1., Color::YELLOW);
+        gizmos.line_2d(inserter_location, arm_position, Color::YELLOW);
     }
 }
 
@@ -932,7 +932,7 @@ mod test {
             app.add_plugins((
                 WindowPlugin::default(),
                 AssetPlugin::default(),
-                ScenePlugin::default(),
+                ScenePlugin,
                 RenderPlugin {
                     render_creation: RenderCreation::Automatic(WgpuSettings {
                         backends: None,
