@@ -7,7 +7,7 @@ pub mod transport_belt;
 
 use bevy::{
     app::{App, FixedUpdate, Plugin},
-    reflect::{Reflect, Struct, TypeUuid},
+    reflect::{Reflect, TypeUuid},
     utils::HashSet,
 };
 use serde::Deserialize;

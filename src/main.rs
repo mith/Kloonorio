@@ -8,6 +8,7 @@ use structure_components::StructureComponentsPlugin;
 mod camera;
 mod craft;
 mod discrete_rotation;
+mod entity_tile_tracking;
 mod interact;
 mod inventory;
 mod isometric_sprite;

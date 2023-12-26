@@ -100,7 +100,6 @@ pub fn extract_isometric_sprites(
                     color: isometric_sprite.color,
                     transform: unrotated_transform,
                     rect,
-                    // Pass the custom size
                     custom_size: isometric_sprite.custom_size,
                     flip_x: isometric_sprite.flip_x,
                     flip_y: isometric_sprite.flip_y,
