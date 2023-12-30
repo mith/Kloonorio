@@ -39,6 +39,25 @@ pub trait ChunkGenerator: Send + Sync {
     fn generate_chunk(&self, chunk_position: IVec2) -> ChunkData;
 }
 
+pub struct FlatChunkGenerator {
+    tile_type: TileType,
+}
+
+impl FlatChunkGenerator {
+    pub fn new(tile_type: TileType) -> Self {
+        Self { tile_type }
+    }
+}
+
+impl ChunkGenerator for FlatChunkGenerator {
+    fn generate_chunk(&self, _chunk_position: IVec2) -> ChunkData {
+        let mut chunk =
+            Array2::<Option<TileType>>::default((CHUNK_SIZE.x as usize, CHUNK_SIZE.y as usize));
+        chunk.fill(Some(self.tile_type));
+        ChunkData(chunk)
+    }
+}
+
 pub struct NoiseChunkGenerator {
     seed: u32,
 }

@@ -1,17 +1,12 @@
 mod debug;
-mod terrain_generator;
+pub mod terrain_generator;
 
 #[cfg(feature = "async")]
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 #[cfg(feature = "async")]
 use futures_lite::future;
 
-use bevy::{
-    ecs::system::SystemParam,
-    math::Vec3Swizzles,
-    prelude::*,
-    utils::{HashMap, HashSet},
-};
+use bevy::{ecs::system::SystemParam, math::Vec3Swizzles, prelude::*, utils::HashMap};
 
 use bevy_ecs_tilemap::prelude::*;
 use ndarray::prelude::*;
@@ -20,7 +15,7 @@ use crate::{player::Player, types::AppState};
 
 use self::{
     debug::{chunk_gizmos, hovered_tile_gizmo},
-    terrain_generator::{NoiseChunkGenerator, TerrainGenerator},
+    terrain_generator::{FlatChunkGenerator, TerrainGenerator},
 };
 
 pub use self::debug::TerrainDebug;
@@ -34,13 +29,10 @@ impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(TilemapPlugin)
             .register_type::<TerrainSettings>()
-            .register_type::<ChunkManager>()
             .register_type::<CursorWorldPos>()
             .register_type::<HoveredTile>()
-            .insert_resource(ChunkManager::default())
-            .insert_resource(TerrainSettings::new(1234567, 5))
+            .init_resource::<TerrainSettings>()
             .insert_resource(CursorWorldPos(Vec3::new(-100., -100., 0.)))
-            .add_systems(Startup, setup_terrain)
             .add_systems(
                 Update,
                 (
@@ -78,29 +70,41 @@ pub const STONE: u32 = 7;
 pub const COAL: u32 = 8;
 pub const IRON: u32 = 9;
 
-#[derive(Component)]
-pub struct Terrain;
+#[derive(Component, Default)]
+pub struct Terrain {
+    pub terrain_texture: Handle<Image>,
+    pub chunks: HashMap<IVec2, Entity>,
+}
+
+impl Terrain {
+    pub fn new(terrain_texture: Handle<Image>) -> Self {
+        Self {
+            terrain_texture,
+            ..default()
+        }
+    }
+}
 
 #[derive(Resource, Debug, Reflect)]
-struct TerrainSettings {
+pub struct TerrainSettings {
     seed: u32,
     chunk_spawn_radius: i32,
     #[cfg(feature = "async")]
     enable_async: bool,
 }
 
-impl TerrainSettings {
-    fn new(seed: u32, chunk_spawn_radius: i32) -> Self {
+impl Default for TerrainSettings {
+    fn default() -> Self {
         Self {
-            seed,
-            chunk_spawn_radius,
+            seed: 1234567,
+            chunk_spawn_radius: 5,
             #[cfg(feature = "async")]
             enable_async: true,
         }
     }
 }
 
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Debug, Reflect, Default)]
 struct Chunk {
     position: IVec2,
 }
@@ -114,54 +118,44 @@ pub struct ChunkData(Array2<Option<u32>>);
 struct GenerateChunk(Task<ChunkData>);
 
 #[derive(Bundle)]
-struct TerrainBundle {
-    terrain: Terrain,
-    generator: TerrainGenerator,
-    name: Name,
-    transform: TransformBundle,
-    visibility: VisibilityBundle,
+pub struct TerrainBundle {
+    pub terrain: Terrain,
+    pub generator: TerrainGenerator,
+    pub name: Name,
+    pub transform: TransformBundle,
+    pub visibility: VisibilityBundle,
 }
 
-impl TerrainBundle {
-    pub fn new(generator: TerrainGenerator) -> Self {
+impl Default for TerrainBundle {
+    fn default() -> Self {
         Self {
-            terrain: Terrain,
-            generator,
+            terrain: default(),
+            generator: TerrainGenerator::new(Box::new(FlatChunkGenerator::new(0))),
             name: Name::new("Terrain"),
-            transform: TransformBundle::default(),
-            visibility: VisibilityBundle::default(),
+            transform: default(),
+            visibility: default(),
         }
     }
 }
 
-#[derive(Default, Resource, Debug, Reflect)]
-pub struct ChunkManager {
-    spawned_chunks: HashSet<IVec2>,
-    loading_chunks: HashSet<IVec2>,
-    pub entities: HashMap<IVec2, Entity>,
-}
-
-fn setup_terrain(mut commands: Commands) {
-    let chunk_generator = NoiseChunkGenerator::new(1234567);
-    let terrain_generator = TerrainGenerator::new(Box::new(chunk_generator));
-
-    commands.spawn(TerrainBundle::new(terrain_generator));
+#[derive(Bundle, Default)]
+pub struct ChunkBundle {
+    chunk: Chunk,
+    transform: TransformBundle,
+    visibility: VisibilityBundle,
 }
 
 fn queue_chunk_generation(
     commands: &mut Commands,
     terrain_entity: Entity,
+    terrain: &mut Terrain,
     chunk_position: IVec2,
     generator: &TerrainGenerator,
-    chunk_manager: &mut ChunkManager,
     #[cfg(feature = "async")] enable_async: bool,
 ) {
-    if chunk_manager.spawned_chunks.contains(&chunk_position) {
-        return;
-    }
-
     let IVec2 { x, y } = chunk_position;
 
+    debug!("Queueing chunk generation at {:?}", chunk_position);
     let transform = Transform::from_translation(Vec3::new(
         x as f32 * CHUNK_SIZE.x as f32,
         y as f32 * CHUNK_SIZE.y as f32,
@@ -175,14 +169,18 @@ fn queue_chunk_generation(
         let task = thread_pool.spawn(async move { generator_clone.generate_chunk(chunk_position) });
 
         commands.entity(terrain_entity).with_children(|parent| {
-            parent.spawn((
-                GenerateChunk(task),
-                Chunk {
-                    position: chunk_position,
-                },
-                TransformBundle::from_transform(transform),
-                VisibilityBundle::default(),
-            ));
+            let chunk_entity = parent
+                .spawn((
+                    GenerateChunk(task),
+                    Chunk {
+                        position: chunk_position,
+                    },
+                    TransformBundle::from_transform(transform),
+                    VisibilityBundle::default(),
+                ))
+                .id();
+
+            terrain.chunks.insert(chunk_position, chunk_entity);
         });
         return;
     }
@@ -191,14 +189,20 @@ fn queue_chunk_generation(
     {
         let chunk_data = generator.generate_chunk(chunk_position);
         commands.entity(terrain_entity).with_children(|parent| {
-            parent.spawn((
-                chunk_data,
-                Chunk {
-                    position: chunk_position,
-                },
-                TransformBundle::from_transform(transform),
-                VisibilityBundle::default(),
-            ));
+            let chunk_entity = parent
+                .spawn((
+                    chunk_data,
+                    ChunkBundle {
+                        chunk: Chunk {
+                            position: chunk_position,
+                        },
+                        transform: TransformBundle::from_transform(transform),
+                        ..default()
+                    },
+                ))
+                .id();
+
+            terrain.chunks.insert(chunk_position, chunk_entity);
         });
     }
 }
@@ -218,14 +222,38 @@ fn spawn_terrain_data(
     }
 }
 
+#[derive(Component, Debug, Reflect)]
+struct SpawnedChunkTilemap;
+
 fn spawn_generated_chunks(
     mut commands: Commands,
-    mut chunk_task: Query<(Entity, &Chunk, &ChunkData), Added<ChunkData>>,
-    mut chunk_manager: ResMut<ChunkManager>,
-    asset_server: Res<AssetServer>,
+    mut chunk_task: Query<
+        (Entity, &ChunkData, &Parent),
+        (Added<ChunkData>, Without<SpawnedChunkTilemap>),
+    >,
+    terrain_query: Query<&Terrain>,
+) {
+    for (chunk_entity, chunk_data, parent) in &mut chunk_task {
+        let terrain = terrain_query
+            .get(parent.get())
+            .expect("Terrain entity not found");
+        add_chunk_tilemap(
+            &mut commands,
+            chunk_data,
+            chunk_entity,
+            terrain.terrain_texture.clone(),
+        );
+    }
+}
+
+fn add_chunk_tilemap(
+    commands: &mut Commands,
+    chunk_data: &ChunkData,
+    chunk_entity: Entity,
+    texture_handle: Handle<Image>,
 ) {
     let map_type = TilemapType::Square;
-    for (chunk_entity, chunk, chunk_data) in &mut chunk_task {
+    let tilemap_entity = {
         let chunk_data = chunk_data.0.view();
         let tilemap_size = TilemapSize {
             x: chunk_data.ncols() as u32,
@@ -262,8 +290,6 @@ fn spawn_generated_chunks(
             }
         }
 
-        let texture_handle = asset_server.load("textures/terrain.png");
-
         commands.entity(tilemap_entity).insert(TilemapBundle {
             grid_size: TILE_SIZE.into(),
             size: CHUNK_SIZE.into(),
@@ -274,27 +300,19 @@ fn spawn_generated_chunks(
             map_type,
             ..default()
         });
+        tilemap_entity
+    };
 
-        debug!(position = ?chunk.position, "Adding chunk to world");
-        commands
-            .entity(chunk_entity)
-            .insert((Name::new(format!(
-                "Chunk {},{}",
-                chunk.position.x, chunk.position.y
-            )),))
-            .add_child(tilemap_entity);
-
-        chunk_manager.loading_chunks.remove(&chunk.position);
-        chunk_manager.spawned_chunks.insert(chunk.position);
-        chunk_manager.entities.insert(chunk.position, chunk_entity);
-    }
+    commands
+        .entity(chunk_entity)
+        .add_child(tilemap_entity)
+        .insert(SpawnedChunkTilemap);
 }
 
 fn spawn_chunks_around_camera(
     camera_query: Query<&GlobalTransform, With<Camera>>,
     terrain_settings: Res<TerrainSettings>,
     mut terrain_params: TerrainParams,
-    terrain_entity_query: Query<Entity, With<Terrain>>,
 ) {
     for transform in &camera_query {
         let camera_chunk_pos = terrain_pos_to_chunk_id(transform.translation().xy());
@@ -306,8 +324,11 @@ fn spawn_chunks_around_camera(
                 (camera_chunk_pos.x - chunk_spawn_radius)..(camera_chunk_pos.x + chunk_spawn_radius)
             {
                 let chunk_position = IVec2::new(x, y);
-                let terrain_entity = terrain_entity_query.single();
-                terrain_params.spawn_chunk(terrain_entity, chunk_position)
+                let (terrain_entity, terrain) = terrain_params.terrain_query.single();
+                if terrain.chunks.contains_key(&chunk_position) {
+                    continue;
+                }
+                terrain_params.queue_spawn_chunk(terrain_entity, chunk_position);
             }
         }
     }
@@ -375,9 +396,9 @@ fn terrain_pos_to_chunk_id(terrain_pos: Vec2) -> IVec2 {
 pub struct TerrainParams<'w, 's> {
     commands: Commands<'w, 's>,
     tiles: Query<'w, 's, &'static TileTextureIndex>,
-    terrain_query: Query<'w, 's, (&'static GlobalTransform, &'static Terrain)>,
+    terrain_query: Query<'w, 's, (Entity, &'static mut Terrain)>,
+    transform_query: Query<'w, 's, &'static GlobalTransform>,
     generator_query: Query<'w, 's, &'static TerrainGenerator>,
-    chunk_manager: ResMut<'w, ChunkManager>,
     children_query: Query<'w, 's, &'static Children>,
     tilemap_query: Query<
         'w,
@@ -388,28 +409,38 @@ pub struct TerrainParams<'w, 's> {
             &'static GlobalTransform,
         ),
     >,
-    terrain_settings: Res<'w, TerrainSettings>,
 }
 
 impl<'w, 's> TerrainParams<'w, 's> {
-    pub fn spawn_chunk(&mut self, terrain_entity: Entity, chunk_position: IVec2) {
+    pub fn queue_spawn_chunk(&mut self, terrain_entity: Entity, chunk_position: IVec2) {
         let generator = self
             .generator_query
             .get(terrain_entity)
             .expect("Terrain entity not found");
 
+        let mut terrain = self
+            .terrain_query
+            .get_mut(terrain_entity)
+            .expect("Terrain entity not found")
+            .1;
+
+        if terrain.chunks.contains_key(&chunk_position) {
+            debug!("Chunk at {:?} already spawned", chunk_position);
+            return;
+        }
+
         queue_chunk_generation(
             &mut self.commands,
             terrain_entity,
+            &mut terrain,
             chunk_position,
             generator,
-            &mut self.chunk_manager,
             #[cfg(feature = "async")]
             self.terrain_settings.enable_async,
         );
     }
 
-    /// Retrieves the tile entity at a given world position.
+    /// Retrieve the tile entity at a given world position.
     ///
     /// # Arguments
     /// * `world_position` - The position in the world.
@@ -419,7 +450,11 @@ impl<'w, 's> TerrainParams<'w, 's> {
     /// Returns `None` if no tile entity is found at that position.
     pub fn tile_entity_at_global_pos(&self, world_position: Vec2) -> Option<Entity> {
         // Retrieve the global transform of the terrain to convert world positions
-        let terrain_transform = self.terrain_query.single().0;
+        let (terrain_entity, terrain) = self.terrain_query.single();
+        let terrain_transform = self
+            .transform_query
+            .get(terrain_entity)
+            .expect("Terrain transform not found");
 
         // Transform the world position to the terrain's local coordinate system
         let terrain_local_position = terrain_transform
@@ -432,8 +467,8 @@ impl<'w, 's> TerrainParams<'w, 's> {
         let chunk_coordinates = terrain_pos_to_chunk_id(terrain_local_position);
 
         // Retrieve the tilemap entity and tile storage for the chunk that contains the given position
-        self.chunk_manager
-            .entities
+        terrain
+            .chunks
             .get(&chunk_coordinates)
             .and_then(|chunk_entity| self.children_query.get(*chunk_entity).ok())
             .and_then(|children| {
@@ -469,6 +504,8 @@ impl<'w, 's> TerrainParams<'w, 's> {
 
 #[cfg(test)]
 mod test {
+    use bevy::{ecs::system::SystemState, utils::HashSet};
+
     use super::*;
 
     #[test]
@@ -488,6 +525,76 @@ mod test {
                 chunk_id, expected_chunk_id,
                 "global_pos_to_chunk_id failed for global position {:?}: expected {:?}, got {:?}",
                 global_pos, expected_chunk_id, chunk_id
+            );
+        }
+    }
+
+    #[test]
+    fn test_terrain_plugin() {
+        let mut app = App::new();
+        app.add_plugins((AssetPlugin::default(), TerrainPlugin));
+
+        app.world.spawn(TerrainBundle::default());
+        *app.world.get_resource_mut::<State<AppState>>().unwrap() = State::new(AppState::Running);
+
+        app.update();
+
+        // Check if the terrain entity is spawned
+        {
+            let mut system_state: SystemState<Query<&Terrain>> = SystemState::new(&mut app.world);
+            let terrain_spawned = !system_state.get_mut(&mut app.world).is_empty();
+            assert!(terrain_spawned, "Terrain entity not found");
+        }
+    }
+
+    #[test]
+    fn test_queue_spawn_chunk() {
+        let mut app = App::new();
+
+        // Setup terrain
+        let terrain_entity = app.world.spawn(TerrainBundle::default()).id();
+
+        {
+            // Get system state to trigger spawning chunk (0, 0)
+            let mut system_state: SystemState<TerrainParams> = SystemState::new(&mut app.world);
+            let mut terrain_params = system_state.get_mut(&mut app.world);
+            terrain_params.queue_spawn_chunk(terrain_entity, IVec2::new(0, 0));
+        }
+
+        app.update();
+
+        {
+            let mut system_state: SystemState<(
+                Commands,
+                Query<(Entity, &ChunkData)>,
+                Query<&Terrain>,
+            )> = SystemState::new(&mut app.world);
+            let (mut commands, chunk_task, terrain_query) = system_state.get_mut(&mut app.world);
+            let (chunk_entity, chunk_data) = chunk_task.single();
+            let terrain = terrain_query.single();
+            add_chunk_tilemap(
+                &mut commands,
+                chunk_data,
+                chunk_entity,
+                terrain.terrain_texture.clone(),
+            );
+        }
+
+        // Check if the tiles are spawned
+        {
+            let mut system_state: SystemState<(Query<(Entity, &TilePos)>, TerrainParams)> =
+                SystemState::new(&mut app.world);
+            let (tile_query, terrain_params) = system_state.get_mut(&mut app.world);
+
+            let tile_positions: HashSet<TilePos> =
+                tile_query.iter().map(|(_, tile_pos)| *tile_pos).collect();
+            let expected_tile_positions: HashSet<TilePos> = (0..CHUNK_SIZE.x)
+                .flat_map(|x| (0..CHUNK_SIZE.y).map(move |y| TilePos::new(x, y)))
+                .collect();
+
+            assert_eq!(
+                tile_positions, expected_tile_positions,
+                "Tile positions are not correct"
             );
         }
     }

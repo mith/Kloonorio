@@ -2,7 +2,9 @@ use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier2d::prelude::*;
+use entity_tile_tracking::EntityTileTrackingPlugin;
 use inventory::Stack;
+use scene_setup::SceneSetupPlugin;
 use structure_components::StructureComponentsPlugin;
 
 mod camera;
@@ -19,6 +21,7 @@ mod placeable;
 mod player;
 mod player_movement;
 mod recipe_loader;
+mod scene_setup;
 mod structure_components;
 mod structure_loader;
 mod terrain;
@@ -88,7 +91,11 @@ fn main() {
             CraftPlugin,
             PlayerPlugin,
         ))
-        .add_plugins(PanZoomCameraPlugin)
+        .add_plugins((
+            PanZoomCameraPlugin,
+            SceneSetupPlugin,
+            EntityTileTrackingPlugin,
+        ))
         .register_type::<Stack>()
         .add_systems(
             Update,

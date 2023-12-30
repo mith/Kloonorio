@@ -33,6 +33,7 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component)]
 pub struct Player;
+
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut inventory = Inventory::new(100);
     inventory.add_item(&Item::new("Wooden chest"), 100);
