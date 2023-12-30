@@ -28,26 +28,9 @@
       system: let
         pkgs = nixpkgs.legacyPackages."${system}";
         toolchain = fenix.packages.${system}.stable;
-        crane-lib = crane.lib."${system}";
-        kloonorio-src = builtins.path {
-          path = ./.;
-          name = "kloonorio-src";
-          filter = path: type:
-            nixpkgs.lib.all
-            (n: builtins.baseNameOf path != n)
-            [
-              "web"
-              "assets"
-              "flake.nix"
-              "flake.lock"
-              "README.md"
-              ".envrc"
-              ".direnv"
-              ".gitignore"
-            ];
-        };
+        craneLib = crane.lib."${system}";
+        kloonorio-src = craneLib.cleanCargoSource ./.;
         buildInputs = with pkgs; [
-          libxkbcommon
           alsa-lib
           udev
           xorg.libX11
@@ -65,7 +48,7 @@
           pkg-config
         ];
       in {
-        packages.kloonorio-bin = crane-lib.buildPackage {
+        packages.kloonorio-bin = craneLib.buildPackage {
           name = "kloonorio-bin";
           src = kloonorio-src;
           inherit buildInputs;
@@ -156,7 +139,7 @@
             export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath buildInputs}"
             ${self.checks.${system}.pre-commit-check.shellHook}
           '';
-          inputsFrom = [self.packages.${system}.kloonorio-bin];
+          inherit buildInputs;
           RUST_LOG = "error,kloonorio=info";
           nativeBuildInputs = with pkgs;
             [
