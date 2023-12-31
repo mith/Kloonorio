@@ -94,3 +94,9 @@ pub struct Recipe {
     pub crafting_time: f32,
     pub name: String,
 }
+
+#[derive(Component)]
+pub struct Pickup;
+
+#[derive(Component)]
+pub struct Dropoff;

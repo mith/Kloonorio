@@ -3,22 +3,18 @@ use bevy_rapier2d::prelude::*;
 
 use crate::{
     discrete_rotation::DiscreteRotation,
+    entity_tile_tracking::TileTracked,
     inventory::{Fuel, Inventory, Output, Source, Storage},
     isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
     loading::Structures,
     picker::Pickable,
     structure_components::{
-        assembler::Assembler,
-        burner::Burner,
-        inserter::{Dropoff, Inserter, Pickup},
-        miner::Miner,
-        smelter::Smelter,
-        transport_belt::TransportBelt,
-        StructureComponent,
+        assembler::Assembler, burner::Burner, inserter::InserterBuilder, miner::Miner,
+        smelter::Smelter, transport_belt::TransportBelt, StructureComponent,
     },
     structure_loader::Structure,
     terrain::{CursorWorldPos, TILE_SIZE},
-    types::{CraftingQueue, Item},
+    types::{CraftingQueue, Dropoff, Item},
     ui::{inventory_grid::Hand, HoveringUI},
     ysort::YSort,
 };
@@ -52,7 +48,9 @@ pub fn placeable(
         let mut inventory = inventories_query.get_mut(hand_entity).unwrap();
         if let Some(Some(stack)) = hand.get_item().map(|ih| inventory.slots[ih.slot].clone()) {
             let structure_name = &*stack.item;
-            let structure = structures.get(structure_name).unwrap();
+            let Some(structure) = structures.get(structure_name) else {
+                continue;
+            };
             let texture_atlas_handle =
                 create_structure_texture_atlas(&asset_server, structure, &mut texture_atlases);
 
@@ -187,7 +185,12 @@ pub fn place_structure(
         texture_atlas_handle,
         Color::WHITE,
     );
-    structure_entity.insert((Building, Pickable, structure_collider(structure)));
+    structure_entity.insert((
+        Building,
+        Pickable,
+        TileTracked,
+        structure_collider(structure),
+    ));
 
     spawn_structure_components(&mut structure_entity, structure);
 }
@@ -281,6 +284,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                         TransformBundle::default(),
                         Sensor,
                         structure_collider(structure),
+                        TileTracked,
                     ));
                 });
             }
@@ -296,6 +300,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                         TransformBundle::default(),
                         Sensor,
                         structure_collider(structure),
+                        TileTracked,
                     ));
                 });
             }
@@ -308,6 +313,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                         TransformBundle::default(),
                         Sensor,
                         structure_collider(structure),
+                        TileTracked,
                     ));
                 });
             }
@@ -320,6 +326,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
                         TransformBundle::default(),
                         Sensor,
                         structure_collider(structure),
+                        TileTracked,
                     ));
                 });
             }
@@ -339,27 +346,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             }
             StructureComponent::Inserter(speed, capacity) => {
                 debug!("Spawning inserter");
-                let pickup = entity_commands
-                    .commands()
-                    .spawn((
-                        TransformBundle::from(Transform::from_xyz(-1., 0., 0.)),
-                        Pickup,
-                        Sensor,
-                        Collider::ball(0.125),
-                    ))
-                    .id();
-                let dropoff = entity_commands
-                    .commands()
-                    .spawn((
-                        TransformBundle::from(Transform::from_xyz(1., 0., 0.)),
-                        Dropoff,
-                        Sensor,
-                        Collider::ball(0.125),
-                    ))
-                    .id();
-                entity_commands
-                    .insert(Inserter::new(*speed, *capacity, dropoff, pickup))
-                    .push_children(&[dropoff, pickup]);
+                entity_commands.insert(InserterBuilder::new(*speed, *capacity));
             }
             StructureComponent::TransportBelt => {
                 debug!("Spawning transport belt");

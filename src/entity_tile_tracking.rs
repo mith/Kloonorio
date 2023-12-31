@@ -9,10 +9,13 @@ use bevy::{
         system::{Commands, Query},
     },
     math::Vec3Swizzles,
-    transform::components::GlobalTransform,
-    utils::HashSet,
+    reflect::Reflect,
+    transform::{commands, components::GlobalTransform},
+    utils::{HashMap, HashSet},
 };
+use bevy_ecs_tilemap::tiles::TilePos;
 use bevy_rapier2d::geometry::Collider;
+use tracing::info;
 
 use crate::terrain::TerrainParams;
 
@@ -20,10 +23,12 @@ pub struct EntityTileTrackingPlugin;
 
 impl Plugin for EntityTileTrackingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (update_entity_on_tile_system, tile_tracker_removed).in_set(EntityTileTrackingSet),
-        );
+        app.register_type::<EntityOnTile>()
+            .register_type::<TileOccupants>()
+            .add_systems(
+                Update,
+                (update_entity_on_tile_system, tile_tracker_removed).in_set(EntityTileTrackingSet),
+            );
     }
 }
 
@@ -31,16 +36,44 @@ impl Plugin for EntityTileTrackingPlugin {
 pub struct EntityTileTrackingSet;
 
 #[derive(Component)]
-struct TileTracked;
+pub struct TileTracked;
 
-#[derive(Component)]
+#[derive(Component, Debug, Reflect)]
 struct EntityOnTile {
     tile_entity: Entity,
 }
 
-#[derive(Component, Default)]
-struct TileOccupants {
+impl EntityOnTile {
+    pub fn tile_entity(&self) -> Entity {
+        self.tile_entity
+    }
+}
+
+#[derive(Component, Default, Debug, Reflect)]
+pub struct TileOccupants {
     occupants: HashSet<Entity>,
+}
+
+impl TileOccupants {
+    #[cfg(test)]
+    pub fn new(occupants: &[Entity]) -> Self {
+        TileOccupants {
+            occupants: occupants.iter().cloned().collect(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn add(&mut self, entity: Entity) {
+        self.occupants.insert(entity);
+    }
+
+    pub fn contains(&self, entity: &Entity) -> bool {
+        self.occupants.contains(entity)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.occupants.iter()
+    }
 }
 
 fn update_entity_on_tile_system(
@@ -52,54 +85,73 @@ fn update_entity_on_tile_system(
             Added<TileTracked>,
         )>,
     >,
-    mut tile_query: Query<&mut TileOccupants>,
+    tile_occupants_query: Query<(Entity, &TileOccupants)>,
     terrain_params: TerrainParams,
+    tile_pos_query: Query<&TilePos>,
 ) {
+    let mut tile_occupants: HashMap<Entity, HashSet<Entity>> = tile_occupants_query
+        .iter()
+        .map(|(e, o)| (e, o.occupants.iter().cloned().collect()))
+        .collect();
     for (mut entity_on_tile, global_transform, entity) in query.iter_mut() {
-        let Some(new_tile_entity) =
-            terrain_params.tile_entity_at_global_pos(global_transform.translation().xy())
+        let entity_position = global_transform.translation().xy();
+        let Some(new_tile_entity) = terrain_params.tile_entity_at_global_pos(entity_position)
         else {
             if let Some(entity_on_tile) = entity_on_tile {
-                remove_from_tile_occupants(&mut tile_query, entity_on_tile.tile_entity, entity);
+                remove_from_tile_occupants(&mut tile_occupants, entity_on_tile.tile_entity, entity);
                 commands.entity(entity).remove::<EntityOnTile>();
             }
             continue;
         };
 
+        let new_tile_pos = tile_pos_query.get(new_tile_entity).unwrap();
+
         match entity_on_tile.as_mut() {
-            Some(entity_on_tile) if new_tile_entity != entity_on_tile.tile_entity => {
-                remove_from_tile_occupants(&mut tile_query, entity_on_tile.tile_entity, entity);
-                add_to_tile_occupants(&mut tile_query, new_tile_entity, entity);
+            Some(entity_on_tile) => {
+                let old_tile_entity = entity_on_tile.tile_entity;
+                remove_from_tile_occupants(&mut tile_occupants, old_tile_entity, entity);
+                add_to_tile_occupants(&mut tile_occupants, new_tile_entity, entity);
                 entity_on_tile.tile_entity = new_tile_entity;
             }
             None => {
                 commands.entity(entity).insert(EntityOnTile {
                     tile_entity: new_tile_entity,
                 });
-                add_to_tile_occupants(&mut tile_query, new_tile_entity, entity);
+                add_to_tile_occupants(&mut tile_occupants, new_tile_entity, entity);
             }
             _ => {}
+        }
+    }
+
+    for (tile_entity, occupants) in tile_occupants {
+        if occupants.is_empty() {
+            commands.entity(tile_entity).remove::<TileOccupants>();
+        } else {
+            commands
+                .entity(tile_entity)
+                .insert(TileOccupants { occupants });
         }
     }
 }
 
 fn add_to_tile_occupants(
-    tile_query: &mut Query<&mut TileOccupants>,
+    tile_occupants: &mut HashMap<Entity, HashSet<Entity>>,
     tile_entity: Entity,
     entity: Entity,
 ) {
-    if let Ok(mut tile_occupants) = tile_query.get_mut(tile_entity) {
-        tile_occupants.occupants.insert(entity);
-    }
+    tile_occupants
+        .entry(tile_entity)
+        .or_insert_with(HashSet::new)
+        .insert(entity);
 }
 
 fn remove_from_tile_occupants(
-    tile_query: &mut Query<&mut TileOccupants>,
+    tile_occupants: &mut HashMap<Entity, HashSet<Entity>>,
     tile_entity: Entity,
     entity: Entity,
 ) {
-    if let Ok(mut tile_occupants) = tile_query.get_mut(tile_entity) {
-        tile_occupants.occupants.remove(&entity);
+    if let Some(tile_occupants) = tile_occupants.get_mut(&tile_entity) {
+        tile_occupants.remove(&entity);
     }
 }
 
@@ -119,13 +171,21 @@ mod test {
     use crate::{
         terrain::{
             terrain_generator::{FlatChunkGenerator, TerrainGenerator},
-            TerrainBundle, TerrainPlugin, GROUND,
+            test::spawn_test_terrain,
+            ChunkBundle, TerrainBundle, TerrainPlugin, GROUND,
         },
         types::AppState,
     };
 
     use super::*;
-    use bevy::{app::Update, ecs::schedule::State, ecs::system::SystemState, math::IVec2};
+    use bevy::{
+        app::Update,
+        ecs::schedule::State,
+        ecs::system::SystemState,
+        math::{IVec2, Vec2},
+        transform::TransformPlugin,
+    };
+    use bevy_ecs_tilemap::tiles::TilePos;
     use proptest::{prelude::*, strategy::ValueTree, test_runner::TestRunner};
 
     prop_compose! {
@@ -138,9 +198,7 @@ mod test {
     }
 
     #[derive(Component)]
-    struct InitialTilePosition {
-        tile_position: IVec2,
-    }
+    struct InitialTilePosition(IVec2);
 
     proptest! {
         #[test]
@@ -151,60 +209,42 @@ mod test {
             ),
         ) {
             let mut app = App::new();
+            app.add_plugins(TransformPlugin);
 
-            // Setup terrain
-            let terrain_entity = app.world.spawn(TerrainBundle::default()).id();
-
-            {
-                // Get system state to trigger spawning chunk (0, 0)
-                let mut system_state: SystemState<TerrainParams> = SystemState::new(&mut app.world);
-                let mut terrain_params = system_state.get_mut(&mut app.world);
-                terrain_params.queue_spawn_chunk(terrain_entity, IVec2::new(0, 0));
-            }
-
-            app.add_systems(Update, update_entity_on_tile_system);
+             // Setup terrain
+            let _terrain_entity = spawn_test_terrain(&mut app);
 
             // Setup entities with initial positions
             for pos in entities_positions {
                 let entity_transform = GlobalTransform::from_translation(pos.as_vec2().extend(0.0));
-                let initial_position = InitialTilePosition {
-                    tile_position: pos,
-                };
-                let entity = app.world.spawn((entity_transform, initial_position)).id();
+                let initial_position = InitialTilePosition(pos);
+                app.world.spawn((TileTracked, entity_transform, initial_position));
             }
+            app.update();
 
+            app.add_systems(Update, update_entity_on_tile_system);
             app.update();
 
             // Check that entities are correctly assigned to tiles
             {
                 let mut system_state: SystemState<(
-                    Query<(Entity, &InitialTilePosition)>,
-                    Query<&TileOccupants>,
+                    Query<(Entity, &InitialTilePosition, &GlobalTransform)>,
+                    Query<(&TileOccupants, &TilePos)>,
                     TerrainParams
                 )> = SystemState::new(&mut app.world);
                 let (entity_query, tile_query, terrain_params) = system_state.get_mut(&mut app.world);
 
-                for (entity, initial_position) in entity_query.iter() {
-                    let tile_entity = terrain_params.tile_entity_at_global_pos(initial_position.tile_position.as_vec2()).unwrap();
-                    let tile_occupants = tile_query.get(tile_entity).unwrap();
+                for (entity, initial_position, _entity_transform) in entity_query.iter() {
+                    let tile_entity = terrain_params.tile_entity_at_global_pos(initial_position.0.as_vec2()).unwrap();
+                    let (tile_occupants, _tile_pos) = tile_query.get(tile_entity).unwrap();
+                    let tile_occupants_vec = tile_occupants.occupants.iter().cloned().collect::<Vec<_>>();
+                    let _occupants_initial_pos = tile_occupants_vec.iter().map(|e| {
+                        let (_, initial_position, entity_transform) = entity_query.get(*e).unwrap();
+                        (initial_position.0, entity_transform.translation().xy())
+                    }).collect::<Vec<_>>();
                     assert!(tile_occupants.occupants.contains(&entity), "Entity should be in the tile occupants");
                 }
-
             }
-
-
-            // // Simulate entity movement
-            // for (entity, _) in entity_transforms.iter_mut() {
-            //     // Randomly assign a new position to simulate movement
-            //     let new_pos = any_ivec2(-4, 4).new_tree(&mut TestRunner::default()).unwrap().current();
-            //     app.world.entity_mut(*entity).insert(GlobalTransform::from_translation(new_pos.as_vec2().extend(0.0)));
-            // }
-
-            // // Verify the correctness
-            // for (entity, transform) in entity_transforms {
-            //     let tile_occupants = app.world.get::<TileOccupants>(tile_entity).unwrap();
-            //     assert!(tile_occupants.occupants.contains(&entity), "Entity should be in the tile occupants");
-            // }
         }
     }
 }

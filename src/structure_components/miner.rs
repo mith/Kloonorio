@@ -6,11 +6,11 @@ use crate::{
     interact::is_minable,
     inventory::{Inventory, Output, Stack},
     terrain::TerrainParams,
-    types::{Powered, Working},
+    types::{Dropoff, Powered, Working},
     util::{drop_stack_at_point, texture_id_to_product},
 };
 
-use super::{inserter::Dropoff, transport_belt::TransportBelt};
+use super::transport_belt::TransportBelt;
 
 #[derive(Component)]
 pub struct Miner {

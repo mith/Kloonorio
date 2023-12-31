@@ -61,6 +61,15 @@ pub enum ItemFilter {
     Only(HashSet<Item>),
 }
 
+impl ItemFilter {
+    pub fn contains(&self, item: &Item) -> bool {
+        match self {
+            ItemFilter::All => true,
+            ItemFilter::Only(allowed) => allowed.contains(item),
+        }
+    }
+}
+
 impl Inventory {
     pub fn new(size: u32) -> Self {
         Self {
