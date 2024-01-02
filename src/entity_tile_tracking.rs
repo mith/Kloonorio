@@ -8,7 +8,7 @@ use bevy::{
         schedule::{IntoSystemConfigs, SystemSet},
         system::{Commands, Query},
     },
-    math::Vec3Swizzles,
+    math::{Vec2, Vec3Swizzles},
     reflect::Reflect,
     transform::{commands, components::GlobalTransform},
     utils::{HashMap, HashSet},
@@ -23,7 +23,7 @@ pub struct EntityTileTrackingPlugin;
 
 impl Plugin for EntityTileTrackingPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<EntityOnTile>()
+        app.register_type::<EntityOnTiles>()
             .register_type::<TileOccupants>()
             .add_systems(
                 Update,
@@ -39,13 +39,13 @@ pub struct EntityTileTrackingSet;
 pub struct TileTracked;
 
 #[derive(Component, Debug, Reflect)]
-struct EntityOnTile {
-    tile_entity: Entity,
+struct EntityOnTiles {
+    tile_entities: Vec<Entity>,
 }
 
-impl EntityOnTile {
-    pub fn tile_entity(&self) -> Entity {
-        self.tile_entity
+impl EntityOnTiles {
+    pub fn tile_entities(&self) -> impl Iterator<Item = &Entity> {
+        self.tile_entities.iter()
     }
 }
 
@@ -79,7 +79,12 @@ impl TileOccupants {
 fn update_entity_on_tile_system(
     mut commands: Commands,
     mut query: Query<
-        (Option<&mut EntityOnTile>, &GlobalTransform, Entity),
+        (
+            Option<&mut EntityOnTiles>,
+            &GlobalTransform,
+            Entity,
+            Option<&Collider>,
+        ),
         Or<(
             (With<TileTracked>, Changed<GlobalTransform>),
             Added<TileTracked>,
@@ -87,39 +92,62 @@ fn update_entity_on_tile_system(
     >,
     tile_occupants_query: Query<(Entity, &TileOccupants)>,
     terrain_params: TerrainParams,
-    tile_pos_query: Query<&TilePos>,
 ) {
     let mut tile_occupants: HashMap<Entity, HashSet<Entity>> = tile_occupants_query
         .iter()
         .map(|(e, o)| (e, o.occupants.iter().cloned().collect()))
         .collect();
-    for (mut entity_on_tile, global_transform, entity) in query.iter_mut() {
+    for (mut entity_on_tile, global_transform, entity, opt_collider) in query.iter_mut() {
+        // Find the new tiles the entity is on
         let entity_position = global_transform.translation().xy();
-        let Some(new_tile_entity) = terrain_params.tile_entity_at_global_pos(entity_position)
-        else {
-            if let Some(entity_on_tile) = entity_on_tile {
-                remove_from_tile_occupants(&mut tile_occupants, entity_on_tile.tile_entity, entity);
-                commands.entity(entity).remove::<EntityOnTile>();
+        let entity_tile_positions = {
+            if let Some(collider) = opt_collider {
+                let aabb = collider.raw.compute_aabb(&entity_position.into());
+                let min_x = aabb.mins.x.floor() as i32;
+                let min_y = aabb.mins.y.floor() as i32;
+                let max_x = aabb.maxs.x.ceil() as i32;
+                let max_y = aabb.maxs.y.ceil() as i32;
+                let mut tiles = Vec::new();
+                for x in min_x..=max_x {
+                    for y in min_y..=max_y {
+                        let tile_global_pos = Vec2::new(x as f32, y as f32);
+                        tiles.push(tile_global_pos);
+                    }
+                }
+                tiles
+            } else {
+                vec![entity_position]
             }
-            continue;
         };
 
-        let new_tile_pos = tile_pos_query.get(new_tile_entity).unwrap();
-
-        match entity_on_tile.as_mut() {
-            Some(entity_on_tile) => {
-                let old_tile_entity = entity_on_tile.tile_entity;
-                remove_from_tile_occupants(&mut tile_occupants, old_tile_entity, entity);
-                add_to_tile_occupants(&mut tile_occupants, new_tile_entity, entity);
-                entity_on_tile.tile_entity = new_tile_entity;
+        if let Some(entity_on_tile) = entity_on_tile.as_mut() {
+            // Remove the entity from the occupant list of the old tiles
+            for tile_entity in entity_on_tile.tile_entities() {
+                remove_from_tile_occupants(&mut tile_occupants, *tile_entity, entity);
             }
-            None => {
-                commands.entity(entity).insert(EntityOnTile {
-                    tile_entity: new_tile_entity,
-                });
-                add_to_tile_occupants(&mut tile_occupants, new_tile_entity, entity);
+            // Update the entity's tile list
+            entity_on_tile.tile_entities = entity_tile_positions
+                .iter()
+                .filter_map(|tile_global_pos| {
+                    terrain_params.tile_entity_at_global_pos(*tile_global_pos)
+                })
+                .collect();
+            for tile_entity in entity_on_tile.tile_entities() {
+                add_to_tile_occupants(&mut tile_occupants, *tile_entity, entity);
             }
-            _ => {}
+        } else {
+            let tile_entities = entity_tile_positions
+                .iter()
+                .filter_map(|tile_global_pos| {
+                    terrain_params.tile_entity_at_global_pos(*tile_global_pos)
+                })
+                .collect::<Vec<_>>();
+            for tile_entity in &tile_entities {
+                add_to_tile_occupants(&mut tile_occupants, *tile_entity, entity);
+            }
+            commands
+                .entity(entity)
+                .insert(EntityOnTiles { tile_entities });
         }
     }
 
@@ -141,7 +169,7 @@ fn add_to_tile_occupants(
 ) {
     tile_occupants
         .entry(tile_entity)
-        .or_insert_with(HashSet::new)
+        .or_default()
         .insert(entity);
 }
 
@@ -156,13 +184,20 @@ fn remove_from_tile_occupants(
 }
 
 fn tile_tracker_removed(
+    mut commands: Commands,
     mut removed_tracker: RemovedComponents<TileTracked>,
-    mut tile_query: Query<&mut TileOccupants>,
+    entity_on_tiles_query: Query<&EntityOnTiles>,
+    mut tile_occupants_query: Query<&mut TileOccupants>,
 ) {
     for entity in removed_tracker.read() {
-        if let Ok(mut entity_on_tile) = tile_query.get_mut(entity) {
-            entity_on_tile.occupants.remove(&entity);
+        if let Ok(entity_on_tiles) = entity_on_tiles_query.get(entity) {
+            for tile_entity in entity_on_tiles.tile_entities() {
+                if let Ok(mut tile_occupants) = tile_occupants_query.get_mut(*tile_entity) {
+                    tile_occupants.occupants.remove(&entity);
+                }
+            }
         }
+        commands.entity(entity).remove::<EntityOnTiles>();
     }
 }
 
