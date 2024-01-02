@@ -28,6 +28,7 @@ pub struct IsometricSprite {
     pub custom_size: Option<Vec2>,
     pub anchor: Anchor,
     pub sides: u32,
+    pub custom_texture_index: Option<usize>,
 }
 
 impl Default for IsometricSprite {
@@ -39,6 +40,7 @@ impl Default for IsometricSprite {
             custom_size: None,
             anchor: Anchor::default(),
             sides: 1,
+            custom_texture_index: None,
         }
     }
 }
@@ -85,20 +87,19 @@ pub fn extract_isometric_sprites(
             continue;
         }
         // PERF: we don't check in this function that the `Image` asset is ready, since it should be in most cases and hashing the handle is expensive
-        let mut unrotated_transform = GlobalTransform::default();
-        let compute_transform = transform.compute_transform();
-        unrotated_transform =
-            unrotated_transform.mul_transform(compute_transform.with_rotation(Quat::default()));
+        let unrotated_transform = transform.compute_transform().with_rotation(Quat::default());
 
         if let Some(texture_atlas) = texture_atlases.get(texture_atlas_handle) {
-            let index = discrete_rotation.get();
+            let index = isometric_sprite
+                .custom_texture_index
+                .unwrap_or_else(|| discrete_rotation.get());
 
             let rect = Some(texture_atlas.textures[index]);
             extracted_sprites.sprites.insert(
                 entity,
                 ExtractedSprite {
                     color: isometric_sprite.color,
-                    transform: unrotated_transform,
+                    transform: unrotated_transform.into(),
                     rect,
                     custom_size: isometric_sprite.custom_size,
                     flip_x: isometric_sprite.flip_x,
