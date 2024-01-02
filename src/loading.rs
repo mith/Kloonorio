@@ -133,23 +133,18 @@ fn load_resources(
     }
 }
 
-fn load_item_textures_and_icons(
-    mut commands: Commands,
+fn load_item_icons(
     asset_server: Res<AssetServer>,
     mut gamestate: ResMut<GameState>,
     mut egui_context: EguiContexts,
     mut icons: ResMut<Icons>,
     loaded_folder_assets: Res<Assets<LoadedFolder>>,
-    mut textures: ResMut<Assets<Image>>,
-    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
     if !gamestate.icons_loaded
         && asset_server.get_recursive_dependency_load_state(&gamestate.icons_handle)
             == Some(RecursiveDependencyLoadState::Loaded)
     {
         let loaded_folder = loaded_folder_assets.get(&gamestate.icons_handle).unwrap();
-        let mut texture_atlas_builder = TextureAtlasBuilder::default();
-        let mut item_images = HashMap::new();
 
         for icon in &loaded_folder.handles {
             let item_texture = icon.clone().typed::<Image>();
@@ -159,6 +154,35 @@ fn load_item_textures_and_icons(
                 .map(|ap| ap.path().file_stem().unwrap().to_string_lossy().to_string())
             {
                 icons.insert(name.clone(), texture_id);
+            }
+        }
+
+        gamestate.icons_loaded = true;
+    }
+}
+
+fn load_item_textures(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut gamestate: ResMut<GameState>,
+    loaded_folder_assets: Res<Assets<LoadedFolder>>,
+    mut textures: ResMut<Assets<Image>>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+) {
+    if !gamestate.item_textures_loaded
+        && asset_server.get_recursive_dependency_load_state(&gamestate.icons_handle)
+            == Some(RecursiveDependencyLoadState::Loaded)
+    {
+        let loaded_folder = loaded_folder_assets.get(&gamestate.icons_handle).unwrap();
+        let mut texture_atlas_builder = TextureAtlasBuilder::default();
+        let mut item_images = HashMap::new();
+
+        for icon in &loaded_folder.handles {
+            let item_texture = icon.clone().typed::<Image>();
+            if let Some(name) = asset_server
+                .get_path(icon.id())
+                .map(|ap| ap.path().file_stem().unwrap().to_string_lossy().to_string())
+            {
                 item_images.insert(name, item_texture.clone());
                 let Some(texture) = textures.get(item_texture.id()) else {
                     warn!(
@@ -188,7 +212,7 @@ fn load_item_textures_and_icons(
             texture_atlas_handle,
             item_texture_index,
         });
-        gamestate.icons_loaded = true;
+        gamestate.item_textures_loaded = true;
     }
 }
 
@@ -237,6 +261,7 @@ fn check_loading(gamestate: Res<GameState>, mut next_state: ResMut<NextState<App
         && gamestate.structures_loaded
         && gamestate.icons_loaded
         && gamestate.items_loaded
+        && gamestate.item_textures_loaded
     {
         next_state.set(AppState::Running);
     }
@@ -259,8 +284,9 @@ impl Plugin for LoadingPlugin {
                 (
                     load_recipes,
                     load_structures,
-                    load_item_textures_and_icons,
+                    load_item_icons,
                     load_resources,
+                    load_item_textures,
                     check_loading,
                 )
                     .run_if(in_state(AppState::Loading)),

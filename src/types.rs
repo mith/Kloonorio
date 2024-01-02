@@ -27,6 +27,7 @@ pub struct GameState {
     pub icons_handle: Handle<LoadedFolder>,
     pub items_loaded: bool,
     pub resources_handle: Handle<ItemAsset>,
+    pub item_textures_loaded: bool,
 }
 
 #[derive(Component)]
