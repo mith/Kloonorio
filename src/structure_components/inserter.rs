@@ -28,11 +28,11 @@ impl Plugin for InserterPlugin {
                     inserter_tick,
                 )
                     .chain(),
-                animate_arm_position,
                 build_inserter,
                 burner_inserter_tick,
             ),
         )
+        .add_systems(Update, animate_arm_position)
         .register_type::<Inserter>();
     }
 }
@@ -566,7 +566,7 @@ fn inserter_tick(
                             // TODO: Implement dropping items on the ground
                         }
                     }
-                    inserter.current_action = None;
+                    inserter.target_arm_position = -1.0;
                 } else {
                     // Pickup
                     match action.pickup.unwrap() {
@@ -587,6 +587,7 @@ fn inserter_tick(
                             // TODO: Implement picking up items from the ground
                         }
                     }
+                    inserter.target_arm_position = 1.0;
                 }
             }
         }
