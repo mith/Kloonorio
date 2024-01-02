@@ -20,7 +20,7 @@ pub enum SideCount {
 }
 
 impl TryFrom<u32> for SideCount {
-    type Error = ();
+    type Error = &'static str;
 
     fn try_from(side_count: u32) -> Result<Self, Self::Error> {
         match side_count {
@@ -28,7 +28,7 @@ impl TryFrom<u32> for SideCount {
             2 => Ok(Self::Two),
             4 => Ok(Self::Four),
             8 => Ok(Self::Eight),
-            _ => Err(()),
+            _ => Err("Invalid side count"),
         }
     }
 }

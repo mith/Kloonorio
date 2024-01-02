@@ -4,6 +4,7 @@ use bevy::{
     asset::{LoadedFolder, RecursiveDependencyLoadState},
     ecs::system::SystemParam,
     prelude::*,
+    transform::commands,
     utils::HashMap,
 };
 use bevy_egui::EguiContexts;
@@ -83,12 +84,31 @@ impl DerefMut for Items {
     }
 }
 
+#[derive(Resource)]
+pub struct ItemTextures {
+    images: HashMap<String, Handle<Image>>,
+    item_texture_index: HashMap<String, usize>,
+    texture_atlas_handle: Handle<TextureAtlas>,
+}
+
+impl ItemTextures {
+    pub fn get_texture_index(&self, item_name: &str) -> Option<usize> {
+        let item_image_name = &item_name.to_lowercase().replace(' ', "_");
+        self.item_texture_index.get(item_image_name).copied()
+    }
+
+    pub fn get_texture_atlas_handle(&self) -> Handle<TextureAtlas> {
+        self.texture_atlas_handle.clone()
+    }
+}
+
 #[derive(SystemParam)]
 pub struct Definitions<'w> {
     pub structures: Res<'w, Structures>,
     pub recipes: Res<'w, Recipes>,
     pub icons: Res<'w, Icons>,
     pub items: Res<'w, Items>,
+    pub item_textures: Res<'w, ItemTextures>,
 }
 
 fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
@@ -114,27 +134,61 @@ fn load_resources(
     }
 }
 
-fn load_icons(
+fn load_item_textures_and_icons(
+    mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut gamestate: ResMut<GameState>,
     mut egui_context: EguiContexts,
     mut icons: ResMut<Icons>,
     loaded_folder_assets: Res<Assets<LoadedFolder>>,
+    mut textures: ResMut<Assets<Image>>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
     if !gamestate.icons_loaded
         && asset_server.get_recursive_dependency_load_state(&gamestate.icons_handle)
             == Some(RecursiveDependencyLoadState::Loaded)
     {
         let loaded_folder = loaded_folder_assets.get(&gamestate.icons_handle).unwrap();
+        let mut texture_atlas_builder = TextureAtlasBuilder::default();
+        let mut item_images = HashMap::new();
+
         for icon in &loaded_folder.handles {
-            let texture_id = egui_context.add_image(icon.clone().typed::<Image>());
+            let item_texture = icon.clone().typed::<Image>();
+            let texture_id = egui_context.add_image(item_texture.clone());
             if let Some(name) = asset_server
                 .get_path(icon.id())
                 .map(|ap| ap.path().file_stem().unwrap().to_string_lossy().to_string())
             {
-                icons.insert(name, texture_id);
+                icons.insert(name.clone(), texture_id);
+                item_images.insert(name, item_texture.clone());
+                let Some(texture) = textures.get(item_texture.id()) else {
+                    warn!(
+                        "{:?} did not resolve to an `Image` asset",
+                        item_texture.path().unwrap()
+                    );
+                    continue;
+                };
+                texture_atlas_builder.add_texture(item_texture.id(), texture)
             }
         }
+        let texture_atlas = texture_atlas_builder.finish(&mut textures).unwrap();
+        let texture_atlas_handle = texture_atlases.add(texture_atlas.clone());
+        let item_texture_index: HashMap<String, usize> = item_images
+            .iter()
+            .map(|(item_name, item_image_handle)| {
+                (
+                    item_name.clone(),
+                    texture_atlas
+                        .get_texture_index(item_image_handle.id())
+                        .unwrap(),
+                )
+            })
+            .collect();
+        commands.insert_resource(ItemTextures {
+            images: item_images,
+            texture_atlas_handle,
+            item_texture_index,
+        });
         gamestate.icons_loaded = true;
     }
 }
@@ -196,17 +250,17 @@ impl Plugin for LoadingPlugin {
         app.register_type::<Structures>()
             .register_type::<Recipes>()
             .register_type::<Items>()
-            .insert_resource(Structures::default())
-            .insert_resource(Recipes::default())
-            .insert_resource(Icons::default())
-            .insert_resource(Items::default())
+            .init_resource::<Structures>()
+            .init_resource::<Recipes>()
+            .init_resource::<Icons>()
+            .init_resource::<Items>()
             .add_systems(OnEnter(AppState::Loading), start_loading)
             .add_systems(
                 Update,
                 (
                     load_recipes,
                     load_structures,
-                    load_icons,
+                    load_item_textures_and_icons,
                     load_resources,
                     check_loading,
                 )

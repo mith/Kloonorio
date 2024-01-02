@@ -1,4 +1,7 @@
-use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
+use bevy::{
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    prelude::*,
+};
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_rapier2d::prelude::*;
@@ -59,16 +62,13 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(60.))
         .add_plugins((
             FrameTimeDiagnosticsPlugin,
+            LogDiagnosticsPlugin::default(),
             DefaultPlugins
                 .set(AssetPlugin { ..default() })
                 .set(ImagePlugin::default_nearest()),
             EguiPlugin,
             DefaultInspectorConfigPlugin,
         ))
-        // .insert_resource(WorldInspectorParams {
-        //     name_filter: Some("Interesting".into()),
-        //     ..default()
-        // })
         .register_type::<Item>()
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, 8.0),

@@ -1,16 +1,20 @@
-use bevy::{math::Vec3Swizzles, prelude::*, ui::debug, utils::HashSet};
+use bevy::{math::Vec3Swizzles, prelude::*, transform, ui::debug, utils::HashSet};
 use bevy_rapier2d::prelude::{Collider, RapierContext};
+use ndarray::RawDataSubst;
 
 use crate::{
-    discrete_rotation::DiscreteRotation,
+    discrete_rotation::{DiscreteRotation, SideCount},
     entity_tile_tracking::TileOccupants,
     inventory::{Inventory, ItemFilter, Stack, MAX_STACK_SIZE},
+    isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
+    loading::ItemTextures,
     terrain::TerrainParams,
-    types::{Item, Powered, Working},
+    types::{AppState, Item, Powered, Working},
     util::{
         find_entities_on_position, get_inventory_child_mut, FuelInventoryQuery, Inventories,
         InventoryType,
     },
+    ysort::YSort,
 };
 
 use super::{burner::Burner, transport_belt::TransportBelt};
@@ -29,10 +33,13 @@ impl Plugin for InserterPlugin {
                 )
                     .chain(),
                 build_inserter,
-                burner_inserter_tick,
-            ),
+            )
+                .run_if(in_state(AppState::Running)),
         )
-        .add_systems(Update, animate_arm_position)
+        .add_systems(
+            Update,
+            animate_arm_position.run_if(in_state(AppState::Running)),
+        )
         .register_type::<Inserter>();
     }
 }
@@ -64,6 +71,9 @@ pub struct Inserter {
     speed: f32,
 }
 
+#[derive(Component, Debug, Reflect)]
+struct InserterHand(Entity);
+
 impl Inserter {
     pub fn new(
         speed: f32,
@@ -88,6 +98,7 @@ fn build_inserter(
     mut commands: Commands,
     inserter_builder_query: Query<(Entity, &InserterBuilder, &GlobalTransform)>,
     terrain_params: TerrainParams,
+    item_textures: Res<ItemTextures>,
 ) {
     for (inserter_entity, inserter_builder, transform) in &mut inserter_builder_query.iter() {
         let span = info_span!("Build inserter", inserter = ?inserter_entity);
@@ -103,6 +114,23 @@ fn build_inserter(
             .tile_entity_at_global_pos(dropoff_tile_location)
             .unwrap();
 
+        let inserter_hand_entity = commands
+            .spawn((
+                IsometricSpriteBundle {
+                    transform: Transform::from_translation(Vec3::new(0., 0., 0.5)),
+                    texture_atlas: item_textures.get_texture_atlas_handle(),
+                    sprite: IsometricSprite {
+                        sides: 1,
+                        custom_size: Some(Vec2::new(0.3, 0.3)),
+                        ..default()
+                    },
+                    ..default()
+                },
+                DiscreteRotation::new(SideCount::One),
+                // YSort { base_layer: 1. },
+            ))
+            .id();
+
         let inserter = Inserter::new(
             inserter_builder.speed,
             inserter_builder.capacity,
@@ -111,7 +139,8 @@ fn build_inserter(
         );
         commands
             .entity(inserter_entity)
-            .insert(inserter)
+            .add_child(inserter_hand_entity)
+            .insert((inserter, InserterHand(inserter_hand_entity)))
             .remove::<InserterBuilder>();
     }
 }
@@ -123,12 +152,15 @@ fn inserter_with_offset(inserter_transform: &GlobalTransform, direction: Vec3) -
         .xy()
 }
 
+const INSERTER_PICKUP_OFFSET: Vec3 = Vec3::new(-1., 0., 0.);
+const INSERTER_DROPOFF_OFFSET: Vec3 = Vec3::new(1., 0., 0.);
+
 fn inserter_dropoff_location(inserter_transform: &GlobalTransform) -> Vec2 {
-    inserter_with_offset(inserter_transform, Vec3::new(1., 0., 0.))
+    inserter_with_offset(inserter_transform, INSERTER_DROPOFF_OFFSET)
 }
 
 fn inserter_pickup_location(inserter_transform: &GlobalTransform) -> Vec2 {
-    inserter_with_offset(inserter_transform, Vec3::new(-1., 0., 0.))
+    inserter_with_offset(inserter_transform, INSERTER_PICKUP_OFFSET)
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, Reflect)]
@@ -594,8 +626,13 @@ fn inserter_tick(
     }
 }
 
-fn animate_arm_position(inserter_query: Query<(&GlobalTransform, &Inserter)>, mut gizmos: Gizmos) {
-    for (inserter_transform, inserter) in &mut inserter_query.iter() {
+fn animate_arm_position(
+    inserter_query: Query<(&GlobalTransform, &Inserter, &InserterHand)>,
+    mut arm_query: Query<(&mut Transform, &mut Visibility, &mut IsometricSprite)>,
+    item_textures: Res<ItemTextures>,
+    mut gizmos: Gizmos,
+) {
+    for (inserter_transform, inserter, inserter_hand) in &mut inserter_query.iter() {
         let span = info_span!("Animate arm position", inserter = ?inserter);
         let _enter = span.enter();
 
@@ -605,7 +642,8 @@ fn animate_arm_position(inserter_query: Query<(&GlobalTransform, &Inserter)>, mu
         let pickup_location = inserter_pickup_location(inserter_transform);
         let dropoff_location = inserter_dropoff_location(inserter_transform);
 
-        let arm_position = pickup_location.lerp(dropoff_location, (arm_position + 1.0) / 2.0);
+        let normalized_arm_position = (arm_position + 1.0) / 2.0;
+        let arm_position = pickup_location.lerp(dropoff_location, normalized_arm_position);
 
         gizmos.circle_2d(inserter_location, 0.5, Color::YELLOW);
         gizmos.circle_2d(arm_position, 0.3, Color::YELLOW);
@@ -613,26 +651,18 @@ fn animate_arm_position(inserter_query: Query<(&GlobalTransform, &Inserter)>, mu
 
         gizmos.circle_2d(pickup_location, 0.2, Color::GOLD);
         gizmos.circle_2d(dropoff_location, 0.2, Color::GOLD);
-    }
-}
 
-fn burner_inserter_tick(
-    mut burner_inserter_query: Query<(Entity, &mut Inserter, &Children), With<Burner>>,
-    mut fuel_query: Query<FuelInventoryQuery>,
-) {
-    for (inserter_entity, mut inserter, inserter_children) in &mut burner_inserter_query {
-        let span = info_span!("Burner inserter tick", inserter = ?inserter_entity);
-        let _enter = span.enter();
+        let (mut hand_transform, mut visibility, mut iso_sprite) =
+            arm_query.get_mut(inserter_hand.0).unwrap();
+        hand_transform.translation =
+            INSERTER_PICKUP_OFFSET.lerp(INSERTER_DROPOFF_OFFSET, normalized_arm_position);
 
-        if let Some(stack) = inserter.holding.as_ref() {
-            let mut fuel_inventory = get_inventory_child_mut(inserter_children, &mut fuel_query).1;
-            if stack.item == Item::new("Coal")
-                && !fuel_inventory.has_items(&[(Item::new("Coal"), 2)])
-            {
-                debug!("Taking fuel from hand to refuel");
-                fuel_inventory.add_stack(stack.to_owned());
-                inserter.holding = None;
-            }
+        if let Some(item) = inserter.holding.as_ref() {
+            *visibility = Visibility::Visible;
+            iso_sprite.custom_texture_index =
+                Some(item_textures.get_texture_index(&item.item).unwrap());
+        } else {
+            *visibility = Visibility::Hidden;
         }
     }
 }

@@ -9,7 +9,7 @@ pub struct YSortPlugin;
 
 impl Plugin for YSortPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, y_sort);
+        app.register_type::<YSort>().add_systems(Update, y_sort);
     }
 }
 

@@ -14,6 +14,7 @@ pub enum AppState {
     Running,
 }
 
+// TODO: move this to loading.rs
 #[derive(Default, Resource, Reflect)]
 pub struct GameState {
     pub map_loaded: bool,

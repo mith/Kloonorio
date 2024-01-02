@@ -44,7 +44,8 @@ impl Plugin for UiPlugin {
                     building_ui::building_ui,
                     crafting_queue_ui::crafting_queue_ui,
                     clear_hand,
-                ),
+                )
+                    .run_if(in_state(AppState::Running)),
             )
             .add_event::<SlotEvent>()
             .add_systems(
