@@ -10,12 +10,11 @@ use bevy::{
     },
     math::{Vec2, Vec3Swizzles},
     reflect::Reflect,
-    transform::{commands, components::GlobalTransform},
+    transform::components::GlobalTransform,
     utils::{HashMap, HashSet},
 };
-use bevy_ecs_tilemap::tiles::TilePos;
+
 use bevy_rapier2d::geometry::Collider;
-use tracing::info;
 
 use crate::terrain::TerrainParams;
 
@@ -203,25 +202,12 @@ fn tile_tracker_removed(
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        terrain::{
-            terrain_generator::{FlatChunkGenerator, TerrainGenerator},
-            test::spawn_test_terrain,
-            ChunkBundle, TerrainBundle, TerrainPlugin, GROUND,
-        },
-        types::AppState,
-    };
+    use crate::terrain::test::spawn_test_terrain;
 
     use super::*;
-    use bevy::{
-        app::Update,
-        ecs::schedule::State,
-        ecs::system::SystemState,
-        math::{IVec2, Vec2},
-        transform::TransformPlugin,
-    };
+    use bevy::{app::Update, ecs::system::SystemState, math::IVec2, transform::TransformPlugin};
     use bevy_ecs_tilemap::tiles::TilePos;
-    use proptest::{prelude::*, strategy::ValueTree, test_runner::TestRunner};
+    use proptest::prelude::*;
 
     prop_compose! {
         fn any_ivec2(min: i32, max: i32)

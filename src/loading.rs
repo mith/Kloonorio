@@ -4,7 +4,6 @@ use bevy::{
     asset::{LoadedFolder, RecursiveDependencyLoadState},
     ecs::system::SystemParam,
     prelude::*,
-    transform::commands,
     utils::HashMap,
 };
 use bevy_egui::EguiContexts;

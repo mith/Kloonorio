@@ -1,23 +1,17 @@
-use bevy::{math::Vec3Swizzles, prelude::*, transform, ui::debug, utils::HashSet};
-use bevy_rapier2d::prelude::{Collider, RapierContext};
-use ndarray::RawDataSubst;
+use bevy::{math::Vec3Swizzles, prelude::*};
 
 use crate::{
     discrete_rotation::{DiscreteRotation, SideCount},
     entity_tile_tracking::TileOccupants,
-    inventory::{Inventory, ItemFilter, Stack, MAX_STACK_SIZE},
+    inventory::{Inventory, Stack, MAX_STACK_SIZE},
     isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
     loading::ItemTextures,
     terrain::TerrainParams,
     types::{AppState, Item, Powered, Working},
-    util::{
-        find_entities_on_position, get_inventory_child_mut, FuelInventoryQuery, Inventories,
-        InventoryType,
-    },
-    ysort::YSort,
+    util::{Inventories, InventoryType},
 };
 
-use super::{burner::Burner, transport_belt::TransportBelt};
+use super::transport_belt::TransportBelt;
 
 pub struct InserterPlugin;
 
