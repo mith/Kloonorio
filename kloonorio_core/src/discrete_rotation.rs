@@ -59,6 +59,35 @@ impl DiscreteRotation {
         self.current = (self.current + 1) % self.max;
     }
 
+    pub fn set(&mut self, direction: CompassDirection) {
+        self.current = match self.max {
+            1 => 0,
+            2 => match direction {
+                CompassDirection::North => 0,
+                CompassDirection::South => 1,
+                _ => panic!("Invalid direction for 2 sides"),
+            },
+            4 => match direction {
+                CompassDirection::North => 0,
+                CompassDirection::East => 1,
+                CompassDirection::South => 2,
+                CompassDirection::West => 3,
+                _ => panic!("Invalid direction for 4 sides"),
+            },
+            8 => match direction {
+                CompassDirection::North => 0,
+                CompassDirection::NorthEast => 1,
+                CompassDirection::East => 2,
+                CompassDirection::SouthEast => 3,
+                CompassDirection::South => 4,
+                CompassDirection::SouthWest => 5,
+                CompassDirection::West => 6,
+                CompassDirection::NorthWest => 7,
+            },
+            _ => unreachable!(),
+        };
+    }
+
     pub fn get(&self) -> usize {
         self.current
     }

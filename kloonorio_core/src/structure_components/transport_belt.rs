@@ -12,14 +12,15 @@ pub struct TransportBeltPlugin;
 
 impl Plugin for TransportBeltPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TransportBeltTimer(Timer::from_seconds(
-            1.,
-            TimerMode::Repeating,
-        )));
-        app.add_systems(
-            Update,
-            transport_belt_tick.run_if(in_state(AppState::Running)),
-        );
+        app.register_type::<TransportBelt>()
+            .insert_resource(TransportBeltTimer(Timer::from_seconds(
+                1.,
+                TimerMode::Repeating,
+            )))
+            .add_systems(
+                Update,
+                transport_belt_tick.run_if(in_state(AppState::Running)),
+            );
     }
 }
 
@@ -42,9 +43,9 @@ impl TransportBelt {
     }
 
     /// Add a stack to the belt at the given slot. Returns true if the stack was added
-    pub fn add(&mut self, slot: usize, stack: Item) -> bool {
+    pub fn add(&mut self, slot: usize, item: Item) -> bool {
         if self.can_add(slot) {
-            self.slots[slot] = Some(stack);
+            self.slots[slot] = Some(item);
             true
         } else {
             false
@@ -160,13 +161,16 @@ pub struct BeltItem;
 #[cfg(test)]
 mod test {
 
-    use crate::discrete_rotation::SideCount;
+    use bevy::time::TimePlugin;
+
+    use crate::discrete_rotation::{CompassDirection, SideCount};
 
     use super::*;
 
     #[test]
     fn transport_belt_rotate_right() {
         let mut app = App::new();
+        app.add_plugins(TimePlugin);
 
         let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
         app.insert_resource(timer);
@@ -206,6 +210,7 @@ mod test {
     #[test]
     fn transport_belt_rotate_right_first_two_slots() {
         let mut app = App::new();
+        app.add_plugins(TimePlugin);
 
         let mut belt = TransportBelt::new(None);
         belt.add(0, Item::new("Coal"));
@@ -236,6 +241,7 @@ mod test {
     #[test]
     fn transport_belt_shift() {
         let mut app = App::new();
+        app.add_plugins(TimePlugin);
         let mut belt = TransportBelt::new(None);
         belt.add(0, Item::new("Coal"));
         belt.add(2, Item::new("Iron ore"));
@@ -265,6 +271,7 @@ mod test {
     #[test]
     fn transport_belt_transfer_to_next_belt() {
         let mut app = App::new();
+        app.add_plugins(TimePlugin);
 
         let belt_b = TransportBelt::new(None);
         let belt_b_entity = app
@@ -296,6 +303,39 @@ mod test {
         assert_eq!(
             app.world.get::<TransportBelt>(belt_b_entity).unwrap().slots,
             vec![Some(Item::new("Iron ore")), None, None]
+        );
+    }
+
+    #[test]
+    fn transport_belt_transfer_to_next_belt_perpendicular() {
+        let mut app = App::new();
+        app.add_plugins(TimePlugin);
+
+        let belt_b = TransportBelt::new(None);
+        let mut belt_b_rotation = DiscreteRotation::new(SideCount::Four);
+        belt_b_rotation.set(CompassDirection::East);
+        let belt_b_entity = app.world.spawn((belt_b, belt_b_rotation)).id();
+
+        let mut belt_a = TransportBelt::new(Some(belt_b_entity));
+        belt_a.add(2, Item::new("Coal"));
+        let mut belt_a_rotation = DiscreteRotation::new(SideCount::Four);
+        belt_a_rotation.set(CompassDirection::North);
+        let belt_a_entity = app.world.spawn((belt_a, belt_a_rotation)).id();
+
+        app.add_systems(Update, transport_belt_tick);
+        let timer = TransportBeltTimer(Timer::from_seconds(0., TimerMode::Once));
+        app.insert_resource(timer);
+
+        app.update();
+
+        assert_eq!(
+            app.world.get::<TransportBelt>(belt_a_entity).unwrap().slots,
+            vec![None, None, None]
+        );
+
+        assert_eq!(
+            app.world.get::<TransportBelt>(belt_b_entity).unwrap().slots,
+            vec![None, Some(Item::new("Coal")), None]
         );
     }
 }

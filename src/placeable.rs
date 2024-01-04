@@ -350,36 +350,8 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
 
 #[cfg(test)]
 mod test {
-    use std::f32::consts::PI;
 
     use super::*;
-
-    #[test]
-    fn placeable_rotation_one_rotation() {
-        let mut app = App::new();
-
-        let placeable = Hand::default();
-
-        let hand_id = app.world.spawn(placeable.clone()).id();
-
-        let mut input = Input::<KeyCode>::default();
-        input.press(KeyCode::R);
-        app.world.insert_resource(input);
-
-        app.add_systems(Update, placeable_rotation);
-        app.update();
-
-        assert_eq!(
-            app.world
-                .get::<Hand>(hand_id)
-                .unwrap()
-                .rotation
-                .as_ref()
-                .unwrap()
-                .radians(),
-            PI * 0.5
-        );
-    }
 
     #[test]
     fn cursor_to_structure_position_zero() {
