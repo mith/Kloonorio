@@ -12,7 +12,10 @@ use bevy::{
     prelude::default,
     render::camera::OrthographicProjection,
     sprite::{Sprite, SpriteBundle},
-    transform::components::Transform,
+    transform::{components::Transform, TransformBundle},
+};
+use bevy_rapier2d::{
+    control::KinematicCharacterController, dynamics::RigidBody, geometry::Collider,
 };
 use kloonorio_core::{item::Item, player::Player};
 
@@ -45,19 +48,13 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
         .spawn((
             Name::new("Player"),
             YSort { base_layer: 1.0 },
-            SpriteBundle {
-                texture: asset_server.load("textures/character.png"),
-                transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                sprite: Sprite {
-                    custom_size: Some(Vec2::new(2., 2.)),
-                    ..default()
-                },
-                ..default()
-            },
+            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 1.0)),
             Player,
             Hand::default(),
             inventory,
             CraftingQueue::default(),
+            KinematicCharacterController { ..default() },
+            Collider::ball(0.3),
             Hotbar::new(5),
         ))
         .with_children(|parent| {
@@ -68,6 +65,18 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
                     projection: OrthographicProjection {
                         scale: 0.01,
                         ..Default::default()
+                    },
+                    ..default()
+                },
+            ));
+            parent.spawn((
+                Name::new("Player sprite"),
+                SpriteBundle {
+                    texture: asset_server.load("textures/character.png"),
+                    transform: Transform::from_xyz(0.0, 0.4, 0.0),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(2., 2.)),
+                        ..default()
                     },
                     ..default()
                 },

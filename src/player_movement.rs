@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 
+use bevy_rapier2d::control::KinematicCharacterController;
 use kloonorio_core::{player::Player, types::AppState};
 
 fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
-    mut player_query: Query<&mut Transform, With<Player>>,
+    mut player_query: Query<&mut KinematicCharacterController, With<Player>>,
     timer: Res<Time>,
 ) {
     let mut direction = Vec3::new(0.0, 0.0, 0.0);
@@ -28,8 +29,10 @@ fn keyboard_input_system(
         return;
     }
 
-    for mut transform in player_query.iter_mut() {
-        transform.translation -= direction.normalize() * 10.0 * timer.delta_seconds();
+    let velocity = direction.normalize() * 10.0 * timer.delta_seconds();
+
+    for mut controller in player_query.iter_mut() {
+        controller.translation = Some(-velocity.xy());
     }
 }
 
