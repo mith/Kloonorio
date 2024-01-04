@@ -1,0 +1,16 @@
+[package]
+name = "kloonorio_render"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kloonorio_core = { path = "../kloonorio_core" }
+bevy = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest-state-machine = "0.1.0"
+proptest = "1.4.0"

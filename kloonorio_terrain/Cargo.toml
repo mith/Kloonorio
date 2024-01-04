@@ -1,0 +1,24 @@
+[package]
+name = "kloonorio_terrain"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kloonorio_core = { path = "../kloonorio_core" }
+bevy = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+bevy_ecs_tilemap = { git = "https://github.com/divark/bevy_ecs_tilemap", branch = "0.12-fixes" }
+rand = "0.8.5"
+noise = "0.8"
+ndarray = "0.15"
+fast_poisson = "1.0"
+rand_chacha = "0.3"
+rand_xoshiro = "0.6"
+ahash = "0.8"
+
+[dev-dependencies]
+proptest-state-machine = "0.1.0"
+proptest = "1.4.0"

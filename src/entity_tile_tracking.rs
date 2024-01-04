@@ -9,25 +9,22 @@ use bevy::{
         system::{Commands, Query},
     },
     math::{Vec2, Vec3Swizzles},
-    reflect::Reflect,
     transform::components::GlobalTransform,
     utils::{HashMap, HashSet},
 };
 
 use bevy_rapier2d::geometry::Collider;
-
-use crate::terrain::TerrainParams;
+use kloonorio_core::tile_occupants::{EntityOnTiles, TileOccupants};
+use kloonorio_terrain::TerrainParams;
 
 pub struct EntityTileTrackingPlugin;
 
 impl Plugin for EntityTileTrackingPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<EntityOnTiles>()
-            .register_type::<TileOccupants>()
-            .add_systems(
-                Update,
-                (update_entity_on_tile_system, tile_tracker_removed).in_set(EntityTileTrackingSet),
-            );
+        app.add_systems(
+            Update,
+            (update_entity_on_tile_system, tile_tracker_removed).in_set(EntityTileTrackingSet),
+        );
     }
 }
 
@@ -36,44 +33,6 @@ pub struct EntityTileTrackingSet;
 
 #[derive(Component)]
 pub struct TileTracked;
-
-#[derive(Component, Debug, Reflect)]
-struct EntityOnTiles {
-    tile_entities: Vec<Entity>,
-}
-
-impl EntityOnTiles {
-    pub fn tile_entities(&self) -> impl Iterator<Item = &Entity> {
-        self.tile_entities.iter()
-    }
-}
-
-#[derive(Component, Default, Debug, Reflect)]
-pub struct TileOccupants {
-    occupants: HashSet<Entity>,
-}
-
-impl TileOccupants {
-    #[cfg(test)]
-    pub fn new(occupants: &[Entity]) -> Self {
-        TileOccupants {
-            occupants: occupants.iter().cloned().collect(),
-        }
-    }
-
-    #[cfg(test)]
-    pub fn add(&mut self, entity: Entity) {
-        self.occupants.insert(entity);
-    }
-
-    pub fn contains(&self, entity: &Entity) -> bool {
-        self.occupants.contains(entity)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
-        self.occupants.iter()
-    }
-}
 
 fn update_entity_on_tile_system(
     mut commands: Commands,
@@ -94,26 +53,14 @@ fn update_entity_on_tile_system(
 ) {
     let mut tile_occupants: HashMap<Entity, HashSet<Entity>> = tile_occupants_query
         .iter()
-        .map(|(e, o)| (e, o.occupants.iter().cloned().collect()))
+        .map(|(tile_entity, occupants)| (tile_entity, occupants.iter().cloned().collect()))
         .collect();
     for (mut entity_on_tile, global_transform, entity, opt_collider) in query.iter_mut() {
         // Find the new tiles the entity is on
         let entity_position = global_transform.translation().xy();
         let entity_tile_positions = {
             if let Some(collider) = opt_collider {
-                let aabb = collider.raw.compute_aabb(&entity_position.into());
-                let min_x = aabb.mins.x.floor() as i32;
-                let min_y = aabb.mins.y.floor() as i32;
-                let max_x = aabb.maxs.x.ceil() as i32;
-                let max_y = aabb.maxs.y.ceil() as i32;
-                let mut tiles = Vec::new();
-                for x in min_x..=max_x {
-                    for y in min_y..=max_y {
-                        let tile_global_pos = Vec2::new(x as f32, y as f32);
-                        tiles.push(tile_global_pos);
-                    }
-                }
-                tiles
+                get_covered_tiles_for_collider(collider, entity_position)
             } else {
                 vec![entity_position]
             }
@@ -124,29 +71,23 @@ fn update_entity_on_tile_system(
             for tile_entity in entity_on_tile.tile_entities() {
                 remove_from_tile_occupants(&mut tile_occupants, *tile_entity, entity);
             }
-            // Update the entity's tile list
-            entity_on_tile.tile_entities = entity_tile_positions
-                .iter()
-                .filter_map(|tile_global_pos| {
-                    terrain_params.tile_entity_at_global_pos(*tile_global_pos)
-                })
-                .collect();
-            for tile_entity in entity_on_tile.tile_entities() {
-                add_to_tile_occupants(&mut tile_occupants, *tile_entity, entity);
-            }
+        }
+
+        let tile_entities = entity_tile_positions
+            .iter()
+            .filter_map(|tile_global_pos| {
+                terrain_params.tile_entity_at_global_pos(*tile_global_pos)
+            })
+            .collect::<Vec<_>>();
+        for tile_entity in &tile_entities {
+            add_to_tile_occupants(&mut tile_occupants, *tile_entity, entity);
+        }
+        if entity_tile_positions.is_empty() {
+            commands.entity(entity).remove::<EntityOnTiles>();
         } else {
-            let tile_entities = entity_tile_positions
-                .iter()
-                .filter_map(|tile_global_pos| {
-                    terrain_params.tile_entity_at_global_pos(*tile_global_pos)
-                })
-                .collect::<Vec<_>>();
-            for tile_entity in &tile_entities {
-                add_to_tile_occupants(&mut tile_occupants, *tile_entity, entity);
-            }
             commands
                 .entity(entity)
-                .insert(EntityOnTiles { tile_entities });
+                .insert(EntityOnTiles::new(tile_entities));
         }
     }
 
@@ -156,9 +97,25 @@ fn update_entity_on_tile_system(
         } else {
             commands
                 .entity(tile_entity)
-                .insert(TileOccupants { occupants });
+                .insert(TileOccupants::new(occupants));
         }
     }
+}
+
+fn get_covered_tiles_for_collider(collider: &Collider, entity_position: Vec2) -> Vec<Vec2> {
+    let aabb = collider.raw.compute_aabb(&entity_position.into());
+    let min_x = aabb.mins.x.round() as i32;
+    let min_y = aabb.mins.y.round() as i32;
+    let max_x = aabb.maxs.x.round() as i32;
+    let max_y = aabb.maxs.y.round() as i32;
+    let mut tiles = Vec::new();
+    for x in min_x..=max_x {
+        for y in min_y..=max_y {
+            let tile_global_pos = Vec2::new(x as f32, y as f32);
+            tiles.push(tile_global_pos);
+        }
+    }
+    tiles
 }
 
 fn add_to_tile_occupants(
@@ -192,7 +149,7 @@ fn tile_tracker_removed(
         if let Ok(entity_on_tiles) = entity_on_tiles_query.get(entity) {
             for tile_entity in entity_on_tiles.tile_entities() {
                 if let Ok(mut tile_occupants) = tile_occupants_query.get_mut(*tile_entity) {
-                    tile_occupants.occupants.remove(&entity);
+                    tile_occupants.remove(&entity);
                 }
             }
         }
@@ -202,12 +159,17 @@ fn tile_tracker_removed(
 
 #[cfg(test)]
 mod test {
-    use crate::terrain::test::spawn_test_terrain;
+    use kloonorio_terrain::spawn_test_terrain;
 
     use super::*;
-    use bevy::{app::Update, ecs::system::SystemState, math::IVec2, transform::TransformPlugin};
+    use bevy::{
+        app::Update,
+        ecs::system::SystemState,
+        math::IVec2,
+        transform::{components::Transform, TransformPlugin},
+    };
     use bevy_ecs_tilemap::tiles::TilePos;
-    use proptest::prelude::*;
+    use proptest::{prelude::*, strategy::ValueTree, test_runner::TestRunner};
 
     prop_compose! {
         fn any_ivec2(min: i32, max: i32)
@@ -249,21 +211,164 @@ mod test {
             // Check that entities are correctly assigned to tiles
             {
                 let mut system_state: SystemState<(
-                    Query<(Entity, &InitialTilePosition, &GlobalTransform)>,
+                    Query<(Entity, &InitialTilePosition, &GlobalTransform, &EntityOnTiles)>,
                     Query<(&TileOccupants, &TilePos)>,
                     TerrainParams
                 )> = SystemState::new(&mut app.world);
                 let (entity_query, tile_query, terrain_params) = system_state.get_mut(&mut app.world);
 
-                for (entity, initial_position, _entity_transform) in entity_query.iter() {
+                for (entity, initial_position, _entity_transform, entity_on_tiles) in entity_query.iter() {
                     let tile_entity = terrain_params.tile_entity_at_global_pos(initial_position.0.as_vec2()).unwrap();
                     let (tile_occupants, _tile_pos) = tile_query.get(tile_entity).unwrap();
-                    let tile_occupants_vec = tile_occupants.occupants.iter().cloned().collect::<Vec<_>>();
-                    let _occupants_initial_pos = tile_occupants_vec.iter().map(|e| {
-                        let (_, initial_position, entity_transform) = entity_query.get(*e).unwrap();
-                        (initial_position.0, entity_transform.translation().xy())
-                    }).collect::<Vec<_>>();
-                    assert!(tile_occupants.occupants.contains(&entity), "Entity should be in the tile occupants");
+                    assert!(tile_occupants.contains(&entity), "Entity should be in the tile occupants");
+                    assert_eq!(entity_on_tiles.tile_entities().count(), 1, "Entity should be on one tile");
+                }
+            }
+
+            // Move entities
+            {
+                let mut test_runner = TestRunner::default();
+                let mut system_state: SystemState<(
+                    Query<&mut Transform, With<TileTracked>>,
+                )> = SystemState::new(&mut app.world);
+                let mut transform_query = system_state.get_mut(&mut app.world).0;
+                for mut transform in transform_query.iter_mut() {
+                    let new_position = any_ivec2(-4, 4)
+                        .prop_map(|pos| pos.as_vec2().extend(0.0))
+                        .new_tree(&mut test_runner).unwrap().current();
+                    transform.translation = new_position;
+                }
+                system_state.apply(&mut app.world);
+            }
+
+            app.update();
+
+            // Check that entities are correctly assigned to tiles
+            {
+                let mut system_state: SystemState<(
+                    Query<(Entity, &GlobalTransform, &EntityOnTiles)>,
+                    Query<(&TileOccupants, &TilePos)>,
+                    TerrainParams
+                )> = SystemState::new(&mut app.world);
+                let (entity_query, tile_query, terrain_params) = system_state.get_mut(&mut app.world);
+
+                for (entity, entity_transform, entity_on_tiles) in entity_query.iter() {
+                    let tile_entity = terrain_params.tile_entity_at_global_pos(entity_transform.translation().xy()).unwrap();
+                    let (tile_occupants, _tile_pos) = tile_query.get(tile_entity).unwrap();
+                    assert!(tile_occupants.contains(&entity), "Entity should be in the tile occupants");
+                    assert_eq!(entity_on_tiles.tile_entities().count(), 1, "Entity should on one tile");
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_get_covered_tiles_for_collider_1x1(
+            collider_positions in prop::collection::vec(
+                any_ivec2(-4, 4),
+                5
+            ),
+        ) {
+            let collider = Collider::cuboid(0.4, 0.4);
+            for pos in collider_positions {
+                let covered_tiles = get_covered_tiles_for_collider(&collider, pos.as_vec2());
+                assert_eq!(covered_tiles.len(), 1, "Collider should cover one tile");
+                assert_eq!(covered_tiles[0], pos.as_vec2(), "Collider should cover the tile it is in");
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_get_covered_tiles_for_collider_2x2(
+            collider_positions in prop::collection::vec(
+                any_ivec2(-4, 4),
+                5
+            ),
+        ) {
+            let collider = Collider::cuboid(0.9, 0.9);
+            for pos in collider_positions {
+                let collider_pos = pos.as_vec2() - Vec2::new(0.5, 0.5);
+                let covered_tiles = get_covered_tiles_for_collider(&collider, collider_pos);
+                assert_eq!(covered_tiles.len(), 4, "Collider should cover 4 tiles");
+                let min_x = collider_pos.x.floor() as i32;
+                let min_y = collider_pos.y.floor() as i32;
+                let max_y = collider_pos.y.ceil() as i32;
+                let max_x = collider_pos.x.ceil() as i32;
+                for x in min_x..=max_x {
+                    for y in min_y..=max_y {
+                        let tile_pos = IVec2::new(x, y);
+                        assert!(covered_tiles.contains(&tile_pos.as_vec2()), "Collider should cover the tile at {:?}", tile_pos);
+                    }
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_get_covered_tiles_for_collider_3x3_tiles(
+            collider_positions in prop::collection::vec(
+                any_ivec2(-4, 4),
+                5
+            ),
+        ) {
+            let collider = Collider::cuboid(1.35, 1.35);
+            for pos in collider_positions {
+                let covered_tiles = get_covered_tiles_for_collider(&collider, pos.as_vec2());
+                assert_eq!(covered_tiles.len(), 9, "Collider should cover 9 tiles");
+                for x in -1..=1 {
+                    for y in -1..=1 {
+                        let tile_pos = pos + IVec2::new(x, y);
+                        assert!(covered_tiles.contains(&tile_pos.as_vec2()), "Collider should cover the tile at {:?}", tile_pos);
+                    }
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_update_entity_on_tile_system_collider(
+            entities_positions in prop::collection::vec(
+                any_ivec2(-4, 4),
+                5
+            ),
+        ) {
+            let mut app = App::new();
+            app.add_plugins(TransformPlugin);
+
+             // Setup terrain
+            let _terrain_entity = spawn_test_terrain(&mut app);
+
+            // Setup entities with initial positions
+            for pos in entities_positions {
+                let entity_transform = GlobalTransform::from_translation(pos.as_vec2().extend(0.0));
+                let initial_position = InitialTilePosition(pos);
+                let collider = Collider::cuboid(0.4, 0.4);
+                app.world.spawn((TileTracked, entity_transform, initial_position, collider));
+            }
+
+            app.update();
+
+            app.add_systems(Update, update_entity_on_tile_system);
+            app.update();
+
+            // Check that entities are correctly assigned to tiles
+            {
+                let mut system_state: SystemState<(
+                    Query<(Entity, &InitialTilePosition, &GlobalTransform, &EntityOnTiles)>,
+                    Query<(&TileOccupants, &TilePos)>,
+                    TerrainParams
+                )> = SystemState::new(&mut app.world);
+                let (entity_query, tile_query, terrain_params) = system_state.get_mut(&mut app.world);
+
+                for (entity, initial_position, _entity_transform, entity_on_tiles) in entity_query.iter() {
+                    let tile_entity = terrain_params.tile_entity_at_global_pos(initial_position.0.as_vec2()).unwrap();
+                    let (tile_occupants, _tile_pos) = tile_query.get(tile_entity).unwrap();
+                    assert!(tile_occupants.contains(&entity), "Entity should be in the tile occupants");
+                    assert_eq!(entity_on_tiles.tile_entities().count(), 1, "Entity should be on one tile");
                 }
             }
         }

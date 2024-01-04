@@ -7,8 +7,7 @@ use bevy::{
     sprite::TextureAtlasSprite,
     time::Time,
 };
-
-use crate::{
+use kloonorio_core::{
     inventory::Inventory,
     player::Player,
     types::{CraftingQueue, Powered, Working},

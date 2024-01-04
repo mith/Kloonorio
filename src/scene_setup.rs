@@ -5,7 +5,7 @@ use bevy::{
     prelude::default,
 };
 
-use crate::terrain::{
+use kloonorio_terrain::{
     terrain_generator::{NoiseChunkGenerator, TerrainGenerator},
     Terrain, TerrainBundle,
 };

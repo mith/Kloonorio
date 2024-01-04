@@ -1,0 +1,22 @@
+[package]
+name = "kloonorio_ui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kloonorio_core = { path = "../kloonorio_core" }
+kloonorio_terrain = { path = "../kloonorio_terrain" }
+bevy = { workspace = true }
+rand = "0.8.5"
+serde = { workspace = true }
+tracing = { workspace = true }
+bevy_egui = "0.23"
+egui = "0.23"
+bevy-inspector-egui = "0.21.0"
+bevy_rapier2d = "0.23.0"
+
+[dev-dependencies]
+proptest-state-machine = "0.1.0"
+proptest = "1.4.0"

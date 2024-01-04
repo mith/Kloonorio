@@ -1,150 +1,67 @@
-use std::ops::{Deref, DerefMut};
-
 use bevy::{
     asset::{LoadedFolder, RecursiveDependencyLoadState},
-    ecs::system::SystemParam,
     prelude::*,
     utils::HashMap,
 };
 use bevy_egui::EguiContexts;
+use kloonorio_core::{item::Items, recipe::Recipes, structure::Structures, types::AppState};
+use kloonorio_render::item_textures::ItemTextures;
+use kloonorio_ui::icon::Icons;
 
 use crate::{
-    item_loader::ItemAsset,
-    recipe_loader::RecipesAsset,
-    structure_loader::{Structure, StructuresAsset},
-    types::{AppState, GameState, Item, Recipe},
+    item_loader::ItemAsset, recipe_loader::RecipesAsset, structure_loader::StructuresAsset,
 };
 
-#[derive(Resource, Default, Reflect)]
-pub struct Structures(HashMap<String, Structure>);
-
-impl Deref for Structures {
-    type Target = HashMap<String, Structure>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+#[derive(Default, Resource, Reflect)]
+pub struct LoadState {
+    pub map_loaded: bool,
+    pub spawned: bool,
+    pub recipes_handle: Handle<RecipesAsset>,
+    pub recipes_loaded: bool,
+    pub structures_handle: Handle<StructuresAsset>,
+    pub structures_loaded: bool,
+    pub icons_loaded: bool,
+    pub icons_handle: Handle<LoadedFolder>,
+    pub items_loaded: bool,
+    pub resources_handle: Handle<ItemAsset>,
+    pub item_textures_loaded: bool,
 }
 
-impl DerefMut for Structures {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Resource, Default, Reflect)]
-pub struct Recipes(HashMap<String, Recipe>);
-
-impl Deref for Recipes {
-    type Target = HashMap<String, Recipe>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Recipes {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Resource, Default)]
-pub struct Icons(HashMap<String, egui::TextureId>);
-
-impl Deref for Icons {
-    type Target = HashMap<String, egui::TextureId>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Icons {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Resource, Default, Reflect)]
-pub struct Items(HashMap<String, Item>);
-
-impl Deref for Items {
-    type Target = HashMap<String, Item>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Items {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Resource)]
-pub struct ItemTextures {
-    images: HashMap<String, Handle<Image>>,
-    item_texture_index: HashMap<String, usize>,
-    texture_atlas_handle: Handle<TextureAtlas>,
-}
-
-impl ItemTextures {
-    pub fn get_texture_index(&self, item_name: &str) -> Option<usize> {
-        let item_image_name = &item_name.to_lowercase().replace(' ', "_");
-        self.item_texture_index.get(item_image_name).copied()
-    }
-
-    pub fn get_texture_atlas_handle(&self) -> Handle<TextureAtlas> {
-        self.texture_atlas_handle.clone()
-    }
-}
-
-#[derive(SystemParam)]
-pub struct Definitions<'w> {
-    pub structures: Res<'w, Structures>,
-    pub recipes: Res<'w, Recipes>,
-    pub icons: Res<'w, Icons>,
-    pub items: Res<'w, Items>,
-    pub item_textures: Res<'w, ItemTextures>,
-}
-
-fn start_loading(asset_server: Res<AssetServer>, mut gamestate: ResMut<GameState>) {
-    gamestate.recipes_handle = asset_server.load("data/base.recipes.ron");
-    gamestate.structures_handle = asset_server.load("data/base.structures.ron");
-    gamestate.icons_handle = asset_server.load_folder("textures/icons");
-    gamestate.resources_handle = asset_server.load("data/base.resources.ron");
+fn start_loading(asset_server: Res<AssetServer>, mut loadstate: ResMut<LoadState>) {
+    loadstate.recipes_handle = asset_server.load("data/base.recipes.ron");
+    loadstate.structures_handle = asset_server.load("data/base.structures.ron");
+    loadstate.icons_handle = asset_server.load_folder("textures/icons");
+    loadstate.resources_handle = asset_server.load("data/base.resources.ron");
 }
 
 fn load_resources(
-    mut gamestate: ResMut<GameState>,
+    mut loadstate: ResMut<LoadState>,
     item_assets: Res<Assets<ItemAsset>>,
     mut resources: ResMut<Items>,
 ) {
-    let item_asset = item_assets.get(&gamestate.resources_handle);
-    if gamestate.items_loaded || item_asset.is_none() {
+    let item_asset = item_assets.get(&loadstate.resources_handle);
+    if loadstate.items_loaded || item_asset.is_none() {
         return;
     }
 
     if let Some(ItemAsset(loaded_resource)) = item_asset {
         resources.extend(loaded_resource.iter().map(|r| (r.to_string(), r.clone())));
-        gamestate.items_loaded = true;
+        loadstate.items_loaded = true;
     }
 }
 
 fn load_item_icons(
     asset_server: Res<AssetServer>,
-    mut gamestate: ResMut<GameState>,
+    mut loadstate: ResMut<LoadState>,
     mut egui_context: EguiContexts,
     mut icons: ResMut<Icons>,
     loaded_folder_assets: Res<Assets<LoadedFolder>>,
 ) {
-    if !gamestate.icons_loaded
-        && asset_server.get_recursive_dependency_load_state(&gamestate.icons_handle)
+    if !loadstate.icons_loaded
+        && asset_server.get_recursive_dependency_load_state(&loadstate.icons_handle)
             == Some(RecursiveDependencyLoadState::Loaded)
     {
-        let loaded_folder = loaded_folder_assets.get(&gamestate.icons_handle).unwrap();
+        let loaded_folder = loaded_folder_assets.get(&loadstate.icons_handle).unwrap();
 
         for icon in &loaded_folder.handles {
             let item_texture = icon.clone().typed::<Image>();
@@ -157,23 +74,23 @@ fn load_item_icons(
             }
         }
 
-        gamestate.icons_loaded = true;
+        loadstate.icons_loaded = true;
     }
 }
 
 fn load_item_textures(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut gamestate: ResMut<GameState>,
+    mut loadstate: ResMut<LoadState>,
     loaded_folder_assets: Res<Assets<LoadedFolder>>,
     mut textures: ResMut<Assets<Image>>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
-    if !gamestate.item_textures_loaded
-        && asset_server.get_recursive_dependency_load_state(&gamestate.icons_handle)
+    if !loadstate.item_textures_loaded
+        && asset_server.get_recursive_dependency_load_state(&loadstate.icons_handle)
             == Some(RecursiveDependencyLoadState::Loaded)
     {
-        let loaded_folder = loaded_folder_assets.get(&gamestate.icons_handle).unwrap();
+        let loaded_folder = loaded_folder_assets.get(&loadstate.icons_handle).unwrap();
         let mut texture_atlas_builder = TextureAtlasBuilder::default();
         let mut item_images = HashMap::new();
 
@@ -212,17 +129,17 @@ fn load_item_textures(
             texture_atlas_handle,
             item_texture_index,
         });
-        gamestate.item_textures_loaded = true;
+        loadstate.item_textures_loaded = true;
     }
 }
 
 fn load_structures(
-    mut gamestate: ResMut<GameState>,
+    mut loadstate: ResMut<LoadState>,
     structures_assets: Res<Assets<StructuresAsset>>,
     mut structures: ResMut<Structures>,
 ) {
-    let structures_asset = structures_assets.get(&gamestate.structures_handle);
-    if gamestate.structures_loaded || structures_asset.is_none() {
+    let structures_asset = structures_assets.get(&loadstate.structures_handle);
+    if loadstate.structures_loaded || structures_asset.is_none() {
         return;
     }
 
@@ -232,17 +149,17 @@ fn load_structures(
                 .iter()
                 .map(|s| (s.name.clone(), s.clone())),
         );
-        gamestate.structures_loaded = true;
+        loadstate.structures_loaded = true;
     }
 }
 
 fn load_recipes(
-    mut gamestate: ResMut<GameState>,
+    mut loadstate: ResMut<LoadState>,
     recipes_assets: Res<Assets<RecipesAsset>>,
     mut recipes: ResMut<Recipes>,
 ) {
-    let recipe_assets = recipes_assets.get(&gamestate.recipes_handle);
-    if gamestate.recipes_loaded || recipe_assets.is_none() {
+    let recipe_assets = recipes_assets.get(&loadstate.recipes_handle);
+    if loadstate.recipes_loaded || recipe_assets.is_none() {
         return;
     }
 
@@ -252,16 +169,16 @@ fn load_recipes(
                 .iter()
                 .map(|r| (r.name.to_string(), r.clone())),
         );
-        gamestate.recipes_loaded = true;
+        loadstate.recipes_loaded = true;
     }
 }
 
-fn check_loading(gamestate: Res<GameState>, mut next_state: ResMut<NextState<AppState>>) {
-    if gamestate.recipes_loaded
-        && gamestate.structures_loaded
-        && gamestate.icons_loaded
-        && gamestate.items_loaded
-        && gamestate.item_textures_loaded
+fn check_loading(loadstate: Res<LoadState>, mut next_state: ResMut<NextState<AppState>>) {
+    if loadstate.recipes_loaded
+        && loadstate.structures_loaded
+        && loadstate.icons_loaded
+        && loadstate.items_loaded
+        && loadstate.item_textures_loaded
     {
         next_state.set(AppState::Running);
     }

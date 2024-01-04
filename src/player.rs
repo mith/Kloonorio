@@ -4,7 +4,6 @@ use bevy::{
     core::Name,
     core_pipeline::core_2d::Camera2dBundle,
     ecs::{
-        component::Component,
         schedule::OnEnter,
         system::{Commands, Res},
     },
@@ -15,13 +14,14 @@ use bevy::{
     sprite::{Sprite, SpriteBundle},
     transform::components::Transform,
 };
+use kloonorio_core::{item::Item, player::Player};
 
-use crate::{
+use crate::ysort::YSort;
+use kloonorio_core::{
     inventory::Inventory,
-    types::{AppState, CraftingQueue, Item},
-    ui::{hotbar::Hotbar, inventory_grid::Hand},
-    ysort::YSort,
+    types::{AppState, CraftingQueue},
 };
+use kloonorio_ui::{hotbar::Hotbar, inventory_grid::Hand};
 
 pub struct PlayerPlugin;
 
@@ -30,9 +30,6 @@ impl Plugin for PlayerPlugin {
         app.add_systems(OnEnter(AppState::Running), spawn_player);
     }
 }
-
-#[derive(Component)]
-pub struct Player;
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut inventory = Inventory::new(100);

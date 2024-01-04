@@ -1,7 +1,6 @@
 use bevy::{
     app::{App, Plugin, Update},
     ecs::{
-        component::Component,
         entity::Entity,
         query::{With, Without},
         system::{Commands, Query, Res, Resource},
@@ -12,36 +11,16 @@ use bevy::{
     transform::components::GlobalTransform,
 };
 use bevy_ecs_tilemap::tiles::TileTextureIndex;
-use bevy_egui::EguiContexts;
-use egui::Align2;
 
-use crate::{
-    inventory::Inventory,
-    player::Player,
-    terrain::{HoveredTile, COAL, IRON, STONE, TREE},
-    types::Item,
-};
+use kloonorio_core::{inventory::Inventory, item::Item, player::Player, types::MineCountdown};
+use kloonorio_terrain::{HoveredTile, COAL, IRON, STONE, TREE};
 
 pub struct InteractPlugin;
 
 impl Plugin for InteractPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                interact,
-                interact_cancel,
-                interact_completion,
-                interaction_ui,
-            ),
-        );
+        app.add_systems(Update, (interact, interact_cancel, interact_completion));
     }
-}
-
-#[derive(Component)]
-struct MineCountdown {
-    timer: Timer,
-    target: Entity,
 }
 
 pub fn is_minable(tile: u32) -> bool {
@@ -118,17 +97,5 @@ fn interact_completion(
                 };
             }
         }
-    }
-}
-
-fn interaction_ui(mut egui_context: EguiContexts, interact_query: Query<&MineCountdown>) {
-    if let Ok(interact) = interact_query.get_single() {
-        egui::Window::new("Interaction")
-            .anchor(Align2::CENTER_BOTTOM, (0., -10.))
-            .title_bar(false)
-            .resizable(false)
-            .show(egui_context.ctx_mut(), |ui| {
-                ui.add(egui::ProgressBar::new(interact.timer.percent()));
-            });
     }
 }

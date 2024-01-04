@@ -6,7 +6,7 @@ use bevy::{
 };
 use serde::Deserialize;
 
-use crate::types::Recipe;
+use kloonorio_core::recipe::Recipe;
 
 #[derive(Default)]
 pub struct RecipesAssetLoader;

@@ -6,7 +6,7 @@ use bevy::{
 };
 use serde::Deserialize;
 
-use crate::types::Item;
+use kloonorio_core::item::Item;
 
 #[derive(Default)]
 pub struct ItemAssetLoader;

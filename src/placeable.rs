@@ -1,29 +1,27 @@
 use bevy::{ecs::system::EntityCommands, math::Vec3Swizzles, prelude::*, utils::HashSet};
 use bevy_rapier2d::prelude::*;
+use kloonorio_core::{
+    discrete_rotation::DiscreteRotation,
+    inventory::{Fuel, Inventory, Output, Source, Storage},
+    item::Item,
+    structure::{Structure, Structures},
+    structure_components::{
+        assembler::Assembler, burner::Burner, smelter::Smelter, StructureComponent,
+    },
+    types::{Building, CraftingQueue, Ghost},
+};
+use kloonorio_render::isometric_sprite::{IsometricSprite, IsometricSpriteBundle};
+use kloonorio_terrain::{CursorWorldPos, TILE_SIZE};
+use kloonorio_ui::{inventory_grid::Hand, picker::Pickable, HoveringUI};
 
 use crate::{
-    discrete_rotation::DiscreteRotation,
-    entity_tile_tracking::TileTracked,
-    inventory::{Fuel, Inventory, Output, Source, Storage},
-    isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
-    loading::Structures,
-    picker::Pickable,
-    structure_components::{
-        assembler::Assembler, burner::Burner, inserter::InserterBuilder, miner::Miner,
-        smelter::Smelter, transport_belt::TransportBelt, StructureComponent,
+    builder::{
+        inserter_builder::InserterBuilder, miner_builder::MinerBuilder,
+        transport_belt_builder::TransportBeltBuilder,
     },
-    structure_loader::Structure,
-    terrain::{CursorWorldPos, TILE_SIZE},
-    types::{CraftingQueue, Dropoff, Item},
-    ui::{inventory_grid::Hand, HoveringUI},
+    entity_tile_tracking::TileTracked,
     ysort::YSort,
 };
-
-#[derive(Component)]
-pub struct Ghost;
-
-#[derive(Component)]
-pub struct Building;
 
 pub fn placeable(
     mut commands: Commands,
@@ -269,7 +267,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             }
             StructureComponent::Burner => {
                 debug!("Spawning burner");
-                entity_commands.insert(Burner::new());
+                entity_commands.insert(Burner::default());
             }
             StructureComponent::CraftingQueue => {
                 debug!("Spawning crafting queue");
@@ -332,17 +330,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             }
             StructureComponent::Miner(speed) => {
                 debug!("Spawning miner");
-                entity_commands
-                    .insert(Miner::new(*speed))
-                    .with_children(|p| {
-                        let collider = Collider::ball(0.125);
-                        p.spawn((
-                            TransformBundle::from(Transform::from_xyz(-0.5, -1.5, 0.)),
-                            Dropoff,
-                            Sensor,
-                            collider.clone(),
-                        ));
-                    });
+                entity_commands.insert(MinerBuilder::new(*speed));
             }
             StructureComponent::Inserter(speed, capacity) => {
                 debug!("Spawning inserter");
@@ -350,20 +338,7 @@ pub fn spawn_structure_components(entity_commands: &mut EntityCommands, structur
             }
             StructureComponent::TransportBelt => {
                 debug!("Spawning transport belt");
-                let collider = Collider::ball(0.125);
-                let dropoff = entity_commands
-                    .commands()
-                    .spawn((
-                        TransformBundle::from(Transform::from_xyz(0., 1., 0.)),
-                        Dropoff,
-                        Sensor,
-                        collider,
-                    ))
-                    .id();
-
-                entity_commands
-                    .insert(TransportBelt::new(dropoff))
-                    .add_child(dropoff);
+                entity_commands.insert(TransportBeltBuilder);
             }
             StructureComponent::Assembler => {
                 debug!("Spawning assembler");

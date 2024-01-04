@@ -644,7 +644,7 @@ dependencies = [
 [[package]]
 name = "bevy_ecs_tilemap"
 version = "0.12.0"
-source = "git+https://github.com/divark/bevy_ecs_tilemap?branch=0.12-fixes#658b6c12441a808c8342233a230863d3c74f780f"
+source = "git+https://github.com/divark/bevy_ecs_tilemap?branch=0.12-fixes#b08a5d997867d5e5a760e296dc38e435c6b268cc"
 dependencies = [
  "bevy",
  "log",
@@ -2542,17 +2542,59 @@ dependencies = [
 name = "kloonorio"
 version = "0.1.0"
 dependencies = [
- "ahash",
  "anyhow",
  "bevy",
- "bevy-inspector-egui",
  "bevy_ecs_tilemap",
  "bevy_egui",
  "bevy_rapier2d",
- "crossbeam-channel",
- "egui",
- "fast_poisson",
  "futures-lite 2.1.0",
+ "kloonorio_core",
+ "kloonorio_render",
+ "kloonorio_terrain",
+ "kloonorio_ui",
+ "proptest",
+ "proptest-state-machine",
+ "rand 0.8.5",
+ "ron",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kloonorio_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "proptest",
+ "proptest-state-machine",
+ "rand 0.8.5",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "kloonorio_render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "kloonorio_core",
+ "proptest",
+ "proptest-state-machine",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "kloonorio_terrain"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "bevy",
+ "bevy_ecs_tilemap",
+ "fast_poisson",
+ "kloonorio_core",
  "ndarray",
  "noise",
  "proptest",
@@ -2560,10 +2602,25 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xoshiro",
- "ron",
  "serde",
- "thiserror",
- "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kloonorio_ui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy-inspector-egui",
+ "bevy_egui",
+ "bevy_rapier2d",
+ "egui",
+ "kloonorio_core",
+ "kloonorio_terrain",
+ "proptest",
+ "proptest-state-machine",
+ "rand 0.8.5",
+ "serde",
  "tracing",
 ]
 
@@ -3755,9 +3812,9 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustix"
-version = "0.38.27"
+version = "0.38.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfeae074e687625746172d639330f1de242a178bf3189b51e35a7a21573513ac"
+checksum = "72e572a5e8ca657d7366229cdde4bd14c4eb5499a9573d4d366fe1b599daa316"
 dependencies = [
  "bitflags 2.4.1",
  "errno",
@@ -4060,15 +4117,15 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef1adac450ad7f4b3c28589471ade84f25f731a7a0fe30d71dfa9f60fd808e5"
+checksum = "01ce4141aa927a6d1bd34a041795abd0db1cccba5d5f24b009f694bdf3a1f3fa"
 dependencies = [
  "cfg-if",
  "fastrand 2.0.1",
  "redox_syscall 0.4.1",
  "rustix",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4183,9 +4240,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.34.0"
+version = "1.35.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c014766411e834f7af5b8f4cf46257aab4036ca95e9d2c144a10f59ad6f5b9"
+checksum = "c89b4efa943be685f629b149f53829423f8f5531ea21249408e8e2f8671ec104"
 dependencies = [
  "backtrace",
  "pin-project-lite",

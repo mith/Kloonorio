@@ -6,21 +6,10 @@ use bevy::{
 };
 use serde::Deserialize;
 
-use crate::structure_components::StructureComponent;
+use kloonorio_core::structure::Structure;
 
 #[derive(Default)]
 pub struct StructuresAssetLoader;
-
-#[derive(Clone, Debug, Deserialize, TypeUuid, Reflect)]
-#[uuid = "540f864d-3e80-4e5d-8be5-1846d7be2484"]
-pub struct Structure {
-    pub name: String,
-    pub size: IVec2,
-    pub collider: Vec2,
-    pub sides: u32,
-    pub components: Vec<StructureComponent>,
-    pub animated: bool,
-}
 
 #[derive(Asset, Clone, Debug, Deserialize, TypeUuid, Reflect)]
 #[uuid = "97b2a898-da7d-4a72-a192-05e18d309950"]
