@@ -1,5 +1,6 @@
 use bevy::app::{PluginGroup, PluginGroupBuilder};
 
+mod building_animation;
 mod inserter;
 pub mod isometric_sprite;
 pub mod item_textures;
@@ -13,5 +14,6 @@ impl PluginGroup for KloonorioRenderPlugins {
             .add(isometric_sprite::IsometricSpritePlugin)
             .add(transport_belt::TransportBeltRenderPlugin)
             .add(inserter::InserterRenderPlugin)
+            .add(building_animation::BuildingAnimationPlugin)
     }
 }

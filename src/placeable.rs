@@ -137,22 +137,16 @@ pub fn create_structure_texture_atlas(
         "textures/{}.png",
         &structure.name.to_lowercase().replace(' ', "_")
     ));
-    let rows = {
+    let (rows, columns) = {
         if structure.animated {
-            120
+            (10, 12)
         } else {
-            1
+            (1, structure.sides as usize)
         }
     };
     let tile_size = structure_texture_size(structure);
-    let texture_atlas = TextureAtlas::from_grid(
-        texture_handle,
-        tile_size,
-        structure.sides as usize,
-        rows,
-        None,
-        None,
-    );
+    let texture_atlas =
+        TextureAtlas::from_grid(texture_handle, tile_size, columns, rows, None, None);
 
     texture_atlases.add(texture_atlas)
 }

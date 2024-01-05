@@ -50,12 +50,8 @@ fn animate_arm_position(
         let normalized_arm_position = (arm_position + 1.0) / 2.0;
         let arm_position = pickup_location.lerp(dropoff_location, normalized_arm_position);
 
-        gizmos.circle_2d(inserter_location, 0.5, Color::YELLOW);
-        gizmos.circle_2d(arm_position, 0.3, Color::YELLOW);
+        gizmos.circle_2d(arm_position, 0.05, Color::YELLOW);
         gizmos.line_2d(inserter_location, arm_position, Color::YELLOW);
-
-        gizmos.circle_2d(pickup_location, 0.2, Color::GOLD);
-        gizmos.circle_2d(dropoff_location, 0.2, Color::GOLD);
 
         let (mut hand_transform, mut visibility, mut iso_sprite) =
             arm_query.get_mut(inserter_hand.0).unwrap();

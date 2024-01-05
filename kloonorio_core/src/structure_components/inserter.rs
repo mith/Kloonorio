@@ -466,7 +466,7 @@ fn inserter_planner(
                 debug!(target_arm_position = ?inserter.target_arm_position);
                 if new_action.is_some() {
                     commands.entity(inserter_entity).insert(Working);
-                    info!(action=?new_action, "New action planned");
+                    debug!(action=?new_action, "New action planned");
                 } else {
                     debug!("No action planned");
                     commands.entity(inserter_entity).remove::<Working>();

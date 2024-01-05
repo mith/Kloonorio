@@ -192,14 +192,14 @@ fn hotbar_keyboard(
             (KeyCode::Key0, 9),
         ]);
 
-        for (key, index) in bindings_map.iter() {
-            if keyboard_input.just_pressed(*key) {
-                if let Some(item) = &hotbar.0[*index as usize].item {
-                    if let Some(index) = inventory.find_item(item.as_str()) {
-                        hand.set_item(player_entity, index)
-                    }
-                }
-            }
+        if let Some(index) = bindings_map
+            .iter()
+            .find(|(&key, _)| keyboard_input.just_pressed(key))
+            .and_then(|(_, index)| hotbar.0.get(*index as usize))
+            .and_then(|hbi| hbi.item.as_ref())
+            .and_then(|item| inventory.find_item(item.as_str()))
+        {
+            hand.set_item(player_entity, index)
         }
     }
 }

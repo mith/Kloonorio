@@ -247,7 +247,6 @@ fn assembling_machine_widget(
     recipes: &Recipes,
 ) {
     ui.horizontal_centered(|ui| {
-        ui.label("Assembler");
         if let Some(recipe) = &assembler.recipe {
             ui.label(recipe.name.as_str());
         }

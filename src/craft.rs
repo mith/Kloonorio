@@ -1,23 +1,23 @@
 use bevy::{
     app::{App, Plugin, Update},
     ecs::{
-        query::{With, Without},
-        system::{ParamSet, Query, Res},
+        query::With,
+        schedule::{common_conditions::in_state, IntoSystemConfigs},
+        system::{Query, Res},
     },
-    sprite::TextureAtlasSprite,
     time::Time,
 };
 use kloonorio_core::{
     inventory::Inventory,
     player::Player,
-    types::{CraftingQueue, Powered, Working},
+    types::{AppState, CraftingQueue},
 };
 
 pub struct CraftPlugin;
 
 impl Plugin for CraftPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (craft_ticker, working_texture));
+        app.add_systems(Update, craft_ticker.run_if(in_state(AppState::Running)));
     }
 }
 
@@ -32,25 +32,5 @@ fn craft_ticker(
                 build_queue.0.pop_front();
             }
         }
-    }
-}
-
-fn working_texture(
-    mut buildings: ParamSet<(
-        Query<&mut TextureAtlasSprite, (With<Powered>, With<Working>)>,
-        Query<&mut TextureAtlasSprite, Without<Powered>>,
-        Query<&mut TextureAtlasSprite, Without<Working>>,
-    )>,
-) {
-    for mut active_sprite in buildings.p0().iter_mut() {
-        active_sprite.index = 1;
-    }
-
-    for mut unpowered_sprite in buildings.p1().iter_mut() {
-        unpowered_sprite.index = 0;
-    }
-
-    for mut idle_sprite in buildings.p2().iter_mut() {
-        idle_sprite.index = 0;
     }
 }
