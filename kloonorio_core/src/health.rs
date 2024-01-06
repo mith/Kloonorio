@@ -1,4 +1,3 @@
-use crate::types::AppState;
 use bevy::{
     app::{App, Plugin, Update},
     ecs::{
@@ -11,6 +10,8 @@ use bevy::{
     reflect::Reflect,
 };
 
+use crate::types::AppState;
+
 pub struct HealthPlugin;
 
 impl Plugin for HealthPlugin {
@@ -22,13 +23,25 @@ impl Plugin for HealthPlugin {
 
 #[derive(Component, Reflect)]
 pub struct Health {
-    pub current: u32,
-    pub max: u32,
+    current: u32,
+    max: u32,
 }
 
 impl Health {
     pub fn new(max: u32) -> Self {
         Self { current: max, max }
+    }
+
+    pub fn current(&self) -> u32 {
+        self.current
+    }
+
+    pub fn max(&self) -> u32 {
+        self.max
+    }
+
+    pub fn damage(&mut self, damage: u32) {
+        self.current = self.current.saturating_sub(damage);
     }
 }
 

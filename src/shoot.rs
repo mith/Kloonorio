@@ -67,7 +67,7 @@ fn shoot(
                     bevy::time::TimerMode::Once,
                 )));
             if let Ok(mut health) = health_query.get_mut(*target_entity) {
-                health.current -= gun.damage;
+                health.damage(gun.damage);
             }
         }
     }

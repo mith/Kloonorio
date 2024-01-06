@@ -11,11 +11,11 @@ pub fn healthbar(
         return;
     };
 
-    if player_health.current == player_health.max {
+    if player_health.current() == player_health.max() {
         return;
     }
 
-    let health_percent = player_health.current as f32 / player_health.max as f32;
+    let health_percent = player_health.current() as f32 / player_health.max() as f32;
     let color = if health_percent > 0.5 {
         Color32::GREEN
     } else if health_percent > 0.25 {
