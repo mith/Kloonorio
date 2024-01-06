@@ -19,7 +19,8 @@ pub struct InteractPlugin;
 
 impl Plugin for InteractPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (interact, interact_cancel, interact_completion));
+        app.init_resource::<InteractionSettings>()
+            .add_systems(Update, (interact, interact_cancel, interact_completion));
     }
 }
 
@@ -28,8 +29,16 @@ pub fn is_minable(tile: u32) -> bool {
 }
 
 #[derive(Resource)]
-pub struct PlayerSettings {
+pub struct InteractionSettings {
     pub max_mining_distance: f32,
+}
+
+impl Default for InteractionSettings {
+    fn default() -> Self {
+        Self {
+            max_mining_distance: 10.0,
+        }
+    }
 }
 
 fn interact(
@@ -40,7 +49,7 @@ fn interact(
         (Entity, &GlobalTransform, &HoveredTile),
         (With<Player>, Without<MineCountdown>),
     >,
-    player_settings: Res<PlayerSettings>,
+    player_settings: Res<InteractionSettings>,
 ) {
     if player_query.is_empty() {
         return;

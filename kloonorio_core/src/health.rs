@@ -1,3 +1,4 @@
+use crate::types::AppState;
 use bevy::{
     app::{App, Plugin, Update},
     ecs::{
@@ -9,7 +10,6 @@ use bevy::{
     hierarchy::DespawnRecursiveExt,
     reflect::Reflect,
 };
-use kloonorio_core::types::AppState;
 
 pub struct HealthPlugin;
 

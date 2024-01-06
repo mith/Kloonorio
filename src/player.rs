@@ -15,9 +15,9 @@ use bevy::{
     transform::{components::Transform, TransformBundle},
 };
 use bevy_rapier2d::{control::KinematicCharacterController, geometry::Collider};
-use kloonorio_core::{item::Item, player::Player};
+use kloonorio_core::{health::Health, item::Item, player::Player};
 
-use crate::{health::Health, shoot::Gun, ysort::YSort};
+use crate::{shoot::Gun, ysort::YSort};
 use kloonorio_core::{
     inventory::Inventory,
     types::{AppState, CraftingQueue},

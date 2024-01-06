@@ -3,6 +3,7 @@ pub mod character_ui;
 mod crafting_queue_ui;
 mod debug;
 pub mod drag_and_drop;
+mod healthbar;
 pub mod hotbar;
 pub mod icon;
 mod interact_ui;
@@ -51,6 +52,7 @@ impl Plugin for KloonorioUiPlugin {
                     crafting_queue_ui::crafting_queue_ui,
                     clear_hand,
                     interact_ui::interaction_ui,
+                    healthbar::healthbar,
                 )
                     .run_if(in_state(AppState::Running)),
             )

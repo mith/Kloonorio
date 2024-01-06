@@ -110,8 +110,14 @@ impl Default for TerrainSettings {
 }
 
 #[derive(Component, Debug, Reflect, Default)]
-struct Chunk {
+pub struct Chunk {
     position: IVec2,
+}
+
+impl Chunk {
+    pub fn position(&self) -> IVec2 {
+        self.position
+    }
 }
 
 #[derive(Component, Debug, Clone, PartialEq, Eq)]

@@ -9,6 +9,17 @@ use crate::{
     shoot::{Gun, Target},
 };
 
+pub struct PlayerControlPlugin;
+
+impl Plugin for PlayerControlPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (keyboard_movement_system, keyboard_shoot_system).run_if(in_state(AppState::Running)),
+        );
+    }
+}
+
 fn keyboard_movement_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut player_query: Query<&mut KinematicCharacterController, With<Player>>,
@@ -71,15 +82,5 @@ fn keyboard_shoot_system(
         for player in player_query.iter() {
             commands.entity(player).remove::<Target>();
         }
-    }
-}
-
-pub struct PlayerControlPlugin;
-impl Plugin for PlayerControlPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (keyboard_movement_system, keyboard_shoot_system).run_if(in_state(AppState::Running)),
-        );
     }
 }

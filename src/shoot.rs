@@ -12,9 +12,7 @@ use bevy::{
     time::{Fixed, Time, Timer},
     transform::components::GlobalTransform,
 };
-use kloonorio_core::types::AppState;
-
-use crate::health::Health;
+use kloonorio_core::{health::Health, types::AppState};
 
 pub struct ShootPlugin;
 
