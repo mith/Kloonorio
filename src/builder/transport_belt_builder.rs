@@ -11,7 +11,7 @@ use bevy::{
     transform::components::GlobalTransform,
 };
 use kloonorio_core::{
-    discrete_rotation::{self, CompassDirection, DiscreteRotation},
+    discrete_rotation::{CompassDirection, DiscreteRotation},
     structure_components::transport_belt::TransportBelt,
     tile_occupants::TileOccupants,
     types::AppState,

@@ -14,12 +14,10 @@ use bevy::{
     sprite::{Sprite, SpriteBundle},
     transform::{components::Transform, TransformBundle},
 };
-use bevy_rapier2d::{
-    control::KinematicCharacterController, dynamics::RigidBody, geometry::Collider,
-};
+use bevy_rapier2d::{control::KinematicCharacterController, geometry::Collider};
 use kloonorio_core::{item::Item, player::Player};
 
-use crate::ysort::YSort;
+use crate::{health::Health, shoot::Gun, ysort::YSort};
 use kloonorio_core::{
     inventory::Inventory,
     types::{AppState, CraftingQueue},
@@ -50,7 +48,13 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             YSort { base_layer: 1.0 },
             TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 1.0)),
             Player,
+            Health::new(100),
             Hand::default(),
+            Gun {
+                range: 10.,
+                damage: 10,
+                cooldown: 1.,
+            },
             inventory,
             CraftingQueue::default(),
             KinematicCharacterController { ..default() },

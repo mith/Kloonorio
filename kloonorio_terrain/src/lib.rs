@@ -359,7 +359,9 @@ fn update_cursor_pos(
     let Some(cursor_position) = window.single().cursor_position() else {
         return;
     };
-    let (camera_transform, camera) = camera_query.single();
+    let Ok((camera_transform, camera)) = camera_query.get_single() else {
+        return;
+    };
     let Some(point) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
         return;
     };

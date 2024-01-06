@@ -3,27 +3,33 @@ use bevy::{
     prelude::*,
 };
 use bevy_rapier2d::prelude::*;
+use biter::BiterPlugin;
 use builder::BuilderPlugin;
 use entity_tile_tracking::EntityTileTrackingPlugin;
+use health::HealthPlugin;
 use kloonorio_core::{types::AppState, KloonorioCorePlugins};
 use kloonorio_render::KloonorioRenderPlugins;
 use kloonorio_terrain::KloonorioTerrainPlugin;
 use kloonorio_ui::KloonorioUiPlugin;
 use loading::LoadState;
 use scene_setup::SceneSetupPlugin;
+use shoot::ShootPlugin;
 
+pub mod biter;
 mod builder;
 mod camera;
 mod craft;
 mod entity_tile_tracking;
+pub mod health;
 mod interact;
 mod item_loader;
 mod loading;
 mod placeable;
 mod player;
-mod player_movement;
+mod player_control;
 mod recipe_loader;
 mod scene_setup;
+mod shoot;
 mod structure_loader;
 mod ysort;
 
@@ -34,7 +40,7 @@ use crate::{
     item_loader::ItemLoaderPlugin,
     loading::LoadingPlugin,
     player::PlayerPlugin,
-    player_movement::PlayerMovementPlugin,
+    player_control::PlayerControlPlugin,
     recipe_loader::RecipeLoaderPlugin,
     structure_loader::StructureLoaderPlugin,
     ysort::YSortPlugin,
@@ -67,7 +73,7 @@ fn main() {
         ))
         .add_plugins((
             YSortPlugin,
-            PlayerMovementPlugin,
+            PlayerControlPlugin,
             RecipeLoaderPlugin,
             StructureLoaderPlugin,
             ItemLoaderPlugin,
@@ -75,7 +81,10 @@ fn main() {
             InteractPlugin,
             CraftPlugin,
             BuilderPlugin,
+            HealthPlugin,
             PlayerPlugin,
+            BiterPlugin,
+            ShootPlugin,
         ))
         .add_plugins((
             PanZoomCameraPlugin,
