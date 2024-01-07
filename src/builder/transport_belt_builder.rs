@@ -35,7 +35,7 @@ pub struct TransportBeltBuilder;
 fn build_transport_belt(
     mut commands: Commands,
     transport_belt_builder_query: Query<(Entity, &TransportBeltBuilder, &GlobalTransform)>,
-    mut transport_belt_query: Query<&mut TransportBelt>,
+    transport_belt_query: Query<&TransportBelt>,
     tile_occupants_query: Query<&TileOccupants>,
     discrete_rotation_query: Query<&DiscreteRotation>,
     terrain_params: TerrainParams,

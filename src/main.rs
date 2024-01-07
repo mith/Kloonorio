@@ -31,16 +31,10 @@ mod structure_loader;
 mod ysort;
 
 use crate::{
-    camera::PanZoomCameraPlugin,
-    craft::CraftPlugin,
-    interact::{InteractPlugin, InteractionSettings},
-    item_loader::ItemLoaderPlugin,
-    loading::LoadingPlugin,
-    player::PlayerPlugin,
-    player_control::PlayerControlPlugin,
-    recipe_loader::RecipeLoaderPlugin,
-    structure_loader::StructureLoaderPlugin,
-    ysort::YSortPlugin,
+    camera::PanZoomCameraPlugin, craft::CraftPlugin, interact::InteractPlugin,
+    item_loader::ItemLoaderPlugin, loading::LoadingPlugin, player::PlayerPlugin,
+    player_control::PlayerControlPlugin, recipe_loader::RecipeLoaderPlugin,
+    structure_loader::StructureLoaderPlugin, ysort::YSortPlugin,
 };
 
 fn main() {
