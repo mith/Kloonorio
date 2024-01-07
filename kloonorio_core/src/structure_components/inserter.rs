@@ -7,7 +7,10 @@ use crate::{
     types::{AppState, Powered, Working},
 };
 
-use super::transport_belt::TransportBelt;
+use super::transport_belt::{TransportBelt, TransportBeltSet};
+
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InserterSet;
 
 pub struct InserterPlugin;
 
@@ -15,12 +18,14 @@ impl Plugin for InserterPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
-            ((
+            (
                 inserter_planner,
                 apply_deferred.in_set(InserterFlush),
                 inserter_tick,
             )
-                .chain(),)
+                .chain()
+                .in_set(InserterSet)
+                .after(TransportBeltSet)
                 .run_if(in_state(AppState::Running)),
         )
         .register_type::<Inserter>();
@@ -404,7 +409,7 @@ fn check_inserter_action_valid<'w, 's, 'a>(
                 InserterTargetType::Belt(entity) => belts_query
                     .get(*entity)
                     .ok()
-                    .map(|belt| belt.slot(1).unwrap().is_none())
+                    .map(|belt| belt.slot(1).unwrap().is_some())
                     .unwrap_or(false),
                 InserterTargetType::Inventory(entity) => inventories
                     .get(*entity)
@@ -745,7 +750,7 @@ mod test {
         ) {
             let mut app = App::new();
 
-            let mut belt = TransportBelt::new(None);
+            let mut belt = TransportBelt::default();
             for (i, item) in items_in_slots.iter().enumerate() {
                 *belt.slot_mut(i).unwrap() = item.clone();
 
@@ -787,7 +792,7 @@ mod test {
                 }
             });
 
-            let empty_belt_entity = app.world.spawn(TransportBelt::new(None)).id();
+            let empty_belt_entity = app.world.spawn(TransportBelt::default()).id();
 
             app.add_systems(Update, move |belts_query: Query<&TransportBelt>| {
                 let pickups = find_belt_pickups_for_entity(empty_belt_entity, &belts_query, &pickup_target).collect::<Vec<_>>();
@@ -890,7 +895,7 @@ mod test {
             // Create a Bevy App with necessary plugins
             let mut app = App::new();
 
-            let mut belt = TransportBelt::new(None);
+            let mut belt = TransportBelt::default();
             for (i, item) in items_in_slots.iter().enumerate() {
                 *belt.slot_mut(i).unwrap() = item.clone();
 

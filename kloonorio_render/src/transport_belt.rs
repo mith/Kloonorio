@@ -13,11 +13,15 @@ use bevy::{
     transform::components::Transform,
 };
 use kloonorio_core::{
+    discrete_rotation::{DiscreteRotation, SideCount},
     structure_components::transport_belt::{BeltItem, TransportBelt},
     types::AppState,
 };
 
-use crate::item_textures::ItemTextures;
+use crate::{
+    isometric_sprite::{IsometricSprite, IsometricSpriteBundle},
+    item_textures::ItemTextures,
+};
 
 pub fn create_transport_belt_sprites(
     mut commands: Commands,
@@ -36,13 +40,16 @@ pub fn create_transport_belt_sprites(
                 let slot_sprite = commands
                     .spawn((
                         BeltItem,
-                        SpriteSheetBundle {
+                        DiscreteRotation::new(SideCount::One),
+                        IsometricSpriteBundle {
                             transform: sprite_transform,
                             texture_atlas: item_textures.get_texture_atlas_handle(),
-                            sprite: TextureAtlasSprite {
+                            sprite: IsometricSprite {
                                 // Pass the custom size
                                 custom_size: Some(Vec2::new(0.4, 0.4)),
-                                index: item_textures.get_texture_index(product).unwrap(),
+                                custom_texture_index: Some(
+                                    item_textures.get_texture_index(product).unwrap(),
+                                ),
                                 ..default()
                             },
                             ..default()
