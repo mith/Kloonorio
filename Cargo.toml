@@ -1,5 +1,10 @@
 [workspace]
-members = []
+members = [
+    "kloonorio_core",
+    "kloonorio_render",
+    "kloonorio_terrain",
+    "kloonorio_ui",
+]
 
 [package]
 name = "kloonorio"
@@ -21,6 +26,7 @@ bevy_egui = "0.23"
 tracing = { workspace = true }
 serde = { workspace = true }
 rand = "0.8"
+rand_xoshiro = "0.6"
 futures-lite = "2.0"
 bevy_rapier2d = { version = "0.23.0", features = ["wasm-bindgen"] }
 ron = "0.8"

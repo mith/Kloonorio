@@ -5,11 +5,11 @@ use egui::{epaint, Color32, CursorIcon, InnerResponse, Order, Pos2, Response, Se
 use kloonorio_core::{
     discrete_rotation::DiscreteRotation,
     inventory::{Inventory, Stack},
-    item::Items,
-    structure::Structures,
 };
 
-use super::{icon::resource_icon, tooltip::item_tooltip};
+use crate::util::Definitions;
+
+use super::{icon::stack_icon, tooltip::item_tooltip};
 
 pub const HIGHLIGHT_COLOR: Color32 = egui::Color32::from_rgb(252, 161, 3);
 
@@ -89,7 +89,7 @@ pub fn item_slot(
     stack: &Stack,
     icons: &HashMap<String, egui::TextureId>,
 ) -> Response {
-    let response = resource_icon(ui, stack, icons);
+    let response = stack_icon(ui, stack, icons);
 
     let font_id = egui::FontId::proportional(16.);
     let layout = ui.fonts(|fonts| {
@@ -176,12 +176,13 @@ pub fn inventory_grid(
     entity: Entity,
     inventory: &Inventory,
     ui: &mut egui::Ui,
-    icons: &HashMap<String, egui::TextureId>,
     hand: &Hand,
     slot_events: &mut EventWriter<SlotEvent>,
-    structures: &Structures,
-    resources: &Items,
+    definitions: &Definitions,
 ) {
+    let icons = &definitions.icons;
+    let structures = &definitions.structures;
+    let items = &definitions.items;
     let grid_height = (inventory.slots.len() as f32 / 10.).ceil() as usize;
     egui::Grid::new(entity)
         .min_col_width(32.)
@@ -201,7 +202,7 @@ pub fn inventory_grid(
                                 });
 
                                 response.on_hover_ui_at_pointer(|ui| {
-                                    item_tooltip(ui, stack.item.as_ref(), structures, resources);
+                                    item_tooltip(ui, stack.item.as_ref(), structures, items);
                                 });
                             }
                         })

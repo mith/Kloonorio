@@ -16,7 +16,7 @@ pub struct ItemAsset(pub Vec<Item>);
 
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
-pub enum IntermediateAssetLoaderError {
+pub enum ItemAssetLoaderError {
     /// An [IO](std::io) Error.
     #[error("Could not load asset: {0}")]
     Io(#[from] std::io::Error),
@@ -28,7 +28,7 @@ pub enum IntermediateAssetLoaderError {
 impl AssetLoader for ItemAssetLoader {
     type Asset = ItemAsset;
     type Settings = ();
-    type Error = IntermediateAssetLoaderError;
+    type Error = ItemAssetLoaderError;
     fn load<'a>(
         &'a self,
         reader: &'a mut Reader,
@@ -38,7 +38,7 @@ impl AssetLoader for ItemAssetLoader {
         let _ = settings;
         Box::pin(async move {
             let path = load_context.path().display().to_string();
-            let _span = info_span!("Loading resource asset", path = path);
+            let _span = info_span!("Loading item asset", path = path);
             let _enter = _span.enter();
             let mut buf = Vec::new();
             reader.read_to_end(&mut buf).await?;
@@ -49,7 +49,7 @@ impl AssetLoader for ItemAssetLoader {
     }
 
     fn extensions(&self) -> &[&str] {
-        &["resources.ron"]
+        &["items.ron"]
     }
 }
 

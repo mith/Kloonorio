@@ -2555,6 +2555,7 @@ dependencies = [
  "proptest",
  "proptest-state-machine",
  "rand 0.8.5",
+ "rand_xoshiro",
  "ron",
  "serde",
  "thiserror",

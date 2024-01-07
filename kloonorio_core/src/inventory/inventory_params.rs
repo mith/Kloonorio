@@ -1,7 +1,10 @@
-use bevy::ecs::{
-    entity::Entity,
-    query::{ReadOnlyWorldQuery, With, Without, WorldQuery},
-    system::{Query, SystemParam},
+use bevy::{
+    ecs::{
+        entity::Entity,
+        query::{ReadOnlyWorldQuery, With, Without, WorldQuery},
+        system::{Query, SystemParam},
+    },
+    hierarchy::Children,
 };
 
 use super::{Fuel, Inventory, Output, Source, Storage};
@@ -50,6 +53,7 @@ pub struct InventoryParams<'w, 's> {
     pub source_inventories: Query<'w, 's, SourceInventoryQuery>,
     pub output_inventories: Query<'w, 's, OutputInventoryQuery>,
     pub storage_inventories: Query<'w, 's, StorageInventoryQuery>,
+    children: Query<'w, 's, &'static Children>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -84,5 +88,19 @@ impl InventoryParams<'_, '_> {
                 .ok()
                 .map(|i| i.inventory),
         }
+    }
+
+    pub fn get_child_inventory(
+        &self,
+        entity: Entity,
+        inventory_type: InventoryType,
+    ) -> Option<(Entity, &Inventory)> {
+        let children = self.children.get(entity).ok()?;
+        for child in children.iter() {
+            if let Some(inventory) = self.get_inventory_component(*child, inventory_type) {
+                return Some((*child, inventory));
+            }
+        }
+        None
     }
 }

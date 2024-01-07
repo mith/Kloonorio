@@ -17,11 +17,14 @@ use egui::{
     Align2, Color32, Frame, Pos2, Response, Sense, Stroke,
 };
 
-use kloonorio_core::{inventory::Inventory, item::Items, player::Player, structure::Structures};
+use kloonorio_core::{inventory::Inventory, player::Player};
 
-use crate::icon::Icons;
+use crate::{
+    icon::{item_icon, Icons},
+    util::Definitions,
+};
 
-use super::{icon::item_icon, inventory_grid::Hand, tooltip::item_tooltip};
+use super::{inventory_grid::Hand, tooltip::item_tooltip};
 
 pub struct HotbarPlugin;
 
@@ -54,9 +57,7 @@ impl Hotbar {
 fn hotbar_ui(
     mut egui_context: EguiContexts,
     mut hotbar_query: Query<(Entity, &mut Hotbar, &Inventory, &mut Hand), With<Player>>,
-    icons: Res<Icons>,
-    structures: Res<Structures>,
-    resources: Res<Items>,
+    definitions: Definitions,
 ) {
     egui::Area::new("Hotbar")
         .movable(false)
@@ -81,7 +82,7 @@ fn hotbar_ui(
                                     let response = hotbar_item_ui(
                                         ui,
                                         hotbar_item,
-                                        &icons,
+                                        &definitions.icons,
                                         index as u8,
                                         in_inventory,
                                     );
@@ -108,8 +109,8 @@ fn hotbar_ui(
                                                 item_tooltip(
                                                     ui,
                                                     item.as_str(),
-                                                    &structures,
-                                                    &resources,
+                                                    &definitions.structures,
+                                                    &definitions.items,
                                                 );
                                             });
                                         }

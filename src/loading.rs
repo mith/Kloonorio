@@ -23,7 +23,7 @@ pub struct LoadState {
     pub icons_loaded: bool,
     pub icons_handle: Handle<LoadedFolder>,
     pub items_loaded: bool,
-    pub resources_handle: Handle<ItemAsset>,
+    pub items_handle: Handle<ItemAsset>,
     pub item_textures_loaded: bool,
 }
 
@@ -31,21 +31,21 @@ fn start_loading(asset_server: Res<AssetServer>, mut loadstate: ResMut<LoadState
     loadstate.recipes_handle = asset_server.load("data/base.recipes.ron");
     loadstate.structures_handle = asset_server.load("data/base.structures.ron");
     loadstate.icons_handle = asset_server.load_folder("textures/icons");
-    loadstate.resources_handle = asset_server.load("data/base.resources.ron");
+    loadstate.items_handle = asset_server.load("data/base.items.ron");
 }
 
-fn load_resources(
+fn load_items(
     mut loadstate: ResMut<LoadState>,
     item_assets: Res<Assets<ItemAsset>>,
-    mut resources: ResMut<Items>,
+    mut items: ResMut<Items>,
 ) {
-    let item_asset = item_assets.get(&loadstate.resources_handle);
+    let item_asset = item_assets.get(&loadstate.items_handle);
     if loadstate.items_loaded || item_asset.is_none() {
         return;
     }
 
-    if let Some(ItemAsset(loaded_resource)) = item_asset {
-        resources.extend(loaded_resource.iter().map(|r| (r.to_string(), r.clone())));
+    if let Some(ItemAsset(loaded_item)) = item_asset {
+        items.extend(loaded_item.iter().map(|r| (r.to_string(), r.clone())));
         loadstate.items_loaded = true;
     }
 }
@@ -202,7 +202,7 @@ impl Plugin for LoadingPlugin {
                     load_recipes,
                     load_structures,
                     load_item_icons,
-                    load_resources,
+                    load_items,
                     load_item_textures,
                     check_loading,
                 )

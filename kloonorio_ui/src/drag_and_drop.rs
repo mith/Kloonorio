@@ -156,8 +156,8 @@ mod test {
                     acc
             });
 
-        for (resource, amount) in post_count {
-            assert_eq!(count.get(&resource), Some(&amount));
+        for (item, amount) in post_count {
+            assert_eq!(count.get(&item), Some(&amount));
         }
         }
     }

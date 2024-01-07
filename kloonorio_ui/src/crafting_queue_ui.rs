@@ -1,27 +1,20 @@
-use bevy::ecs::{
-    query::With,
-    system::{Query, Res},
-};
+use bevy::ecs::{query::With, system::Query};
 use bevy_egui::EguiContexts;
 use egui::{Align2, Color32, PointerButton, Response, Sense};
 
 use kloonorio_core::{
-    item::Items,
     player::Player,
-    structure::Structures,
     types::{ActiveCraft, CraftingQueue},
 };
 
-use crate::icon::Icons;
+use crate::{icon::Icons, util::Definitions};
 
 use super::{icon::recipe_icon, tooltip::recipe_tooltip};
 
 pub fn crafting_queue_ui(
     mut egui_context: EguiContexts,
     mut crafting_queue_query: Query<&mut CraftingQueue, With<Player>>,
-    icons: Res<Icons>,
-    structures: Res<Structures>,
-    resources: Res<Items>,
+    definitions: Definitions,
 ) {
     let mut to_cancel: Vec<usize> = vec![];
     egui::Area::new("Crafting queue")
@@ -32,13 +25,13 @@ pub fn crafting_queue_ui(
             for mut crafting_queue in &mut crafting_queue_query {
                 ui.horizontal(|ui| {
                     for (index, build) in crafting_queue.0.iter_mut().enumerate() {
-                        let response = queue_item_ui(ui, build, &icons);
+                        let response = queue_item_ui(ui, build, &definitions.icons);
                         if response.clicked_by(PointerButton::Secondary) {
                             to_cancel.push(index);
                         }
                         if response.hovered() {
                             response.on_hover_ui_at_pointer(|ui| {
-                                recipe_tooltip(ui, &build.recipe, &icons, &structures, &resources);
+                                recipe_tooltip(ui, &build.recipe, &definitions);
                             });
                         }
                     }

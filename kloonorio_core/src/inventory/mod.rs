@@ -83,8 +83,8 @@ impl Inventory {
         let mut space_needed = HashMap::new();
 
         // Calculate the space needed for each item.
-        for (item_resource, item_amount) in items {
-            *space_needed.entry(item_resource).or_insert(0) += item_amount;
+        for (item, item_amount) in items {
+            *space_needed.entry(item).or_insert(0) += item_amount;
         }
 
         // Check if there's enough space in the existing stacks.
@@ -182,8 +182,8 @@ impl Inventory {
 
         for slot in self.slots.iter() {
             if let Some(stack) = slot {
-                for (resource, amount) in remaining.iter_mut() {
-                    if *resource == stack.item {
+                for (item, amount) in remaining.iter_mut() {
+                    if *item == stack.item {
                         *amount = amount.saturating_sub(stack.amount);
                     }
                 }
@@ -198,10 +198,10 @@ impl Inventory {
         !remaining.iter().any(|(_, amount)| *amount > 0)
     }
 
-    pub fn num_items(&self, resource: &Item) -> u32 {
+    pub fn num_items(&self, item: &Item) -> u32 {
         let mut amount = 0;
         for stack in self.slots.iter().flatten() {
-            if stack.item == *resource {
+            if stack.item == *item {
                 amount += stack.amount;
             }
         }

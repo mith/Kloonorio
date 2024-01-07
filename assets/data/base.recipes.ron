@@ -14,7 +14,7 @@
 	Recipe(
 		ingredients: [("Iron plate", 1)],
 		products: [("Iron gear wheel", 1)],
-		crafting_time: 0.5,
+		crafting_time: 1.5,
 		name: "Iron gear wheel",
 	),
 	Recipe(

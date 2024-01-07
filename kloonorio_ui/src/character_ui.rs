@@ -4,15 +4,13 @@ use bevy_egui::EguiContexts;
 use egui::{epaint, Pos2, Response, Sense, Stroke};
 
 use crate::{
-    icon::Icons,
     inventory_grid::{inventory_grid, Hand, SlotEvent, HIGHLIGHT_COLOR},
+    util::Definitions,
 };
 use kloonorio_core::{
     inventory::Inventory,
-    item::Items,
     player::Player,
-    recipe::{Recipe, Recipes},
-    structure::Structures,
+    recipe::Recipe,
     types::{ActiveCraft, CraftingQueue},
 };
 
@@ -49,14 +47,11 @@ pub fn recipe_slot(
 
 pub fn craft_ui(
     ui: &mut egui::Ui,
-    recipes: &HashMap<String, Recipe>,
     inventory: &mut Inventory,
     build_queue: &mut CraftingQueue,
-    icons: &HashMap<String, egui::TextureId>,
-    structures: &Structures,
-    resources: &Items,
+    definitions: &Definitions,
 ) {
-    let mut recipe_it = recipes.values();
+    let mut recipe_it = definitions.recipes.values();
     egui::Grid::new("crafting")
         .min_col_width(32.)
         .max_col_width(32.)
@@ -68,8 +63,8 @@ pub fn craft_ui(
                         let craftable_amount = recipe
                             .ingredients
                             .iter()
-                            .map(|(resource, amount)| {
-                                let amount_in_inventory = inventory.num_items(resource);
+                            .map(|(item, amount)| {
+                                let amount_in_inventory = inventory.num_items(item);
                                 if amount_in_inventory > 0 {
                                     amount_in_inventory / amount
                                 } else {
@@ -78,7 +73,7 @@ pub fn craft_ui(
                             })
                             .min()
                             .unwrap_or(0);
-                        let resources_available = craftable_amount > 0;
+                        let items_available = craftable_amount > 0;
                         let (rect, response) = ui.allocate_exact_size(
                             egui::Vec2::new(32., 32.),
                             Sense::hover().union(Sense::click()),
@@ -97,8 +92,8 @@ pub fn craft_ui(
                             uv: egui::Rect::ZERO,
                         });
                         ui.child_ui(rect, *ui.layout())
-                            .add_enabled_ui(resources_available, |ui| {
-                                recipe_slot(ui, recipe, craftable_amount, icons);
+                            .add_enabled_ui(items_available, |ui| {
+                                recipe_slot(ui, recipe, craftable_amount, &definitions.icons);
                             });
 
                         if response.clicked() {
@@ -112,7 +107,7 @@ pub fn craft_ui(
                             });
                         }
                         response.on_hover_ui_at_pointer(|ui| {
-                            recipe_tooltip(ui, recipe, icons, structures, resources);
+                            recipe_tooltip(ui, recipe, definitions);
                         });
                     } else {
                         let (_id, rect) = ui.allocate_space(egui::Vec2::new(32., 32.));
@@ -146,12 +141,9 @@ fn toggle_character_ui(
 fn character_ui(
     mut egui_context: EguiContexts,
     mut inventory_query: Query<(Entity, &mut Inventory, &Hand, &mut CraftingQueue), With<Player>>,
-    blueprints: Res<Recipes>,
-    icons: Res<Icons>,
     mut slot_events: EventWriter<SlotEvent>,
     character_ui_open: Res<CharacterUiOpen>,
-    structures: Res<Structures>,
-    resources: Res<Items>,
+    definitions: Definitions,
 ) {
     if !character_ui_open.0 {
         return;
@@ -174,21 +166,11 @@ fn character_ui(
                         player_entity,
                         inventory,
                         ui,
-                        &icons,
                         hand,
                         &mut slot_events,
-                        &structures,
-                        &resources,
+                        &definitions,
                     );
-                    craft_ui(
-                        ui,
-                        &blueprints,
-                        inventory,
-                        crafting_queue,
-                        &icons,
-                        &structures,
-                        &resources,
-                    );
+                    craft_ui(ui, inventory, crafting_queue, &definitions);
                 });
         });
 }

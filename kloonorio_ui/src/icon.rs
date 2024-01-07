@@ -20,7 +20,7 @@ impl DerefMut for Icons {
         &mut self.0
     }
 }
-pub fn resource_icon(
+pub fn stack_icon(
     ui: &mut egui::Ui,
     stack: &Stack,
     icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,

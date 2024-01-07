@@ -5,13 +5,15 @@ use kloonorio_core::{
     structure::Structures, structure_components::StructureComponent,
 };
 
-use super::icon::resource_icon;
+use crate::util::Definitions;
+
+use super::icon::stack_icon;
 
 pub fn item_tooltip(
     ui: &mut egui::Ui,
     name: &str,
     structures: &Structures,
-    resources: &Items,
+    items: &Items,
 ) -> Response {
     egui::Grid::new("item_tooltip")
         .spacing([3., 3.])
@@ -28,8 +30,8 @@ pub fn item_tooltip(
             if let Some(structure) = structures.get(name) {
                 structure_rows(ui, structure);
             }
-            if let Some(resource) = resources.get(name) {
-                item_rows(ui, resource);
+            if let Some(item) = items.get(name) {
+                item_rows(ui, item);
             }
         })
         .response
@@ -53,18 +55,14 @@ pub fn structure_rows(ui: &mut egui::Ui, structure: &Structure) {
     }
 }
 
-pub fn item_rows(ui: &mut egui::Ui, resource: &Item) {
-    let _ = resource;
+pub fn item_rows(ui: &mut egui::Ui, item: &Item) {
+    let _ = item;
     ui.end_row();
 }
 
-pub fn recipe_tooltip(
-    ui: &mut egui::Ui,
-    recipe: &Recipe,
-    icons: &bevy::utils::hashbrown::HashMap<String, egui::TextureId>,
-    structures: &Structures,
-    resources: &Items,
-) -> Response {
+pub fn recipe_tooltip(ui: &mut egui::Ui, recipe: &Recipe, definitions: &Definitions) -> Response {
+    let structures = &definitions.structures;
+    let items = &definitions.items;
     egui::Grid::new("recipe_tooltip")
         .spacing([3., 3.])
         .with_row_color(|row, _style| {
@@ -85,7 +83,11 @@ pub fn recipe_tooltip(
             ui.end_row();
             for (ingredient, amount) in &recipe.ingredients {
                 ui.horizontal(|ui| {
-                    resource_icon(ui, &Stack::new(ingredient.clone(), *amount), icons);
+                    stack_icon(
+                        ui,
+                        &Stack::new(ingredient.clone(), *amount),
+                        &definitions.icons,
+                    );
                     ui.label(format!("{} x {}", amount, ingredient));
                 });
                 ui.end_row();
@@ -103,8 +105,8 @@ pub fn recipe_tooltip(
                 if let Some(structure) = structures.get(&product.to_string()) {
                     structure_rows(ui, structure);
                 }
-                if let Some(resource) = resources.get(&product.to_string()) {
-                    item_rows(ui, resource);
+                if let Some(item) = items.get(&product.to_string()) {
+                    item_rows(ui, item);
                 }
                 ui.end_row();
             }

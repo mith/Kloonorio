@@ -11,11 +11,8 @@ pub struct Stack {
 }
 
 impl Stack {
-    pub fn new(resource: Item, amount: u32) -> Self {
-        Self {
-            item: resource,
-            amount,
-        }
+    pub fn new(item: Item, amount: u32) -> Self {
+        Self { item, amount }
     }
 
     /// Add an amount to the stack, returning the amount that could not be added.
