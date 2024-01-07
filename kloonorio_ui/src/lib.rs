@@ -24,6 +24,7 @@ use bevy::{
 };
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
+use building_ui::BuildingUiPlugin;
 use picker::PickerPlugin;
 
 use self::{
@@ -43,12 +44,17 @@ pub struct UiSet;
 impl Plugin for KloonorioUiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((EguiPlugin, DefaultInspectorConfigPlugin))
-            .add_plugins((CharacterUiPlugin, HotbarPlugin, PickerPlugin, DebugPlugin))
+            .add_plugins((
+                CharacterUiPlugin,
+                HotbarPlugin,
+                PickerPlugin,
+                BuildingUiPlugin,
+                DebugPlugin,
+            ))
             .add_systems(
                 Update,
                 (
                     hovering_ui,
-                    building_ui::building_ui,
                     crafting_queue_ui::crafting_queue_ui,
                     clear_hand,
                     interact_ui::interaction_ui,

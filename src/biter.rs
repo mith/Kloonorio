@@ -7,7 +7,7 @@ use bevy::{
         entity::Entity,
         query::{With, Without},
         schedule::{common_conditions::in_state, IntoSystemConfigs},
-        system::{Commands, Query, Res, ResMut, Resource},
+        system::{Commands, Query, Res, ResMut, Resource, SystemParam},
     },
     hierarchy::BuildChildren,
     math::{Vec2, Vec3Swizzles},
@@ -72,9 +72,7 @@ impl Default for SpawnRng {
 }
 
 fn spawn_biter_packs(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut spawn_param: BiterSpawnParam,
     time: Res<Time<Fixed>>,
     mut timer: ResMut<SpawnTimer>,
     mut rng: ResMut<SpawnRng>,
@@ -104,18 +102,25 @@ fn spawn_biter_packs(
                         ((rng.0.next_u32() % 9) as i32 - 4) as f32,
                         ((rng.0.next_u32() % 9) as i32 - 4) as f32,
                     );
-                spawn_biter(&mut commands, &mut meshes, &mut materials, spawn_position);
+                spawn_biter(&mut spawn_param, spawn_position);
             }
         }
     }
 }
 
-fn spawn_biter(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<ColorMaterial>,
-    position: Vec2,
-) {
+#[derive(SystemParam)]
+struct BiterSpawnParam<'w, 's> {
+    commands: Commands<'w, 's>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<ColorMaterial>>,
+}
+
+fn spawn_biter(spawn_param: &mut BiterSpawnParam, position: Vec2) {
+    let BiterSpawnParam {
+        commands,
+        meshes,
+        materials,
+    } = spawn_param;
     commands
         .spawn((
             Name::new("Biter"),

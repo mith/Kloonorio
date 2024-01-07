@@ -9,7 +9,6 @@ use bevy::{
     hierarchy::{BuildChildren, DespawnRecursiveExt},
     math::Vec2,
     prelude::default,
-    sprite::{SpriteSheetBundle, TextureAtlasSprite},
     transform::components::Transform,
 };
 use kloonorio_core::{

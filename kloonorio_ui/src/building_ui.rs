@@ -1,13 +1,10 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{ecs::system::SystemParam, prelude::*, utils::HashMap};
 use bevy_egui::EguiContexts;
 
 use kloonorio_core::{
     inventory::{
-        inventory_params::{
-            FuelInventoryQuery, OutputInventoryQuery, SourceInventoryQuery, StorageInventoryQuery,
-        },
         util::{get_inventory_child, try_get_inventory_child},
-        Fuel, Inventory, Output, Source, Storage,
+        Fuel, Inventory, InventoryParams, Output, Source, Storage,
     },
     item::Items,
     player::Player,
@@ -17,7 +14,7 @@ use kloonorio_core::{
         assembler::{Assembler, ChangeAssemblerRecipeEvent},
         burner::Burner,
     },
-    types::{Building, CraftingQueue},
+    types::{AppState, Building, CraftingQueue},
 };
 
 use crate::{
@@ -26,7 +23,23 @@ use crate::{
     util::Definitions,
 };
 
-pub fn building_ui(
+pub struct BuildingUiPlugin;
+
+impl Plugin for BuildingUiPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, building_ui.run_if(in_state(AppState::Running)));
+    }
+}
+
+#[derive(SystemParam)]
+struct BuildingParam<'w, 's> {
+    crafting_machine_query: Query<'w, 's, (&'static CraftingQueue, &'static Children)>,
+    burner_query: Query<'w, 's, (&'static mut Burner, &'static Children)>,
+    assembler_query: Query<'w, 's, &'static Assembler>,
+    assembler_recipe_change_events: EventWriter<'w, ChangeAssemblerRecipeEvent>,
+}
+
+fn building_ui(
     mut commands: Commands,
     mut egui_ctx: EguiContexts,
     player_query: Query<
@@ -42,14 +55,8 @@ pub fn building_ui(
     >,
     name: Query<&Name>,
     children: Query<&Children>,
-    storage_query: Query<StorageInventoryQuery>,
-    source_query: Query<SourceInventoryQuery>,
-    output_query: Query<OutputInventoryQuery>,
-    fuel_query: Query<FuelInventoryQuery>,
-    mut crafting_machine_query: Query<(&CraftingQueue, &Children), With<Building>>,
-    mut burner_query: Query<(&mut Burner, &Children), With<Building>>,
-    mut assembler_query: Query<&Assembler, With<Building>>,
-    mut assembler_recipe_change_events: EventWriter<ChangeAssemblerRecipeEvent>,
+    inventory_params: InventoryParams,
+    mut building_param: BuildingParam,
     mut slot_events: EventWriter<SlotEvent>,
     definitions: Definitions,
 ) {
@@ -90,10 +97,13 @@ pub fn building_ui(
                         .inner_margin(5.)
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
-                                if let Some((inventory_child, inventory)) = children
-                                    .get(*selected_building)
-                                    .ok()
-                                    .and_then(|c| try_get_inventory_child(c, &storage_query))
+                                if let Some((inventory_child, inventory)) =
+                                    children.get(*selected_building).ok().and_then(|c| {
+                                        try_get_inventory_child(
+                                            c,
+                                            &inventory_params.storage_inventories,
+                                        )
+                                    })
                                 {
                                     inventory_grid(
                                         inventory_child,
@@ -106,20 +116,29 @@ pub fn building_ui(
                                         &definitions.items,
                                     );
                                 }
-                                if let Ok(assembler) = assembler_query.get_mut(*selected_building) {
+                                if let Ok(assembler) =
+                                    building_param.assembler_query.get_mut(*selected_building)
+                                {
                                     assembling_machine_widget(
                                         ui,
                                         assembler,
                                         *selected_building,
-                                        &mut assembler_recipe_change_events,
+                                        &mut building_param.assembler_recipe_change_events,
                                         &definitions.recipes,
                                     );
                                 }
-                                if let Ok((crafting_queue, children)) =
-                                    crafting_machine_query.get_mut(*selected_building)
+                                if let Ok((crafting_queue, children)) = building_param
+                                    .crafting_machine_query
+                                    .get_mut(*selected_building)
                                 {
-                                    let source = get_inventory_child(children, &source_query);
-                                    let output = get_inventory_child(children, &output_query);
+                                    let source = get_inventory_child(
+                                        children,
+                                        &inventory_params.source_inventories,
+                                    );
+                                    let output = get_inventory_child(
+                                        children,
+                                        &inventory_params.output_inventories,
+                                    );
 
                                     crafting_machine_widget(
                                         ui,
@@ -135,10 +154,13 @@ pub fn building_ui(
                                 }
 
                                 if let Ok((burner, children)) =
-                                    burner_query.get_mut(*selected_building)
+                                    building_param.burner_query.get_mut(*selected_building)
                                 {
                                     ui.separator();
-                                    let fuel = get_inventory_child(children, &fuel_query);
+                                    let fuel = get_inventory_child(
+                                        children,
+                                        &inventory_params.fuel_inventories,
+                                    );
                                     burner_widget(
                                         ui,
                                         &definitions.icons,
@@ -265,7 +287,7 @@ fn assembling_machine_widget(
 
 #[cfg(test)]
 mod test {
-    use kloonorio_core::item::Item;
+    use kloonorio_core::{inventory::inventory_params::FuelInventoryQuery, item::Item};
 
     use super::*;
 
