@@ -27,7 +27,7 @@ use bevy::{
 use bevy_rapier2d::{control::KinematicCharacterController, geometry::Collider};
 use kloonorio_core::{health::Health, player::Player, types::AppState};
 use kloonorio_terrain::Chunk;
-use rand::{seq::IteratorRandom, SeedableRng};
+use rand::{seq::IteratorRandom, RngCore, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
 use tracing::info;
 
@@ -44,7 +44,7 @@ impl Plugin for BiterPlugin {
             .init_resource::<SpawnRng>()
             .add_systems(
                 FixedUpdate,
-                (spawn_random_biters, move_to_player, attack_player)
+                (spawn_biter_packs, move_to_player, attack_player)
                     .run_if(in_state(AppState::Running)),
             );
     }
@@ -58,7 +58,7 @@ struct SpawnTimer(Timer);
 
 impl Default for SpawnTimer {
     fn default() -> Self {
-        Self(Timer::from_seconds(30., TimerMode::Repeating))
+        Self(Timer::from_seconds(120., TimerMode::Repeating))
     }
 }
 
@@ -71,7 +71,7 @@ impl Default for SpawnRng {
     }
 }
 
-fn spawn_random_biters(
+fn spawn_biter_packs(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -79,22 +79,33 @@ fn spawn_random_biters(
     mut timer: ResMut<SpawnTimer>,
     mut rng: ResMut<SpawnRng>,
     chunks_query: Query<&Chunk>,
+    player_query: Query<&GlobalTransform, With<Player>>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
         // Pick a random chunk to spawn in
-        // The chunk must be at least 25 chunks away from the center chunk (0, 0)
-        let eligible_chunks = chunks_query
-            .iter()
-            .filter(|chunk| chunk.position().as_vec2().distance(Vec2::ZERO) > 15.);
+        // The chunk must be at least 25 chunks away from the center chunk (0, 0) and the player
+        let eligible_chunks = chunks_query.iter().filter(|chunk| {
+            let chunk_position = chunk.position().as_vec2() * 3.;
+            let player_position = player_query.single().translation().xy();
+
+            chunk_position.distance(player_position) > 25.
+                && chunk_position.distance(Vec2::ZERO) > 25.
+        });
 
         if let Some(chunk) = eligible_chunks.choose(&mut rng.0) {
-            info!("Spawning biter at {:?}", chunk.position().as_vec2());
-            spawn_biter(
-                &mut commands,
-                &mut meshes,
-                &mut materials,
-                chunk.position().as_vec2(),
-            );
+            let chunk_position = chunk.position().as_vec2() * 3.;
+
+            let amount = rng.0.next_u32() % 5 + 1;
+            info!("Spawning {} biters at {:?}", amount, chunk_position);
+
+            for _ in 0..amount {
+                let spawn_position = chunk_position
+                    + Vec2::new(
+                        ((rng.0.next_u32() % 9) as i32 - 4) as f32,
+                        ((rng.0.next_u32() % 9) as i32 - 4) as f32,
+                    );
+                spawn_biter(&mut commands, &mut meshes, &mut materials, spawn_position);
+            }
         }
     }
 }
@@ -155,5 +166,20 @@ fn attack_player(
     for biter in biter_query.iter() {
         let player = player_query.iter().next().unwrap();
         commands.entity(biter).insert(Target(player));
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rand::RngCore;
+
+    #[test]
+    fn spawn_rng() {
+        let mut spawn_rng = super::SpawnRng::default();
+
+        let a = spawn_rng.0.next_u64();
+        let b = spawn_rng.0.next_u64();
+
+        assert_ne!(a, b);
     }
 }
